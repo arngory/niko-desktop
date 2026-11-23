@@ -1293,6 +1293,8 @@ void main() {
     expect(find.textContaining('ed25519 и ML-DSA-65'), findsOneWidget);
     expect(find.text('REALITY'), findsOneWidget);
     expect(find.text('Hysteria2'), findsOneWidget);
+    // salamander-device-v1 §6: a node's profiles are this computer's, no link to copy
+    expect(find.bySemanticsLabel(RegExp('^Скопировать ссылку на')), findsNothing);
     await picture('node_light');
     await tester.tap(find.text('Обновить'));
     await settle();

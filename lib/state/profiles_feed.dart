@@ -171,6 +171,10 @@ class ProfilesFeed extends ChangeNotifier {
     return group == null || group.subscription || group.nodeId.isNotEmpty ? 0 : group.id;
   }
 
+  /// Whether the group shown is a raycontrol node's: its profiles are this computer's, not shared (salamander-device-v1
+  /// §6, NikoService.ShareProfile refuses them); another device takes an invite of its own.
+  bool get shownIsNode => groups.where((g) => g.id == groupId).firstOrNull?.nodeId.isNotEmpty ?? false;
+
   /// The node whose group [id] is; null for none.
   NodeRow? nodeOfGroup(int id) => nodes.where((n) => n.groupId == id && id != 0).firstOrNull;
 
