@@ -181,13 +181,7 @@ jobs:
       - name: Generated files are current
         if: runner.os == 'Linux'
         run: |
-          # Niko's generators check the window's files in the checkout --desktop names. One from before the split
-          # (arngory/niko-desktop's history begins at its desktop/) takes no --desktop and checks its own copy of the
-          # window in desktop/: that copy is this checkout here
-          if [ -d niko/desktop ]; then
-            rm -rf niko/desktop
-            ln -s "$GITHUB_WORKSPACE/niko-desktop" niko/desktop
-          fi
+          # Niko's generators check the window's files in the checkout --desktop names
           python3 -I niko/shared/tool/gen_tokens.py --check --desktop niko-desktop
           # the window's icons too (lib/ui/icons.g.dart), from the same SVGs as Android's
           python3 -I niko/shared/tool/gen_icons.py --check --desktop niko-desktop
