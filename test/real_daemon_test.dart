@@ -6,7 +6,8 @@
 // (slice 4); then the core's log and its connections, one of which is closed from here (D-LOG-01, D-CONN-01); the NAT
 // tool against a STUN server here. Then Connect (slice 7): a SOCKS5 profile of a server here, its config built by the
 // daemon, a request through it. Runs where NIKO_DAEMON names nikod's executable (CI: on Windows and on Linux); skipped
-// otherwise.
+// otherwise. What it takes from Niko's repository (its golden fixtures) is read from the checkout NIKO_ROOT names,
+// ../niko (a clone of arngory/niko beside this one) by default.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -174,6 +175,7 @@ Future<ServerSocket> socksServer(List<String> asked, {Map<String, (String, int)>
 
 void main() {
   final nikod = Platform.environment['NIKO_DAEMON'] ?? '';
+  final niko = Platform.environment['NIKO_ROOT'] ?? '../niko';
 
   test(
     'the real daemon: start a config, see the status and the traffic, stop; the daemon killed and back',
@@ -349,7 +351,7 @@ void main() {
       expect((await controller.daemon!.profiles()).singleWhere((r) => r.id == back).name, 'store-test');
       // a node's invite (slice 11): the app's golden one recognized as a node, never imported here (that registers
       // with the node; raycontrol-interop.yml does it against a real one); one that is no invite refused, by both
-      final invite = File('../shared/golden/raycontrol/invites/rcinv1.txt').readAsStringSync().trim();
+      final invite = File('$niko/shared/golden/raycontrol/invites/rcinv1.txt').readAsStringSync().trim();
       expect((await controller.daemon!.recognize(invite)).kind, ImportKind.node);
       await expectLater(
         controller.daemon!.recognize('rcinv1:eyJ0ZXN0IjoxfQ'),
