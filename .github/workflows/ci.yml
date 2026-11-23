@@ -1,0 +1,334 @@
+# The window for the computer, Windows first (the owner's decision of 2026-11-15), against Niko's daemon. The daemon,
+# nikod (the core's experimental/boxdd with Niko's NikoService beside it), and everything the window takes from Niko
+# (shared/proto, shared/tokens.json, shared/icons, the golden fixtures) live in arngory/niko, pinned by commit in
+# .github/niko.env (the owner's decision of 2026-11-23): Niko is checked out at that commit into niko/ beside this
+# repository's checkout (niko-desktop/) and the core at Niko's pin into sing-box/, the layout the window's tools and
+# tests take by default. The daemon is built there as Niko's desktop.yml builds it; the window (Flutter) is analysed,
+# tested and built on Windows and on Linux, and its link to the daemon checked against the real nikod of this run in
+# development mode (stage 2b of Niko's docs/design/desktop.md, slices of docs/design/desktop-stage3.md).
+#
+# A change comes to main through a pull request (CONTRIBUTING.md): the pull request's run is its check, and "CI
+# result" one of those the ruleset on main asks for (checks.yml has the others).
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      niko:
+        description: "A full commit of arngory/niko to build and check against in place of .github/niko.env's pin"
+        required: false
+        default: ""
+
+# read-only token: nothing here writes to the repository
+permissions:
+  contents: read
+
+env:
+  TAGS: with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_xhttp,with_awg,with_dnstt,with_masterdnsvpn,with_yggdrasil,badlinkname,tfogo_checklinkname0
+  # a manual run's Niko, if one was given (.github/scripts/niko.sh)
+  NIKO_COMMIT: ${{ inputs.niko }}
+
+# one run per branch or pull request for pushes: a newer push cancels the run it supersedes (one full run per commit);
+# a manual run (another Niko, other inputs) has a group of its own and is never cancelled by them
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'push' }}
+  cancel-in-progress: true
+
+jobs:
+  # Niko's daemon for Windows (the external WinDivert and USB/IP drivers besides Niko's tags, naive through purego) and
+  # for Linux, of the pinned Niko: pure Go, so cross-compiled here, with the flags of Niko's desktop.yml. naive is
+  # Chromium's libcronet.dll from the fork of cronet-go, which the core loads with purego from beside its executable:
+  # each architecture's directory holds the executables and the library
+  daemon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: niko-desktop
+          persist-credentials: false
+
+      - name: Niko and the core, at their pins
+        run: niko-desktop/.github/scripts/niko.sh . --core
+
+      - name: Install Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: niko/libcore/go.mod
+          cache-dependency-path: niko/libcore/go.sum
+
+      # Each architecture's library is the one the fork's SHA256SUMS names, of the Chromium the Android library is
+      # (the core's intermediate anchors are of that release)
+      - name: The core, the daemon and naive's library for Windows; the daemon for Linux
+        run: |
+          NIKO_VERSION="$(sed -n 's/^VERSION_NAME=//p' niko/niko.properties)-$(git -C niko rev-parse --short=7 HEAD)"
+          out_root="$RUNNER_TEMP/daemon"
+          cd sing-box
+          chromium="$(sed -n 's/^const ChromiumAnchorsVersion = "\(.*\)"$/\1/p' common/certificate/chromium_anchors_neko_generated.go)"
+          [ -n "$chromium" ] || { echo "::error::no Chromium version of the core's anchors"; exit 1; }
+          for arch in amd64 arm64; do
+            out="$out_root/windows-$arch"
+            mkdir -p "$out"
+            for pkg in cmd/sing-box cmd/boxdd; do
+              GOOS=windows GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -checklinkname=0" \
+                -tags="$TAGS,with_naive_outbound,with_purego,with_external_windivert,with_external_usbip_drivers" \
+                -o "$out/$(basename "$pkg").exe" "./$pkg"
+            done
+            # Niko's daemon: boxdd with NikoService beside it (Niko's docs/design/desktop-stage3.md, slice 1)
+            (cd "$GITHUB_WORKSPACE/niko/libcore" && GOOS=windows GOARCH=$arch CGO_ENABLED=0 go build -trimpath \
+              -ldflags="-s -w -checklinkname=0 -X libcore/nikoservice.Version=$NIKO_VERSION" \
+              -tags="$TAGS,with_naive_outbound,with_purego,with_external_windivert,with_external_usbip_drivers" \
+              -o "$out/nikod.exe" ./cmd/nikod)
+            go mod download "github.com/sagernet/cronet-go/lib/windows_$arch"
+            lib="$(go list -m -f '{{.Dir}}' "github.com/sagernet/cronet-go/lib/windows_$arch")"
+            sums="$(go list -m -f '{{.Dir}}' github.com/sagernet/cronet-go)/SHA256SUMS"
+            want="$(awk -v f="lib/windows_$arch/libcronet.dll" '$2 == f {print $1}' "$sums")"
+            have="$(sha256sum "$lib/libcronet.dll" | cut -d' ' -f1)"
+            [ -n "$want" ] && [ "$have" = "$want" ] ||
+              { echo "::error::windows_$arch libcronet.dll $have, the fork's SHA256SUMS says '${want:-none}'"; exit 1; }
+            grep -q "const Version = \"$chromium\"" "$lib/libcronet.go" ||
+              { echo "::error::windows_$arch is not Chromium $chromium"; exit 1; }
+            cp "$lib/libcronet.dll" "$out/libcronet.dll"
+            echo "windows-$arch: $(du -h "$out"/* | tr '\t\n' ' ')(libcronet.dll $have, Chromium $chromium)"
+          done
+          # the daemon for Linux, for the window's test against it there (Niko's tags; naive needs its library and is
+          # not what that test asks for)
+          mkdir -p "$out_root/linux-amd64"
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -checklinkname=0" -tags="$TAGS" \
+            -o "$out_root/linux-amd64/boxdd" ./cmd/boxdd
+          (cd "$GITHUB_WORKSPACE/niko/libcore" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
+            -ldflags="-s -w -checklinkname=0 -X libcore/nikoservice.Version=$NIKO_VERSION" -tags="$TAGS" \
+            -o "$out_root/linux-amd64/nikod" ./cmd/nikod)
+          # port knocking is in the core: a profile of a raycontrol node needs it to reach the node; and naive
+          for daemon in boxdd nikod; do
+            go version -m "$out_root/windows-amd64/$daemon.exe" > /dev/null
+            for pkg in knock naive; do
+              strings "$out_root/windows-amd64/$daemon.exe" | grep -q "sing-box/protocol/$pkg" ||
+                { echo "::error::$daemon has no $pkg"; exit 1; }
+            done
+          done
+          strings "$out_root/windows-amd64/nikod.exe" | grep -q "niko.v1.NikoService" ||
+            { echo "::error::nikod has no NikoService"; exit 1; }
+
+      - name: The binaries
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: daemon
+          path: ${{ runner.temp }}/daemon
+          retention-days: 7
+
+  # The window (Flutter): the generated files are what their sources give, the analyser is clean, the tests pass, and
+  # the link to the daemon works against the real nikod of this run in development mode: the button starts a config,
+  # the status and the traffic are seen (stage 2b), NikoService's calls, VPN mode and the system proxy on Windows. Then
+  # the release build, which has no development link in it.
+  app:
+    needs: daemon
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Flutter 3.50.0 stable, by its commit
+      FLUTTER_VERSION: "3.50.0"
+      FLUTTER_COMMIT: ab2912035e160d9cad6306df307576da6128ebdb
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: niko-desktop
+          persist-credentials: false
+
+      # its golden fixtures for the test against the real daemon, its sources of the generated files
+      - name: Niko, at its pin
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            niko-desktop/.github/scripts/niko.sh . --core
+          else
+            niko-desktop/.github/scripts/niko.sh .
+          fi
+
+      - name: Flutter
+        run: |
+          git clone -q --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          have="$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)"
+          [ "$have" = "$FLUTTER_COMMIT" ] || { echo "::error::Flutter $FLUTTER_VERSION is $have, pinned $FLUTTER_COMMIT"; exit 1; }
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/flutter/bin:$PATH"
+          flutter --disable-analytics > /dev/null
+          flutter --version
+
+      - name: What Linux needs to build a window
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q clang cmake ninja-build pkg-config libgtk-3-dev > /dev/null
+
+      - name: Dependencies, as locked
+        working-directory: niko-desktop
+        run: flutter pub get --enforce-lockfile
+
+      # generated files against their sources at the pinned Niko: the theme against shared/tokens.json and the fonts
+      # against the app's, the icons against shared/icons (Niko's generators, which write the window's files too),
+      # the daemon's API against the core's protos at the commit Niko pins and Niko's shared/proto
+      - name: Generated files are current
+        if: runner.os == 'Linux'
+        run: |
+          # Niko's generators check the window's files in the checkout --desktop names. One from before the split
+          # (arngory/niko-desktop's history begins at its desktop/) takes no --desktop and checks its own copy of the
+          # window in desktop/: that copy is this checkout here
+          if [ -d niko/desktop ]; then
+            rm -rf niko/desktop
+            ln -s "$GITHUB_WORKSPACE/niko-desktop" niko/desktop
+          fi
+          python3 -I niko/shared/tool/gen_tokens.py --check --desktop niko-desktop
+          # the window's icons too (lib/ui/icons.g.dart), from the same SVGs as Android's
+          python3 -I niko/shared/tool/gen_icons.py --check --desktop niko-desktop
+          python3 -m pip install -q grpcio-tools==1.85.1
+          dart pub global activate protoc_plugin 25.1.0 > /dev/null
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          niko-desktop/tool/gen_proto.sh --check
+
+      - name: Analyse
+        working-directory: niko-desktop
+        run: flutter analyze && dart analyze tool
+
+      - name: Tests
+        working-directory: niko-desktop
+        run: flutter test
+
+      - name: The screens, when a picture differs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: golden-failures-${{ runner.os }}
+          path: niko-desktop/test/failures
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: The daemon of this run
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: daemon
+          path: ${{ runner.temp }}/daemon
+
+      # the runner's own proxy settings (WinINet's, in HKCU), kept before any real daemon runs here: put back at the end
+      # of the job whatever the tests did (below)
+      - name: The runner's proxy settings, kept
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: reg export 'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings' "$env:RUNNER_TEMP\internet-settings.reg" /y
+
+      # NIKO_ROOT is ../niko by default: Niko's checkout above
+      - name: The window's link against the real daemon
+        working-directory: niko-desktop
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            daemon="$RUNNER_TEMP/daemon/windows-amd64/nikod.exe"
+          else
+            daemon="$RUNNER_TEMP/daemon/linux-amd64/nikod"
+            chmod +x "$daemon"
+          fi
+          NIKO_DAEMON="$daemon" flutter test test/real_daemon_test.dart
+
+      # VPN mode (slice 8b of Niko's docs/design/desktop-stage3.md): nikod in development mode opens its TUN on the
+      # runner (an administrator's), Connect in VPN mode carries a request to an address of TEST-NET-3 through the
+      # profile, by the programs chosen. Not the runner's system proxy: the test reads it before, while and after the
+      # TUN, the same
+      - name: VPN mode against the real daemon
+        if: runner.os == 'Windows'
+        working-directory: niko-desktop
+        env:
+          NIKO_VPN_TEST: "1"
+        run: |
+          NIKO_DAEMON="$RUNNER_TEMP/daemon/windows-amd64/nikod.exe" flutter test test/real_daemon_test.dart \
+            --plain-name 'VPN mode'
+
+      # The system proxy of proxy mode (slice 8b): set for the user by nikod's platform, off and on through
+      # ManagedService, gone with the core; WinINet's values of HKCU are read while it runs and checked to be as before
+      # after
+      - name: The system proxy against the real daemon
+        if: runner.os == 'Windows'
+        working-directory: niko-desktop
+        env:
+          NIKO_PROXY_TEST: "1"
+        run: |
+          NIKO_DAEMON="$RUNNER_TEMP/daemon/windows-amd64/nikod.exe" flutter test test/real_daemon_test.dart \
+            --plain-name 'the system proxy'
+
+      - name: The runner's proxy settings, put back
+        if: ${{ always() && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+          if (Test-Path "$env:RUNNER_TEMP\internet-settings.reg") {
+            foreach ($name in 'ProxyEnable', 'ProxyServer', 'ProxyOverride', 'AutoConfigURL') {
+              Remove-ItemProperty -Path $key -Name $name -ErrorAction SilentlyContinue
+            }
+            reg import "$env:RUNNER_TEMP\internet-settings.reg"
+          }
+          Get-ItemProperty $key | Select-Object ProxyEnable, ProxyServer, ProxyOverride, AutoConfigURL | Format-List
+
+      # «Что решить», п. 2 of Niko's docs/design/desktop.md: what dart:io can open towards the daemon's worker here
+      - name: Local sockets dart:io has on this system (informational)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        working-directory: niko-desktop
+        run: |
+          {
+            echo "### dart:io and local sockets, $RUNNER_OS"
+            echo '```'
+            dart run tool/probe_local_sockets.dart
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # no NIKO_DEV: the release has no way to a daemon over TCP
+      - name: Build
+        working-directory: niko-desktop
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            flutter build windows --release
+            out=build/windows/x64/runner/Release
+          else
+            flutter build linux --release
+            out=build/linux/x64/release/bundle
+          fi
+          ls -la "$out"
+          du -sh "$out"
+          # the development link's own words are not in a release
+          if grep -r -a -l -- "--daemon takes 127.0.0.1" "$out" > /dev/null; then
+            echo "::error::the release build carries the development link"; exit 1
+          fi
+          echo "WINDOW_OUT=niko-desktop/$out" >> "$GITHUB_ENV"
+
+      - name: The window
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: niko-window-${{ runner.os }}
+          path: ${{ env.WINDOW_OUT }}
+          retention-days: 7
+
+  result:
+    name: CI result
+    if: always()
+    needs: [daemon, app]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "jobs: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) echo "::error::a job ended $result"; exit 1 ;;
+            esac
+          done
