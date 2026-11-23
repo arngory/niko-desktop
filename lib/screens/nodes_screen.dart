@@ -53,6 +53,7 @@ class NodesScreen extends StatelessWidget {
                 itemCount: feed.profiles.length,
                 itemBuilder: (context, i) {
                   final p = feed.profiles[i];
+                  final share = !feed.shownIsNode;
                   return _ProfileRow(
                     key: ValueKey(p.id),
                     profile: p,
@@ -60,7 +61,7 @@ class NodesScreen extends StatelessWidget {
                     divider: i > 0,
                     onPressed: () => feed.select(p.id),
                     onDelete: () => feed.delete(p),
-                    onShare: () => feed.share(p, copyText),
+                    onShare: share ? () => feed.share(p, copyText) : null,
                   );
                 },
               ),
@@ -435,7 +436,7 @@ class _ProfileRow extends StatelessWidget {
     required this.divider,
     required this.onPressed,
     required this.onDelete,
-    required this.onShare,
+    this.onShare,
   });
 
   final ProfileRow profile;
@@ -443,7 +444,8 @@ class _ProfileRow extends StatelessWidget {
   final bool divider;
   final VoidCallback onPressed;
   final VoidCallback onDelete;
-  final VoidCallback onShare;
+  /// null: no link to copy (a node's profile)
+  final VoidCallback? onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -502,13 +504,14 @@ class _ProfileRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: body),
-          NikoIconButton(
-            icon: NikoIcons.copy,
-            label: strings.profileShare(profile.name),
-            muted: true,
-            small: true,
-            onPressed: onShare,
-          ),
+          if (onShare != null)
+            NikoIconButton(
+              icon: NikoIcons.copy,
+              label: strings.profileShare(profile.name),
+              muted: true,
+              small: true,
+              onPressed: onShare,
+            ),
           Padding(
             padding: const EdgeInsets.only(right: NikoSpace.s2),
             child: NikoIconButton(

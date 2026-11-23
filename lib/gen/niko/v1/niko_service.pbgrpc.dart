@@ -149,8 +149,9 @@ class NikoServiceClient extends $grpc.Client {
   }
 
   /// The link to share a profile by (D-PROFILE-07), as the app writes it: a link of its type's own, else sn://.
-  /// NOT_FOUND; FAILED_PRECONDITION where its secrets cannot be opened on this machine; UNIMPLEMENTED for a kind with
-  /// no link (a plugin's profile).
+  /// NOT_FOUND; FAILED_PRECONDITION where its secrets cannot be opened on this machine, and for a raycontrol node's
+  /// profile (its rows are this device's: another device registers with an invite of its own); UNIMPLEMENTED for a kind
+  /// with no link (a plugin's profile).
   $grpc.ResponseFuture<$0.ShareLink> shareProfile(
     $0.ProfileId request, {
     $grpc.CallOptions? options,
