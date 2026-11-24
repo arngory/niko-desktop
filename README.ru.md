@@ -127,3 +127,7 @@ tool/gen_proto.sh --check [<checkout форка ядра>]
 ![Окно, подключено](doc/live-linux.png)
 
 Шрифты Geist и Geist Mono — SIL Open Font License 1.1, текст в `fonts/OFL.txt`.
+
+## Поддержать проект
+
+Niko даётся как есть, бесплатно. Если он вам помогает, можно поддержать разработку: [donotpromise.space/donate](https://donotpromise.space/donate).
