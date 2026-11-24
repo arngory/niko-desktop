@@ -8,6 +8,12 @@ Flutter, Windows сначала, Linux потом. Ядро и логика Niko
 целиком — [docs/design/desktop.md](https://github.com/arngory/niko/blob/main/docs/design/desktop.md), что за каждым элементом экрана —
 [desktop-requirements.md](https://github.com/arngory/niko/blob/main/docs/spec/desktop-requirements.md).
 
+<p>
+<img src="test/goldens/main_on_dark.png" width="300" alt="Главная, подключено"> <img src="test/goldens/node_light.png" width="300" alt="Узел raycontrol"> <img src="test/goldens/settings_light.png" width="300" alt="Настройки">
+</p>
+
+Картинки — эталоны виджет-тестов (`test/goldens/`): окно такое, какое оно сейчас.
+
 Сейчас окно умеет то, что даёт уже готовый демон (`boxdd`), без `NikoService`:
 
 - **Главная** (этап 2b): кнопка запускает готовый JSON-конфиг, видны статус, время и скорость (D-MAIN-02,

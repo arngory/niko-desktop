@@ -9,6 +9,12 @@ which the window talks to over gRPC. What the window can do and where its parts 
 [docs/design/desktop.md](https://github.com/arngory/niko/blob/main/docs/design/desktop.md) and
 [docs/design/desktop-stage3.md](https://github.com/arngory/niko/blob/main/docs/design/desktop-stage3.md).
 
+<p>
+<img src="test/goldens/main_on_dark.png" width="300" alt="Main, connected"> <img src="test/goldens/node_light.png" width="300" alt="A raycontrol node"> <img src="test/goldens/settings_light.png" width="300" alt="Settings">
+</p>
+
+The pictures are the widget tests' goldens (`test/goldens/`), the window as it is now.
+
 ## What lives where
 
 - **Here:** the window (`lib/`, `windows/`, `linux/`), its tests (`test/`, the screens' pictures in
