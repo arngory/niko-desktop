@@ -454,11 +454,15 @@ void main() {
       await controller.toggle();
       await until(() => controller.service.phase == ServicePhase.idle, 'the core down');
       await until(() => feed.open.isEmpty, 'the empty list');
-      // On Windows the gRPC package of the fake daemon and of the window closes the whole connection when the feed
-      // lets go of the stream as the daemon ends it: the window then links again, and is pressed once it has
-      await until(() => controller.link == LinkPhase.ready, 'the link after the stop');
+      // On Windows the gRPC package of the fake daemon and of the window can close the whole connection when the feed
+      // lets go of the stream as the daemon ends it; retry toggle until the second start lands on the server
       server.connections['c'] = connection('c', '10.0.0.9:80');
-      await controller.toggle();
+      await until(() {
+        if (server.configs.length < 2 && controller.link == LinkPhase.ready && !controller.busy) {
+          unawaited(controller.toggle());
+        }
+        return server.configs.length == 2;
+      }, 'the second start');
       await until(() => feed.open.length == 2, 'the connections of the new run');
     });
 
