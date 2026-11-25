@@ -185,6 +185,10 @@ jobs:
           python3 -I niko/shared/tool/gen_tokens.py --check --desktop niko-desktop
           # the window's icons too (lib/ui/icons.g.dart), from the same SVGs as Android's
           python3 -I niko/shared/tool/gen_icons.py --check --desktop niko-desktop
+          # update signing key ID shown in About matches bytes 2..10 (LE) of niko/niko-update.pub's base64 key
+          key_id="$(python3 -I -c "import base64, pathlib; lines = pathlib.Path('niko/niko-update.pub').read_text().splitlines(); raw = base64.b64decode(lines[1].strip()); assert len(raw) == 42 and raw[:2] == b'Ed'; print(raw[2:10][::-1].hex().upper())")"
+          [ -n "$key_id" ] && grep -q "const updateSigningKey = 'minisign $key_id';" niko-desktop/lib/app_info.dart ||
+            { echo "::error::updateSigningKey in lib/app_info.dart does not match niko/niko-update.pub ($key_id)"; exit 1; }
           python3 -m pip install -q grpcio-tools==1.85.1
           dart pub global activate protoc_plugin 25.1.0 > /dev/null
           export PATH="$PATH:$HOME/.pub-cache/bin"
@@ -287,11 +291,13 @@ jobs:
       - name: Build
         working-directory: niko-desktop
         run: |
+          window_version="$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)"
+          [ -n "$window_version" ] || { echo "::error::could not read version from pubspec.yaml"; exit 1; }
           if [ "$RUNNER_OS" = Windows ]; then
-            flutter build windows --release
+            flutter build windows --release --dart-define="NIKO_WINDOW_VERSION=$window_version"
             out=build/windows/x64/runner/Release
           else
-            flutter build linux --release
+            flutter build linux --release --dart-define="NIKO_WINDOW_VERSION=$window_version"
             out=build/linux/x64/release/bundle
           fi
           ls -la "$out"

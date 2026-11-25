@@ -79,6 +79,9 @@ class MemoryDaemon implements Daemon {
   Future<NikoInfo> nikoInfo() async =>
       NikoInfo(nikoVersion: '1.58.0', coreVersion: '1.14.4-niko', storeSchema: 0, api: api);
 
+  final routeCalls = <({String host, int port, String network, String inbound, bool resolve})>[];
+  Future<RouteVerdict> Function(String host, int port, String network, String inbound, bool resolve)? onRouteTest;
+
   @override
   Future<RouteVerdict> routeTest(
     String host,
@@ -86,7 +89,11 @@ class MemoryDaemon implements Daemon {
     String network = 'tcp',
     String inbound = '',
     bool resolve = false,
-  }) async => const RouteVerdict(index: -1, rule: '', action: 'final', outbound: 'proxy');
+  }) async {
+    routeCalls.add((host: host, port: port, network: network, inbound: inbound, resolve: resolve));
+    if (onRouteTest case final fn?) return fn(host, port, network, inbound, resolve);
+    return const RouteVerdict(index: -1, rule: '', action: 'final', outbound: 'proxy');
+  }
 
   @override
   Stream<StunProgress> stunTest(String server) {
@@ -480,6 +487,7 @@ void main() {
     String locale = 'ru',
     bool withDaemon = true,
     bool withConfig = true,
+    String? daemonAddress,
     int api = 1,
     WindowSettings? settings,
     Directory? Function()? saveTo,
@@ -499,7 +507,7 @@ void main() {
         controller: controller,
         settings: settings,
         saveTo: saveTo ?? () => null,
-        daemonAddress: withDaemon ? '127.0.0.1:18080' : '',
+        daemonAddress: daemonAddress ?? (withDaemon ? '127.0.0.1:18080' : ''),
         configName: withConfig && withDaemon ? 'direct.json' : '',
         locale: Locale(locale),
         brightness: brightness,
@@ -571,8 +579,8 @@ void main() {
   testWidgets('the keyboard: Enter on the focused button connects', (tester) async {
     await show(tester);
     await core(tester, ServicePhase.idle);
-    // the header first: four sections and the two views; then the button
-    for (var stop = 0; stop < 7; stop++) {
+    // the header first: five sections and the two views; then the button
+    for (var stop = 0; stop < 8; stop++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     }
     await tester.pump();
@@ -707,10 +715,10 @@ void main() {
     testWidgets('the keyboard reaches the sections and the view', (tester) async {
       await show(tester);
       await core(tester, ServicePhase.idle);
-      // the first stop is the first section, the second Узлы, the third the log
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      // 1=Главная, 2=Узлы, 3=Проверка маршрута, 4=Журнал
+      for (var i = 0; i < 4; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      }
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump();
@@ -1794,6 +1802,202 @@ void main() {
       expect(tester.takeException(), isNull);
       await press(tester, find.text('Новое правило'));
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets('release banner without --config says the service is older than the window', (tester) async {
+    await show(tester, brightness: Brightness.light, withConfig: false, daemonAddress: '', api: 3);
+    await core(tester, ServicePhase.idle);
+    expect(find.text('Служба Niko старее окна'), findsOneWidget);
+    expect(find.text('Нужен NikoService API 7, у службы — 3'), findsOneWidget);
+    expect(find.text('--config <file.json>'), findsNothing);
+    await picture('main_old_service_light');
+  });
+
+  group('Проверка маршрута', () {
+    Future<void> settle(WidgetTester tester) async {
+      for (var i = 0; i < 8; i++) {
+        await tester.pump();
+      }
+    }
+
+    Future<void> openCheck(
+      WidgetTester tester, {
+      Brightness brightness = Brightness.light,
+      int api = 11,
+      WindowSettings? settings,
+    }) async {
+      await show(tester, brightness: brightness, api: api, settings: settings, size: const Size(960, 760));
+      daemon.groupRows = [const GroupRow(id: 2, name: 'arngory', nodeId: 'n1', profiles: 1)];
+      daemon.profileRows = [
+        const ProfileRow(id: 7, groupId: 2, order: 1, type: 'naive', name: 'Хельсинки', address: '203.0.113.7:443'),
+      ];
+      daemon.selectedId = 7;
+      daemon.ruleRows = [
+        const RuleRow(
+          id: 1,
+          name: 'Россия',
+          order: 1,
+          domains: 'srs:https://lists.example.com/ru-direct.srs',
+          outbound: RuleOutbound.direct,
+        ),
+        const RuleRow(
+          id: 2,
+          name: 'Реклама',
+          order: 2,
+          domains: 'srs:https://lists.example.com/ads.srs',
+          outbound: RuleOutbound.block,
+        ),
+      ];
+      final updatedAt = daemonClock.subtract(const Duration(hours: 2));
+      daemon.ruleSetRows = [
+        RuleSetRow(
+          item: 'srs:https://lists.example.com/ru-direct.srs',
+          url: 'https://lists.example.com/ru-direct.srs',
+          enabled: true,
+          downloaded: true,
+          updated: updatedAt.millisecondsSinceEpoch ~/ 1000,
+        ),
+        RuleSetRow(
+          item: 'srs:https://lists.example.com/ads.srs',
+          url: 'https://lists.example.com/ads.srs',
+          enabled: true,
+          downloaded: false,
+          updated: 0,
+        ),
+      ];
+      await core(tester, ServicePhase.started);
+      daemon.storeEvents.add(const StoreChange(revision: 1, reset: true));
+      await tester.tap(find.text('Проверка маршрута').first);
+      await settle(tester);
+    }
+
+    testWidgets('proxy final verdict, freshness caption, and light/dark pictures (D-CHECK-02…06)', (tester) async {
+      await openCheck(tester, brightness: Brightness.light);
+      await tester.enterText(find.byType(EditableText), 'youtube.com');
+      await tester.pump();
+      await tester.tap(find.text('Проверить'));
+      await settle(tester);
+
+      expect(daemon.routeCalls.last, (
+        host: 'youtube.com',
+        port: 443,
+        network: 'tcp',
+        inbound: 'mixed-in',
+        resolve: false,
+      ));
+      expect(find.text('Остальное'), findsOneWidget);
+      expect(find.text('arngory · naive'), findsOneWidget);
+      expect(find.text('Через прокси: не в «Россия»'), findsOneWidget);
+      expect(find.textContaining('«Россия» обновлён сегодня,'), findsOneWidget);
+      await picture('check_light');
+
+      // dark theme picture
+      await openCheck(tester, brightness: Brightness.dark);
+      await tester.enterText(find.byType(EditableText), 'youtube.com');
+      await tester.pump();
+      await tester.tap(find.text('Проверить'));
+      await settle(tester);
+      await picture('check_dark');
+    });
+
+    testWidgets('direct, reject, verdict error, gRPC error, and recent history (D-CHECK-07)', (tester) async {
+      final settings = WindowSettings.memory();
+      await openCheck(tester, brightness: Brightness.light, settings: settings);
+
+      daemon.onRouteTest = (host, port, network, inbound, resolve) async {
+        if (host == 'gosuslugi.ru') {
+          return const RouteVerdict(
+            index: 0,
+            rule: 'rule_set=srs:https://lists.example.com/ru-direct.srs',
+            action: 'route',
+            outbound: 'direct',
+          );
+        }
+        if (host == 'ads.example.com') {
+          return const RouteVerdict(
+            index: 1,
+            rule: 'rule_set=srs:https://lists.example.com/ads.srs',
+            action: 'reject',
+            outbound: 'block',
+          );
+        }
+        if (host == 'broken.example') {
+          return const RouteVerdict(
+            index: -1,
+            rule: '',
+            action: 'final',
+            outbound: 'proxy',
+            error: 'dns lookup failed',
+          );
+        }
+        if (host == 'rpc-fail.example') {
+          throw const GrpcError.unavailable('core restarting');
+        }
+        return const RouteVerdict(index: -1, rule: '', action: 'final', outbound: 'proxy');
+      };
+
+      await tester.enterText(find.byType(EditableText), 'gosuslugi.ru');
+      await tester.pump();
+      await tester.tap(find.text('Проверить'));
+      await settle(tester);
+      expect(find.text('Напрямую: «Россия»'), findsOneWidget);
+
+      await tester.enterText(find.byType(EditableText), 'ads.example.com');
+      await tester.pump();
+      await tester.tap(find.text('Проверить'));
+      await settle(tester);
+      expect(find.text('Блок: «Реклама»'), findsOneWidget);
+      expect(find.text('«Реклама» ещё не скачан'), findsOneWidget);
+
+      await tester.enterText(find.byType(EditableText), 'git.corp.example:22');
+      await tester.pump();
+      await tester.tap(find.text('Проверить'));
+      await settle(tester);
+      expect(find.text('НЕДАВНИЕ'), findsOneWidget);
+      expect(settings.recentChecks.map((r) => r.target), ['git.corp.example:22', 'ads.example.com', 'gosuslugi.ru']);
+      await picture('check_recent_light');
+
+      // verdict with error is shown and NOT added to recent
+      await tester.enterText(find.byType(EditableText), 'broken.example');
+      await tester.pump();
+      await tester.tap(find.text('Проверить'));
+      await settle(tester);
+      expect(find.text('Маршрута нет'), findsOneWidget);
+      expect(find.text('dns lookup failed'), findsOneWidget);
+      expect(settings.recentChecks, hasLength(3));
+
+      // gRPC failure shows danger banner
+      await tester.enterText(find.byType(EditableText), 'rpc-fail.example');
+      await tester.pump();
+      await tester.tap(find.text('Проверить'));
+      await settle(tester);
+      expect(find.text('Не удалось проверить'), findsOneWidget);
+
+      // tapping a recent row replays the check
+      await tester.tap(find.text('gosuslugi.ru'));
+      await settle(tester);
+      expect(daemon.routeCalls.last.host, 'gosuslugi.ru');
+
+      // clear recent removes the section
+      await tester.tap(find.bySemanticsLabel('Очистить недавние'));
+      await settle(tester);
+      expect(find.text('НЕДАВНИЕ'), findsNothing);
+    });
+
+    testWidgets('states: old daemon without NikoService and stopped core disable check', (tester) async {
+      await show(tester, brightness: Brightness.light, api: 0);
+      await core(tester, ServicePhase.started);
+      daemon.storeEvents.add(const StoreChange(revision: 1, reset: true));
+      await tester.tap(find.text('Проверка маршрута').first);
+      await settle(tester);
+      expect(find.text('Проверке маршрута нужна служба Niko'), findsOneWidget);
+
+      await show(tester, brightness: Brightness.light, api: 11);
+      await core(tester, ServicePhase.idle);
+      await tester.tap(find.text('Проверка маршрута').first);
+      await settle(tester);
+      expect(find.text('Подключение выключено'), findsOneWidget);
     });
   });
 

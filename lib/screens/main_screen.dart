@@ -199,7 +199,14 @@ class _MainScreenState extends State<MainScreen> {
                 ],
                 if (ready && !state.canStart) ...[
                   const SizedBox(height: NikoSpace.s6),
-                  NikoBanner(icon: NikoIcons.alert, title: strings.noConfigTitle, text: '--config <file.json>'),
+                  if (widget.daemonAddress.isNotEmpty)
+                    NikoBanner(icon: NikoIcons.alert, title: strings.noConfigTitle, text: '--config <file.json>')
+                  else
+                    NikoBanner(
+                      icon: NikoIcons.alert,
+                      title: strings.oldServiceTitle,
+                      text: strings.oldServiceText(ConnectionController.connectApi, state.nikoApi),
+                    ),
                 ],
                 if (widget.daemonAddress.isNotEmpty) ...[
                   const SizedBox(height: NikoSpace.s8),

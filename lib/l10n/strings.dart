@@ -25,9 +25,13 @@ class NikoStrings {
   String get noServiceTitle => _ru ? 'Служба не установлена' : 'The service is not installed';
   String get serviceSilentTitle => _ru ? 'Служба не отвечает' : 'The service does not answer';
   String get noConfigTitle => _ru ? 'Нет конфига' : 'No config';
+  String get oldServiceTitle => _ru ? 'Служба Niko старее окна' : 'The Niko service is older than the window';
+  String oldServiceText(int need, int have) =>
+      _ru ? 'Нужен NikoService API $need, у службы — $have' : 'Needs NikoService API $need, the service has $have';
 
   String get sections => _ru ? 'Разделы' : 'Sections';
   String get sectionHome => _ru ? 'Главная' : 'Home';
+  String get sectionCheck => _ru ? 'Проверка маршрута' : 'Route check';
   String get sectionConnections => _ru ? 'Соединения' : 'Connections';
   String get sectionLog => _ru ? 'Журнал' : 'Log';
   String get sectionNodes => _ru ? 'Узлы' : 'Nodes';
@@ -270,6 +274,9 @@ class NikoStrings {
       : 'One a line: a name (firefox.exe) or a full path. The other programs go direct or through Niko';
   String get setLog => _ru ? 'Журнал' : 'Log';
   String get setLogLevel => _ru ? 'Уровень журнала' : 'Log level';
+  String get setAbout => _ru ? 'О программе и обновления' : 'About and updates';
+  String get setAboutMenu => _ru ? 'О программе' : 'About';
+  String get setUpdateKey => _ru ? 'Подпись обновлений' : 'Update signing key';
 
   String get inboundUser => _ru ? 'Пользователь' : 'User';
   String get inboundPort => _ru ? 'Порт' : 'Port';
@@ -343,4 +350,28 @@ class NikoStrings {
         3 => _ru ? 'домены и адреса' : 'domains and addresses',
         _ => '',
       };
+
+  String get today => _ru ? 'сегодня' : 'today';
+  String get yesterday => _ru ? 'вчера' : 'yesterday';
+  String get checkAddress => _ru ? 'Адрес' : 'Address';
+  String get checkProtocol => _ru ? 'Протокол' : 'Protocol';
+  String get checkButton => _ru ? 'Проверить' : 'Check';
+  String get checkChecking => _ru ? 'Проверяю…' : 'Checking…';
+  String get checkResult => _ru ? 'Результат' : 'Result';
+  String get checkRuleFinal => _ru ? 'Остальное' : 'Everything else';
+  String get checkAnswerProxy => _ru ? 'Через прокси' : 'Through the proxy';
+  String checkAnswerProxyNotIn(String names) =>
+      _ru ? 'Через прокси: не в «$names»' : 'Through the proxy: not in “$names”';
+  String checkAnswerProxyRule(String name) => _ru ? 'Через прокси: «$name»' : 'Through the proxy: “$name”';
+  String checkAnswerDirect(String name) => _ru ? 'Напрямую: «$name»' : 'Direct: “$name”';
+  String checkAnswerBlock(String name) => _ru ? 'Блок: «$name»' : 'Block: “$name”';
+  String checkRuleSetUpdated(String name, String when) => _ru ? '«$name» обновлён $when' : '“$name” updated $when';
+  String checkRuleSetNotFetched(String name) => _ru ? '«$name» ещё не скачан' : '“$name” not fetched yet';
+  String get checkNoRoute => _ru ? 'Маршрута нет' : 'No route';
+  String get checkNeedsNiko => _ru ? 'Проверке маршрута нужна служба Niko' : 'Route check needs the Niko service';
+  String get checkFailed => _ru ? 'Не удалось проверить' : 'Could not check';
+  String get checkRecent => _ru ? 'Недавние' : 'Recent';
+  String get checkClearRecent => _ru ? 'Очистить недавние' : 'Clear recent';
+  String get checkSteps => _ru ? 'Шаги' : 'Steps';
+  String get checkNotes => _ru ? 'Заметки ядра' : 'Core notes';
 }

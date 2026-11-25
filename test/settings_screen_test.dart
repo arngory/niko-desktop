@@ -34,9 +34,11 @@ void main() {
     SettingValues values, {
     WindowSettings? window,
     ValueChanged<String>? onLanguage,
+    String coreVersion = '',
+    String nikoVersion = '',
     (String, String)? notice,
     Brightness brightness = Brightness.light,
-    Size size = const Size(1040, 2040),
+    Size size = const Size(1040, 2240),
     String locale = 'ru',
   }) async {
     tester.view.physicalSize = size;
@@ -49,6 +51,8 @@ void main() {
           values: values,
           window: window,
           onLanguage: onLanguage,
+          coreVersion: coreVersion,
+          nikoVersion: nikoVersion,
           notice: notice,
           strings: NikoStrings.of(Locale(locale)),
         ),
@@ -273,6 +277,33 @@ void main() {
     await tester.pump();
     expect(find.byType(NikoDialog), findsNothing);
     expect(portNode.hasFocus, isTrue, reason: 'focus returns to the row that opened the dialog');
+  });
+
+  testWidgets('about section shows window version, signing key, and connected daemon versions (D-SET-12)', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      defaults(),
+      coreVersion: '1.14.4-niko',
+      nikoVersion: '1.58.0',
+      notice: ('Нет связи со службой', ''),
+      size: const Size(1040, 720),
+    );
+    expect(find.text('Niko 0.1.0'), findsOneWidget);
+    expect(find.text('sing-box 1.14.4-niko'), findsOneWidget);
+    expect(find.text('nikod 1.58.0'), findsOneWidget);
+    expect(find.text('minisign D5D2D2E799D74D8D'), findsOneWidget);
+    if (Platform.isLinux) {
+      await expectLater(find.byType(SettingsScreen), matchesGoldenFile('goldens/settings_about_light.png'));
+    }
+
+    // without daemon versions, sing-box/nikod lines are omitted while window version and signing key remain
+    await show(tester, defaults(), notice: ('Нет связи со службой', ''), size: const Size(1040, 720));
+    expect(find.text('Niko 0.1.0'), findsOneWidget);
+    expect(find.textContaining('sing-box'), findsNothing);
+    expect(find.textContaining('nikod'), findsNothing);
+    expect(find.text('minisign D5D2D2E799D74D8D'), findsOneWidget);
   });
 }
 

@@ -175,10 +175,22 @@ class NikoTonalButton extends StatelessWidget {
 
 /// A field with its label above (m-field): a value typed in mono, a placeholder for what it takes.
 class NikoTextField extends StatefulWidget {
-  const NikoTextField({super.key, required this.label, this.placeholder = '', required this.controller, this.onSubmit});
+  const NikoTextField({
+    super.key,
+    required this.label,
+    this.placeholder = '',
+    this.labelHidden = false,
+    this.fill,
+    required this.controller,
+    this.onSubmit,
+  });
 
   final String label;
   final String placeholder;
+
+  /// Keeps [label] for screen readers only, hiding the visual caption above the box.
+  final bool labelHidden;
+  final Color? fill;
   final TextEditingController controller;
   final ValueChanged<String>? onSubmit;
 
@@ -223,14 +235,16 @@ class _NikoTextFieldState extends State<NikoTextField> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ExcludeSemantics(child: Text(widget.label, style: NikoType.caption.style(colors.ink2))),
-          const SizedBox(height: NikoSpace.s1),
+          if (!widget.labelHidden) ...[
+            ExcludeSemantics(child: Text(widget.label, style: NikoType.caption.style(colors.ink2))),
+            const SizedBox(height: NikoSpace.s1),
+          ],
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _focus.requestFocus,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: colors.surface0,
+                color: widget.fill ?? colors.surface0,
                 borderRadius: BorderRadius.circular(NikoRadius.sm),
                 border: Border.all(
                   width: NikoStroke.bold,
@@ -271,31 +285,34 @@ class _NikoTextFieldState extends State<NikoTextField> {
 }
 
 /// A short mark (m-tag): quiet, or in ink for the one that matters (m-tag--strong).
+/// When [large] is true, draws a 32 px mono pill without uppercasing (route check path).
 class NikoTag extends StatelessWidget {
-  const NikoTag(this.text, {super.key, this.strong = false});
+  const NikoTag(this.text, {super.key, this.strong = false, this.large = false});
 
   final String text;
   final bool strong;
+  final bool large;
 
   @override
   Widget build(BuildContext context) {
     final colors = NikoTheme.of(context);
+    final fg = strong ? colors.onInk : colors.ink2;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: strong ? colors.ink : colors.surface2,
         borderRadius: BorderRadius.circular(NikoRadius.full),
       ),
       child: SizedBox(
-        height: 20,
+        height: large ? 32 : 20,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s2),
+          padding: EdgeInsets.symmetric(horizontal: large ? NikoSpace.s3 : NikoSpace.s2),
           child: Center(
             widthFactor: 1,
             child: Text(
-              text.toUpperCase(),
+              large ? text : text.toUpperCase(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: NikoType.label.style(strong ? colors.onInk : colors.ink2),
+              style: (large ? NikoType.code : NikoType.label).style(fg),
             ),
           ),
         ),

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../app_info.dart';
 import '../l10n/strings.dart';
 import '../state/window_settings.dart';
 import '../theme/niko_theme.dart';
@@ -24,6 +25,8 @@ class SettingsScreen extends StatefulWidget {
     required this.strings,
     this.window,
     this.onLanguage,
+    this.coreVersion = '',
+    this.nikoVersion = '',
     this.notice,
   });
 
@@ -37,6 +40,10 @@ class SettingsScreen extends StatefulWidget {
   /// Called after the user saves a language choice, so the shell can inform the daemon.
   final ValueChanged<String>? onLanguage;
 
+  /// Connected daemon's core and nikod versions (shown under About when non-empty).
+  final String coreVersion;
+  final String nikoVersion;
+
   /// What is shown in place of the daemon's sections, a title and what to know under it: no link to the daemon, the
   /// settings not read; an empty title: nothing yet (they are being read); null: the daemon's sections are shown.
   final (String, String)? notice;
@@ -46,7 +53,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 /// The sections, in the canvas's order.
-enum _Section { general, connection, dns, programs, inbound, experiments, log }
+enum _Section { general, connection, dns, programs, inbound, experiments, log, about }
 
 /// A dialog of a settings row: a daemon value row (fields or domain strategies) or the window's language choice.
 class _Dialog {
@@ -121,6 +128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _Section.inbound => _s.setInboundMenu,
         _Section.experiments => _s.setExperiments,
         _Section.log => _s.setLog,
+        _Section.about => _s.setAboutMenu,
       };
 
   void _jump(_Section section) {
@@ -280,11 +288,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ]),
       ];
 
+  // D-SET-12: window version, connected core/nikod versions, and update signing key; always shown
+  Widget _aboutSection(NikoColors colors) => _section(_Section.about, _s.setAbout, [
+        MergeSemantics(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 56),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s4, vertical: NikoSpace.s3),
+              child: SizedBox(
+                width: double.infinity,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Niko $windowVersion', style: NikoType.body.style(colors.ink, weight: FontWeight.w600)),
+                    if (widget.coreVersion.isNotEmpty)
+                      Text('sing-box ${widget.coreVersion}', style: NikoType.code.style(colors.ink2)),
+                    if (widget.nikoVersion.isNotEmpty && widget.nikoVersion != windowVersion)
+                      Text('nikod ${widget.nikoVersion}', style: NikoType.code.style(colors.ink2)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        CustomPaint(
+          foregroundPainter: _AboutHairline(colors.line),
+          child: NikoInfoRow(title: _s.setUpdateKey, value: updateSigningKey),
+        ),
+      ]);
+
   @override
   Widget build(BuildContext context) {
     final colors = NikoTheme.of(context);
     final hasDaemon = widget.notice == null;
-    final menuSections = hasDaemon ? _Section.values : const [_Section.general];
+    final menuSections = hasDaemon ? _Section.values : const [_Section.general, _Section.about];
     return ColoredBox(
       color: colors.surface0,
       child: ListenableBuilder(
@@ -316,6 +354,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ] else ...[
                           for (final section in _daemonSections()) ...[const SizedBox(height: NikoSpace.s8), section],
                         ],
+                        const SizedBox(height: NikoSpace.s8),
+                        _aboutSection(colors),
                       ],
                     );
                     return Row(
@@ -592,4 +632,17 @@ class _LanguageDialogState extends State<_LanguageDialog> {
       ),
     );
   }
+}
+
+class _AboutHairline extends CustomPainter {
+  _AboutHairline(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) =>
+      canvas.drawRect(Rect.fromLTWH(NikoSpace.s4, 0, size.width - NikoSpace.s4, NikoStroke.hairline), Paint()..color = color);
+
+  @override
+  bool shouldRepaint(_AboutHairline oldDelegate) => color != oldDelegate.color;
 }

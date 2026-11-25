@@ -7,10 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:niko_desktop/app.dart';
+import 'package:niko_desktop/app_info.dart';
 import 'package:niko_desktop/daemon/daemon.dart';
 import 'package:niko_desktop/daemon/endpoint.dart';
 import 'package:niko_desktop/platform/places.dart';
 import 'package:niko_desktop/state/connection_controller.dart';
+import 'package:niko_desktop/state/route_check.dart';
 import 'package:niko_desktop/state/window_settings.dart';
 import 'package:niko_desktop/ui/format.dart';
 import 'package:niko_desktop/ui/icons.dart';
@@ -113,6 +115,72 @@ void main() {
       expect(plainLogText('\x1b[36mINFO\x1b[0m[0000] started'), 'INFO[0000] started');
       expect(plainLogText('plain'), 'plain');
     });
+
+    test('recent moment formatting: today, yesterday, older', () {
+      final now = DateTime(2026, 11, 25, 16, 30);
+      expect(
+        formatRecent(DateTime(2026, 11, 25, 9, 14), now, today: 'сегодня', yesterday: 'вчера'),
+        'сегодня, 09:14',
+      );
+      expect(
+        formatRecent(DateTime(2026, 11, 24, 23, 5), now, today: 'сегодня', yesterday: 'вчера'),
+        'вчера, 23:05',
+      );
+      expect(
+        formatRecent(DateTime(2026, 11, 20, 8, 7), now, today: 'сегодня', yesterday: 'вчера'),
+        '20.11.2026 08:07',
+      );
+    });
+  });
+
+  group('route target parsing', () {
+    test('domains, URLs, host:port, and IPv6', () {
+      final plain = parseRouteTarget('  youtube.com  ')!;
+      expect((plain.host, plain.port, plain.display), ('youtube.com', 443, 'youtube.com'));
+
+      final httpUrl = parseRouteTarget('http://example.com/path?q=1#frag')!;
+      expect((httpUrl.host, httpUrl.port, httpUrl.display), ('example.com', 80, 'example.com:80'));
+
+      final httpsUrl = parseRouteTarget('https://example.com:8443/a/b')!;
+      expect((httpsUrl.host, httpsUrl.port, httpsUrl.display), ('example.com', 8443, 'example.com:8443'));
+
+      final hostPort = parseRouteTarget('git.corp.example:22')!;
+      expect((hostPort.host, hostPort.port, hostPort.display), ('git.corp.example', 22, 'git.corp.example:22'));
+
+      final bareV6 = parseRouteTarget('2001:db8::1')!;
+      expect((bareV6.host, bareV6.port, bareV6.display), ('2001:db8::1', 443, '2001:db8::1'));
+
+      final bracketV6 = parseRouteTarget('[2001:db8::1]:8443')!;
+      expect((bracketV6.host, bracketV6.port, bracketV6.display), ('2001:db8::1', 8443, '[2001:db8::1]:8443'));
+
+      final urlV6 = parseRouteTarget('http://[2001:db8::1]/test')!;
+      expect((urlV6.host, urlV6.port, urlV6.display), ('2001:db8::1', 80, '[2001:db8::1]:80'));
+    });
+
+    test('empty and malformed targets are rejected', () {
+      for (final bad in [
+        '',
+        '   ',
+        'example.com:0',
+        'example.com:65536',
+        'example.com:abc',
+        'example.com:',
+        'bad host.com',
+        'https://user@example.com',
+        '[2001:db8::1',
+        '[not-ipv6]:443',
+        'example.com/path-without-scheme',
+      ]) {
+        expect(parseRouteTarget(bad), isNull, reason: '"$bad"');
+      }
+    });
+  });
+
+  test('default windowVersion matches pubspec.yaml', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final match = RegExp(r'^version:\s*([^\s+]+)', multiLine: true).firstMatch(pubspec);
+    expect(match, isNotNull);
+    expect(windowVersion, match!.group(1));
   });
 
   group('places on the disk', () {
@@ -256,7 +324,7 @@ XDG_DOWNLOAD_DIR="\$HOME/Загрузки"
         'view': 'simple',
         'theme': 'sepia',
         'language': 'de',
-        'recentChecks': [
+        'futureList': [
           {'target': 'example.com', 'network': 'tcp'},
         ],
         'futureFlag': 42,
@@ -278,12 +346,57 @@ XDG_DOWNLOAD_DIR="\$HOME/Загрузки"
       expect(saved['theme'], 'dark');
       expect(saved['language'], 'en');
       expect(saved['futureFlag'], 42);
-      expect(saved['recentChecks'], [
+      expect(saved['futureList'], [
         {'target': 'example.com', 'network': 'tcp'},
       ]);
 
       final reloaded = await WindowSettings.load(file);
       expect((reloaded.theme, reloaded.language), ('dark', 'en'));
+    });
+
+    test('recent route checks persist, deduplicate, cap at 10, and clear', () async {
+      final folder = await Directory.systemTemp.createTemp('niko-settings-recent-');
+      addTearDown(() => folder.delete(recursive: true));
+      final file = File('${folder.path}/window.json');
+      final settings = await WindowSettings.load(file);
+
+      for (var i = 1; i <= 12; i++) {
+        settings.addRecentCheck(RecentRouteCheck(
+          target: 'host$i.example',
+          network: 'tcp',
+          outcome: 'proxy',
+          label: 'Node',
+        ));
+      }
+      expect(settings.recentChecks, hasLength(10));
+      expect(settings.recentChecks.first.target, 'host12.example');
+      expect(settings.recentChecks.last.target, 'host3.example');
+
+      // duplicate target+network moves to top; different network stays separate
+      settings.addRecentCheck(const RecentRouteCheck(
+        target: 'HOST5.EXAMPLE',
+        network: 'tcp',
+        outcome: 'direct',
+        label: 'Direct',
+      ));
+      settings.addRecentCheck(const RecentRouteCheck(
+        target: 'host5.example',
+        network: 'udp',
+        outcome: 'block',
+        label: 'Block',
+      ));
+      expect(settings.recentChecks, hasLength(10));
+      expect((settings.recentChecks[0].target, settings.recentChecks[0].network), ('host5.example', 'udp'));
+      expect((settings.recentChecks[1].target, settings.recentChecks[1].network), ('HOST5.EXAMPLE', 'tcp'));
+
+      await settings.save();
+      final reloaded = await WindowSettings.load(file);
+      expect(reloaded.recentChecks, hasLength(10));
+      expect(reloaded.recentChecks.first.outcome, 'block');
+
+      reloaded.clearRecentChecks();
+      await reloaded.save();
+      expect((await WindowSettings.load(file)).recentChecks, isEmpty);
     });
   });
 
@@ -357,6 +470,15 @@ class _DelayedSaveSettings extends ChangeNotifier implements WindowSettings {
 
   @override
   String language = 'system';
+
+  @override
+  List<RecentRouteCheck> get recentChecks => const [];
+
+  @override
+  void addRecentCheck(RecentRouteCheck entry) {}
+
+  @override
+  void clearRecentChecks() {}
 
   @override
   Future<void> flush() {

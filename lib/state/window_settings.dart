@@ -3,19 +3,58 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-/// What the window remembers between its launches: the view (Простой or Расширенный), the theme and the language.
-/// Kept in a file of the user's ([settingsFile]); a file that is not there or does not read gives the defaults, never
-/// a failure. Unknown keys in the JSON file are kept intact across saves.
+/// A recent successful route check remembered in `window.json` (D-CHECK-07).
+class RecentRouteCheck {
+  const RecentRouteCheck({
+    required this.target,
+    required this.network,
+    required this.outcome,
+    required this.label,
+  });
+
+  final String target;
+  final String network;
+  final String outcome;
+  final String label;
+
+  Map<String, Object?> toJson() => {
+        'target': target,
+        'network': network,
+        'outcome': outcome,
+        'label': label,
+      };
+
+  static RecentRouteCheck? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final target = raw['target'];
+    final network = raw['network'];
+    final outcome = raw['outcome'];
+    final label = raw['label'];
+    if (target is! String || target.isEmpty) return null;
+    if (network != 'tcp' && network != 'udp') return null;
+    if (outcome != 'proxy' && outcome != 'direct' && outcome != 'block') return null;
+    if (label is! String || label.isEmpty) return null;
+    return RecentRouteCheck(target: target, network: network as String, outcome: outcome as String, label: label);
+  }
+}
+
+/// What the window remembers between its launches: the view (Простой or Расширенный), the theme, the language, and
+/// recent route checks. Kept in a file of the user's ([settingsFile]); a file that is not there or does not read gives
+/// the defaults, never a failure. Unknown keys in the JSON file are kept intact across saves.
 class WindowSettings extends ChangeNotifier {
   WindowSettings._(
     this._file,
     this._advanced, {
     String theme = 'system',
     String language = 'system',
+    List<RecentRouteCheck> recentChecks = const [],
     Map<String, Object?> extra = const {},
   })  : _theme = normalizeTheme(theme),
         _language = normalizeLanguage(language),
+        _recentChecks = List<RecentRouteCheck>.of(recentChecks.take(maxRecentChecks)),
         _extra = Map<String, Object?>.of(extra);
+
+  static const maxRecentChecks = 10;
 
   final File? _file;
   final Map<String, Object?> _extra;
@@ -23,6 +62,7 @@ class WindowSettings extends ChangeNotifier {
   bool _advanced;
   String _theme;
   String _language;
+  final List<RecentRouteCheck> _recentChecks;
 
   /// The view Расширенный.
   bool get advanced => _advanced;
@@ -50,6 +90,36 @@ class WindowSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Recent successful route checks, newest first (at most [maxRecentChecks]).
+  List<RecentRouteCheck> get recentChecks => List<RecentRouteCheck>.unmodifiable(_recentChecks);
+
+  void addRecentCheck(RecentRouteCheck entry) {
+    final key = entry.target.toLowerCase();
+    _recentChecks.removeWhere((e) => e.target.toLowerCase() == key && e.network == entry.network);
+    _recentChecks.insert(0, entry);
+    if (_recentChecks.length > maxRecentChecks) {
+      _recentChecks.removeRange(maxRecentChecks, _recentChecks.length);
+    }
+    notifyListeners();
+  }
+
+  void clearRecentChecks() {
+    if (_recentChecks.isEmpty) return;
+    _recentChecks.clear();
+    notifyListeners();
+  }
+
+  static List<RecentRouteCheck> _parseRecentChecks(Object? raw) {
+    if (raw is! List) return const [];
+    final out = <RecentRouteCheck>[];
+    for (final item in raw) {
+      final parsed = RecentRouteCheck.fromJson(item);
+      if (parsed != null) out.add(parsed);
+      if (out.length >= maxRecentChecks) break;
+    }
+    return out;
+  }
+
   static String normalizeTheme(Object? value) => switch (value) {
         'light' || 'dark' || 'system' => value as String,
         _ => 'system',
@@ -65,8 +135,9 @@ class WindowSettings extends ChangeNotifier {
     bool advanced = false,
     String theme = 'system',
     String language = 'system',
+    List<RecentRouteCheck> recentChecks = const [],
   }) =>
-      WindowSettings._(null, advanced, theme: theme, language: language);
+      WindowSettings._(null, advanced, theme: theme, language: language, recentChecks: recentChecks);
 
   static Future<WindowSettings> load(File? file) async {
     if (file == null) return WindowSettings._(null, false);
@@ -82,6 +153,7 @@ class WindowSettings extends ChangeNotifier {
           extra['view'] == 'advanced',
           theme: normalizeTheme(extra['theme']),
           language: normalizeLanguage(extra['language']),
+          recentChecks: _parseRecentChecks(extra['recentChecks']),
           extra: extra,
         );
       }
@@ -112,6 +184,10 @@ class WindowSettings extends ChangeNotifier {
         'view': _advanced ? 'advanced' : 'simple',
         'theme': _theme,
         'language': _language,
+        if (_recentChecks.isNotEmpty)
+          'recentChecks': [for (final item in _recentChecks) item.toJson()]
+        else
+          'recentChecks': const <Object>[],
       };
       await temporary.writeAsString(jsonEncode(payload), flush: true);
       await temporary.rename(file.path);
