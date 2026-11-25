@@ -114,12 +114,30 @@ jobs:
           done
           strings "$out_root/windows-amd64/nikod.exe" | grep -q "niko.v1.NikoService" ||
             { echo "::error::nikod has no NikoService"; exit 1; }
+          # AF_UNIX worker-link probe (tool/probe_af_unix): pure stdlib Go, tested/vetted and cross-compiled separately
+          # from the daemon artifact so the test helper never ships beside nikod
+          probe_root="$RUNNER_TEMP/probe-af-unix"
+          mkdir -p "$probe_root/windows-amd64" "$probe_root/linux-amd64"
+          (cd "$GITHUB_WORKSPACE/niko-desktop/tool/probe_af_unix" &&
+            test -z "$(gofmt -l .)" &&
+            go test -v -race ./... &&
+            go vet ./... &&
+            GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./... &&
+            GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$probe_root/windows-amd64/probe-af-unix.exe" . &&
+            GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$probe_root/linux-amd64/probe-af-unix" .)
 
       - name: The binaries
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: daemon
           path: ${{ runner.temp }}/daemon
+          retention-days: 7
+
+      - name: AF_UNIX probe binaries
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: probe-af-unix
+          path: ${{ runner.temp }}/probe-af-unix
           retention-days: 7
 
   # The window (Flutter): the generated files are what their sources give, the analyser is clean, the tests pass, and
@@ -283,6 +301,35 @@ jobs:
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # Release transport probe (desktop-stage3.md, decision 8): Go AF_UNIX listener with peer-PID check and
+      # pre-HTTP/2 mutual HMAC-SHA256 handshake (secret over stdin) against Dart ClientTransportConnectorChannel
+      - name: AF_UNIX probe binary of this run
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: probe-af-unix
+          path: ${{ runner.temp }}/probe-af-unix
+
+      - name: AF_UNIX worker transport probe
+        timeout-minutes: 5
+        working-directory: niko-desktop
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            probe="$RUNNER_TEMP/probe-af-unix/windows-amd64/probe-af-unix.exe"
+          else
+            probe="$RUNNER_TEMP/probe-af-unix/linux-amd64/probe-af-unix"
+            chmod +x "$probe"
+          fi
+          log="$RUNNER_TEMP/probe-af-unix.log"
+          status=0
+          NIKO_AF_UNIX_PROBE="$probe" dart run tool/probe_af_unix.dart 2>&1 | tee "$log" || status=$?
+          {
+            echo "### AF_UNIX worker transport probe, $RUNNER_OS"
+            echo '```'
+            cat "$log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
       # no NIKO_DEV: the release has no way to a daemon over TCP
       - name: Build
         working-directory: niko-desktop
@@ -296,10 +343,16 @@ jobs:
           fi
           ls -la "$out"
           du -sh "$out"
-          # the development link's own words are not in a release
-          if grep -r -a -l -- "--daemon takes 127.0.0.1" "$out" > /dev/null; then
-            echo "::error::the release build carries the development link"; exit 1
-          fi
+          # forbidden development/unsafe strings must never appear in a release (and a grep error fails the build)
+          for forbidden in "--daemon takes 127.0.0.1" "--allow-unsafe-installation-directory-permissions"; do
+            rc=0
+            grep -rqaF -- "$forbidden" "$out" || rc=$?
+            if [ "$rc" -eq 0 ]; then
+              echo "::error::the release build carries forbidden string: $forbidden"; exit 1
+            elif [ "$rc" -ne 1 ]; then
+              echo "::error::grep failed with exit $rc checking $forbidden"; exit 1
+            fi
+          done
           echo "WINDOW_OUT=niko-desktop/$out" >> "$GITHUB_ENV"
 
       - name: The window
