@@ -128,12 +128,23 @@ void main() {
 
   test('a daemon that answers its version and refuses the status: one quick try, then the usual pause', () async {
     server.refuseStatus = true;
-    controller = link(server.port)..attach();
+    controller = link(server.port);
+    final phases = <LinkPhase>[];
+    controller.addListener(() {
+      if (phases.isEmpty || phases.last != controller.link) phases.add(controller.link);
+    });
+    controller.attach();
     await Future<void>.delayed(const Duration(milliseconds: 400));
     // a loop would have asked hundreds of times by now; the pause of 100 ms lets four or five through
     expect(server.statusAsked, lessThan(10));
-    expect(controller.drops, lessThan(10));
-    expect(controller.link, anyOf(LinkPhase.lost, LinkPhase.connecting));
+    // the status never answered: the quick relink stays spent, exactly one
+    expect(controller.drops, 1);
+    // after the first loss every try waits the pause: never `connecting` (the quick path) again
+    final firstLost = phases.indexOf(LinkPhase.lost);
+    expect(firstLost, greaterThan(0), reason: '$phases');
+    expect(phases.sublist(firstLost), isNot(contains(LinkPhase.connecting)), reason: '$phases');
+    // `ready` is passed through between nikoInfo and the refusal; the link always comes to rest on `lost`
+    await until(() => controller.link == LinkPhase.lost, 'the pause');
   });
 
   test('no daemon at the address: lost, with a reason', () async {

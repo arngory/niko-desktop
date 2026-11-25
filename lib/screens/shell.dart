@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/widgets.dart';
 
@@ -9,6 +10,7 @@ import '../state/connection_controller.dart';
 import '../state/connections_feed.dart';
 import '../state/log_feed.dart';
 import '../state/profiles_feed.dart';
+import '../state/route_check.dart';
 import '../state/rules_feed.dart';
 import '../state/settings_feed.dart';
 import '../state/stun_tool.dart';
@@ -17,15 +19,15 @@ import '../theme/niko_theme.dart';
 import '../settings/settings_screen.dart';
 import '../ui/header.dart';
 import 'add_screen.dart';
+import 'check_screen.dart';
 import 'connections_screen.dart';
 import 'log_screen.dart';
 import 'main_screen.dart';
 import 'nodes_screen.dart';
 import 'rules_screen.dart';
 
-/// The sections the window has so far. Проверка маршрута comes with NikoService (stage 3): a section is in the header
-/// only when its screen exists.
-enum AppSection { home, nodes, rules, connections, log, settings }
+/// The sections the window has, in the canvas's order.
+enum AppSection { home, nodes, check, connections, rules, log, settings }
 
 /// The window under its header: the section shown, in the view chosen. D-NAV-01, D-NAV-03.
 ///
@@ -58,21 +60,35 @@ class NikoShell extends StatefulWidget {
 }
 
 class _NikoShellState extends State<NikoShell> {
+  late AppLifecycleListener _lifecycle;
   late LogFeed _log;
   late ConnectionsFeed _connections;
   late StunTool _stun;
   late ProfilesFeed _profiles;
   late RulesFeed _rules;
   late SettingsFeed _settings;
+  late RouteCheckController _routeCheck;
   bool _adding = false;
   AppSection _section = AppSection.home;
   late bool _advanced = widget.settings.advanced;
+  bool _localeSynced = false;
 
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
     _attach();
     _read();
+  }
+
+  // finish any queued settings write before closing; the service keeps the connection alive
+  Future<AppExitResponse> _onExitRequested() async {
+    try {
+      await widget.settings.flush().timeout(const Duration(seconds: 1));
+    } catch (_) {
+      // a stalled or failed write never blocks closing the window
+    }
+    return AppExitResponse.exit;
   }
 
   void _attach() {
@@ -82,6 +98,7 @@ class _NikoShellState extends State<NikoShell> {
     _profiles = ProfilesFeed(widget.controller);
     _rules = RulesFeed(widget.controller);
     _settings = SettingsFeed(widget.controller);
+    _routeCheck = RouteCheckController(widget.controller, widget.settings);
     widget.controller.addListener(_changed);
   }
 
@@ -93,6 +110,7 @@ class _NikoShellState extends State<NikoShell> {
     _profiles.dispose();
     _rules.dispose();
     _settings.dispose();
+    _routeCheck.dispose();
   }
 
   @override
@@ -107,12 +125,25 @@ class _NikoShellState extends State<NikoShell> {
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     _detach(widget.controller);
     super.dispose();
   }
 
   // the connections screen says whether the core runs; the settings, whether the daemon is there
   void _changed() {
+    if (widget.controller.link == LinkPhase.ready) {
+      if (!_localeSynced) {
+        _localeSynced = true;
+        final lang = widget.settings.language;
+        if (lang != 'system') {
+          final daemon = widget.controller.daemon;
+          if (daemon != null) unawaited(daemon.setLocale(lang).catchError((Object _) {}));
+        }
+      }
+    } else {
+      _localeSynced = false;
+    }
     if (_section == AppSection.connections || _section == AppSection.settings) setState(() {});
     // the daemon found, or another one: whether the main screen reads the settings
     if (_section == AppSection.home) _read();
@@ -122,11 +153,15 @@ class _NikoShellState extends State<NikoShell> {
   void _read() {
     _section == AppSection.log ? _log.open() : _log.close();
     _section == AppSection.connections ? _connections.show() : _connections.hide();
-    // the main screen too: the node of the selected profile (D-MAIN-13)
-    _section == AppSection.nodes || _section == AppSection.home ? _profiles.show() : _profiles.hide();
-    _section == AppSection.rules ? _rules.show() : _rules.hide();
-    // the main screen shows the mode of the settings where it connects the selected profile (D-NAV-02)
-    _section == AppSection.settings || (_section == AppSection.home && widget.controller.connectsProfile)
+    // main screen (D-MAIN-13) and route check (selected profile/group label) read profiles too
+    _section == AppSection.nodes || _section == AppSection.home || _section == AppSection.check
+        ? _profiles.show()
+        : _profiles.hide();
+    _section == AppSection.rules || _section == AppSection.check ? _rules.show() : _rules.hide();
+    // main screen (D-NAV-02) and route check (serviceMode -> inbound/resolve) read settings too
+    _section == AppSection.settings ||
+            _section == AppSection.check ||
+            (_section == AppSection.home && widget.controller.connectsProfile)
         ? _settings.show()
         : _settings.hide();
   }
@@ -182,8 +217,9 @@ class _NikoShellState extends State<NikoShell> {
             sections: [
               (AppSection.home, strings.sectionHome),
               (AppSection.nodes, strings.sectionNodes),
-              if (_advanced) (AppSection.rules, strings.sectionRules),
+              (AppSection.check, strings.sectionCheck),
               if (_advanced) (AppSection.connections, strings.sectionConnections),
+              if (_advanced) (AppSection.rules, strings.sectionRules),
               (AppSection.log, strings.sectionLog),
               (AppSection.settings, strings.sectionSettings),
             ],
@@ -207,6 +243,23 @@ class _NikoShellState extends State<NikoShell> {
                   mode: _mode(),
                   onMode: _setMode,
                 ),
+              ),
+              AppSection.check => ListenableBuilder(
+                listenable: Listenable.merge([_routeCheck, _profiles, _rules, _settings, state, widget.settings]),
+                builder: (context, _) {
+                  final vpnMode = state.startedMode != null
+                      ? state.startedMode == ConnectMode.vpn
+                      : _mode() == ConnectMode.vpn;
+                  return CheckScreen(
+                    check: _routeCheck,
+                    controller: state,
+                    profiles: _profiles,
+                    rules: _rules,
+                    vpnMode: vpnMode,
+                    advanced: _advanced,
+                    now: widget.now,
+                  );
+                },
               ),
               AppSection.connections => ConnectionsScreen(
                 feed: _connections,
@@ -232,7 +285,16 @@ class _NikoShellState extends State<NikoShell> {
                 listenable: _settings,
                 builder: (context, _) => SettingsScreen(
                   values: _settings,
+                  window: widget.settings,
                   strings: strings,
+                  coreVersion: state.link == LinkPhase.ready ? state.coreVersion : '',
+                  nikoVersion: state.link == LinkPhase.ready ? state.nikoVersion : '',
+                  onLanguage: (lang) {
+                    final daemon = state.daemon;
+                    if (daemon != null && state.link == LinkPhase.ready) {
+                      unawaited(daemon.setLocale(lang == 'system' ? '' : lang).catchError((Object _) {}));
+                    }
+                  },
                   notice: switch (state.link) {
                     LinkPhase.ready when _settings.loaded => null,
                     LinkPhase.ready when _settings.readError.isNotEmpty => (

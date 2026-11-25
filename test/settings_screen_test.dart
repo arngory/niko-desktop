@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:niko_desktop/l10n/strings.dart';
 import 'package:niko_desktop/settings/setting_values.dart';
 import 'package:niko_desktop/settings/settings_screen.dart';
+import 'package:niko_desktop/state/window_settings.dart';
 import 'package:niko_desktop/theme/niko_theme.dart';
+import 'package:niko_desktop/ui/dialog.dart';
 import 'package:niko_desktop/ui/fields.dart';
 
 import 'fonts.dart';
@@ -27,13 +29,35 @@ void main() {
         ),
       );
 
-  Future<void> show(WidgetTester tester, SettingValues values,
-      {Brightness brightness = Brightness.light, Size size = const Size(1040, 1920), String locale = 'ru'}) async {
+  Future<void> show(
+    WidgetTester tester,
+    SettingValues values, {
+    WindowSettings? window,
+    ValueChanged<String>? onLanguage,
+    String coreVersion = '',
+    String nikoVersion = '',
+    (String, String)? notice,
+    Brightness brightness = Brightness.light,
+    Size size = const Size(1040, 2240),
+    String locale = 'ru',
+  }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-        frame(brightness, SettingsScreen(values: values, strings: NikoStrings.of(Locale(locale)))));
+      frame(
+        brightness,
+        SettingsScreen(
+          values: values,
+          window: window,
+          onLanguage: onLanguage,
+          coreVersion: coreVersion,
+          nikoVersion: nikoVersion,
+          notice: notice,
+          strings: NikoStrings.of(Locale(locale)),
+        ),
+      ),
+    );
   }
 
   for (final brightness in Brightness.values) {
@@ -55,7 +79,7 @@ void main() {
     expect(find.text('не заданы'), findsOneWidget);
     expect(find.text('Авто'), findsOneWidget, reason: 'every domain strategy the core\'s own');
     // what the window has not yet is not shown
-    for (final missing in ['Узлы raycontrol', 'naive', 'Yggdrasil', 'Резервная копия', 'Тема', 'Clash API']) {
+    for (final missing in ['Узлы raycontrol', 'naive', 'Yggdrasil', 'Резервная копия', 'Clash API']) {
       expect(find.text(missing), findsNothing, reason: missing);
     }
 
@@ -188,7 +212,98 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Inbound for other programs'.toUpperCase()), findsOneWidget);
     expect(find.text('Experiments'), findsNothing, reason: 'the menu is for a wide window');
-    expect(find.byType(NikoChoiceRow<String>), findsNWidgets(5));
+    expect(find.byType(NikoChoiceRow<String>), findsNWidgets(6));
+  });
+
+  testWidgets('theme and language rows stay available without daemon; language dialog notifies callback', (tester) async {
+    final window = WindowSettings.memory();
+    String? notified;
+    await show(
+      tester,
+      defaults(),
+      window: window,
+      onLanguage: (lang) => notified = lang,
+      notice: ('Нет связи со службой', ''),
+      size: const Size(1040, 720),
+    );
+    expect(find.text('Тема'), findsOneWidget);
+    expect(find.text('Язык'), findsOneWidget);
+    expect(find.text('Нет связи со службой'), findsOneWidget);
+    expect(find.text('Порт'), findsNothing);
+    // sidebar menu stays visible
+    expect(find.bySemanticsLabel('Разделы настроек'), findsOneWidget);
+
+    await tester.tap(find.text('Тёмная'));
+    await tester.pump();
+    expect(window.theme, 'dark');
+
+    await tester.tap(find.text('Язык'));
+    await tester.pump();
+    expect(find.text('English'), findsOneWidget);
+    expect(find.text('Русский'), findsOneWidget);
+    await tester.tap(find.text('English'));
+    await tester.pump();
+    await tester.tap(find.text('Сохранить'));
+    await tester.pump();
+    expect(window.language, 'en');
+    expect(notified, 'en');
+  });
+
+  testWidgets('dialog traps Tab focus inside itself and restores focus on close', (tester) async {
+    await show(tester, defaults());
+    // focus the Port link row before opening it with Enter
+    final portRow = find.ancestor(of: find.text('Порт'), matching: find.byType(Focus)).first;
+    final portNode = tester.widget<Focus>(portRow).focusNode ?? Focus.of(tester.element(find.text('Порт')));
+    portNode.requestFocus();
+    await tester.pump();
+    expect(portNode.hasFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byType(NikoDialog), findsOneWidget);
+
+    final dialogElement = tester.element(find.byType(NikoDialog));
+    final dialogScope = FocusScope.of(dialogElement);
+    for (var i = 0; i < 12; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      final current = FocusManager.instance.primaryFocus;
+      expect(current, isNotNull);
+      expect(current!.enclosingScope, dialogScope, reason: 'Tab #$i escaped the dialog');
+    }
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(NikoDialog), findsNothing);
+    expect(portNode.hasFocus, isTrue, reason: 'focus returns to the row that opened the dialog');
+  });
+
+  testWidgets('about section shows window version, signing key, and connected daemon versions (D-SET-12)', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      defaults(),
+      coreVersion: '1.14.4-niko',
+      nikoVersion: '1.58.0',
+      notice: ('Нет связи со службой', ''),
+      size: const Size(1040, 720),
+    );
+    expect(find.text('Niko 0.1.0'), findsOneWidget);
+    expect(find.text('sing-box 1.14.4-niko'), findsOneWidget);
+    expect(find.text('nikod 1.58.0'), findsOneWidget);
+    expect(find.text('minisign D5D2D2E799D74D8D'), findsOneWidget);
+    if (Platform.isLinux) {
+      await expectLater(find.byType(SettingsScreen), matchesGoldenFile('goldens/settings_about_light.png'));
+    }
+
+    // without daemon versions, sing-box/nikod lines are omitted while window version and signing key remain
+    await show(tester, defaults(), notice: ('Нет связи со службой', ''), size: const Size(1040, 720));
+    expect(find.text('Niko 0.1.0'), findsOneWidget);
+    expect(find.textContaining('sing-box'), findsNothing);
+    expect(find.textContaining('nikod'), findsNothing);
+    expect(find.text('minisign D5D2D2E799D74D8D'), findsOneWidget);
   });
 }
 

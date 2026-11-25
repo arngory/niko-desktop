@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../theme/niko_theme.dart';
@@ -174,10 +175,22 @@ class NikoTonalButton extends StatelessWidget {
 
 /// A field with its label above (m-field): a value typed in mono, a placeholder for what it takes.
 class NikoTextField extends StatefulWidget {
-  const NikoTextField({super.key, required this.label, this.placeholder = '', required this.controller, this.onSubmit});
+  const NikoTextField({
+    super.key,
+    required this.label,
+    this.placeholder = '',
+    this.labelHidden = false,
+    this.fill,
+    required this.controller,
+    this.onSubmit,
+  });
 
   final String label;
   final String placeholder;
+
+  /// Keeps [label] for screen readers only, hiding the visual caption above the box.
+  final bool labelHidden;
+  final Color? fill;
   final TextEditingController controller;
   final ValueChanged<String>? onSubmit;
 
@@ -222,14 +235,16 @@ class _NikoTextFieldState extends State<NikoTextField> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ExcludeSemantics(child: Text(widget.label, style: NikoType.caption.style(colors.ink2))),
-          const SizedBox(height: NikoSpace.s1),
+          if (!widget.labelHidden) ...[
+            ExcludeSemantics(child: Text(widget.label, style: NikoType.caption.style(colors.ink2))),
+            const SizedBox(height: NikoSpace.s1),
+          ],
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _focus.requestFocus,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: colors.surface0,
+                color: widget.fill ?? colors.surface0,
                 borderRadius: BorderRadius.circular(NikoRadius.sm),
                 border: Border.all(
                   width: NikoStroke.bold,
@@ -270,31 +285,34 @@ class _NikoTextFieldState extends State<NikoTextField> {
 }
 
 /// A short mark (m-tag): quiet, or in ink for the one that matters (m-tag--strong).
+/// When [large] is true, draws a 32 px mono pill without uppercasing (route check path).
 class NikoTag extends StatelessWidget {
-  const NikoTag(this.text, {super.key, this.strong = false});
+  const NikoTag(this.text, {super.key, this.strong = false, this.large = false});
 
   final String text;
   final bool strong;
+  final bool large;
 
   @override
   Widget build(BuildContext context) {
     final colors = NikoTheme.of(context);
+    final fg = strong ? colors.onInk : colors.ink2;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: strong ? colors.ink : colors.surface2,
         borderRadius: BorderRadius.circular(NikoRadius.full),
       ),
       child: SizedBox(
-        height: 20,
+        height: large ? 32 : 20,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s2),
+          padding: EdgeInsets.symmetric(horizontal: large ? NikoSpace.s3 : NikoSpace.s2),
           child: Center(
             widthFactor: 1,
             child: Text(
-              text.toUpperCase(),
+              large ? text : text.toUpperCase(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: NikoType.label.style(strong ? colors.onInk : colors.ink2),
+              style: (large ? NikoType.code : NikoType.label).style(fg),
             ),
           ),
         ),
@@ -378,11 +396,15 @@ class NikoSegmented<T> extends StatelessWidget {
 
 /// A line to type a search into (m-field__control with the search icon).
 class NikoSearchField extends StatefulWidget {
-  const NikoSearchField({super.key, required this.label, required this.onChanged});
+  const NikoSearchField({super.key, required this.label, required this.onChanged, this.focusNode, this.onEscape});
 
   /// The placeholder, and the field's name for a screen reader.
   final String label;
   final ValueChanged<String> onChanged;
+  final FocusNode? focusNode;
+
+  /// Called on Escape after clearing; null unfocuses the field.
+  final VoidCallback? onEscape;
 
   @override
   State<NikoSearchField> createState() => _NikoSearchFieldState();
@@ -390,7 +412,9 @@ class NikoSearchField extends StatefulWidget {
 
 class _NikoSearchFieldState extends State<NikoSearchField> {
   final _controller = TextEditingController();
-  final _focus = FocusNode();
+  FocusNode? _ownedFocus;
+
+  FocusNode get _focus => widget.focusNode ?? (_ownedFocus ??= FocusNode());
 
   @override
   void initState() {
@@ -399,11 +423,37 @@ class _NikoSearchFieldState extends State<NikoSearchField> {
     _controller.addListener(_repaint);
   }
 
+  @override
+  void didUpdateWidget(NikoSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      (oldWidget.focusNode ?? _ownedFocus)?.removeListener(_repaint);
+      if (widget.focusNode != null) {
+        _ownedFocus?.dispose();
+        _ownedFocus = null;
+      }
+      _focus.addListener(_repaint);
+    }
+  }
+
   void _repaint() => setState(() {});
+
+  void _clearAndUnfocus() {
+    if (_controller.text.isNotEmpty) {
+      _controller.clear();
+      widget.onChanged('');
+    }
+    if (widget.onEscape case final onEscape?) {
+      onEscape();
+    } else {
+      _focus.unfocus();
+    }
+  }
 
   @override
   void dispose() {
-    _focus.dispose();
+    _focus.removeListener(_repaint);
+    _ownedFocus?.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -412,48 +462,51 @@ class _NikoSearchFieldState extends State<NikoSearchField> {
   Widget build(BuildContext context) {
     final colors = NikoTheme.of(context);
     final style = NikoType.body.style(colors.ink);
-    return Semantics(
-      textField: true,
-      label: widget.label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _focus.requestFocus,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.surface2,
-            borderRadius: BorderRadius.circular(NikoRadius.sm),
-            border: Border.all(width: NikoStroke.bold, color: _focus.hasFocus ? colors.ink : const Color(0x00000000)),
-          ),
-          child: SizedBox(
-            height: NikoSize.control,
-            child: Padding(
-              padding: const EdgeInsetsDirectional.only(start: NikoSpace.s4, end: NikoSpace.s2),
-              child: Row(
-                children: [
-                  NikoIcon(NikoIcons.search, size: 20, color: colors.ink2),
-                  const SizedBox(width: NikoSpace.s2),
-                  Expanded(
-                    child: Stack(
-                      alignment: AlignmentDirectional.centerStart,
-                      children: [
-                        if (_controller.text.isEmpty)
-                          ExcludeSemantics(
-                            child: Text(widget.label, maxLines: 1, style: NikoType.body.style(colors.ink2)),
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): _clearAndUnfocus},
+      child: Semantics(
+        textField: true,
+        label: widget.label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _focus.requestFocus,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surface2,
+              borderRadius: BorderRadius.circular(NikoRadius.sm),
+              border: Border.all(width: NikoStroke.bold, color: _focus.hasFocus ? colors.ink : const Color(0x00000000)),
+            ),
+            child: SizedBox(
+              height: NikoSize.control,
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(start: NikoSpace.s4, end: NikoSpace.s2),
+                child: Row(
+                  children: [
+                    NikoIcon(NikoIcons.search, size: 20, color: colors.ink2),
+                    const SizedBox(width: NikoSpace.s2),
+                    Expanded(
+                      child: Stack(
+                        alignment: AlignmentDirectional.centerStart,
+                        children: [
+                          if (_controller.text.isEmpty)
+                            ExcludeSemantics(
+                              child: Text(widget.label, maxLines: 1, style: NikoType.body.style(colors.ink2)),
+                            ),
+                          EditableText(
+                            controller: _controller,
+                            focusNode: _focus,
+                            style: style,
+                            cursorColor: colors.ink,
+                            backgroundCursorColor: colors.ink2,
+                            selectionColor: colors.surface3,
+                            maxLines: 1,
+                            onChanged: widget.onChanged,
                           ),
-                        EditableText(
-                          controller: _controller,
-                          focusNode: _focus,
-                          style: style,
-                          cursorColor: colors.ink,
-                          backgroundCursorColor: colors.ink2,
-                          selectionColor: colors.surface3,
-                          maxLines: 1,
-                          onChanged: widget.onChanged,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

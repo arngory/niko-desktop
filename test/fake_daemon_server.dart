@@ -5,6 +5,7 @@ import 'package:grpc/grpc.dart';
 import 'package:niko_desktop/gen/daemon/managed_service.pbgrpc.dart';
 import 'package:niko_desktop/gen/daemon/started_service.pbgrpc.dart';
 import 'package:niko_desktop/gen/experimental/boxdd/desktop_service.pbgrpc.dart';
+import 'package:niko_desktop/gen/niko/v1/niko_service.pbgrpc.dart' show NikoServiceBase;
 import 'package:protobuf/well_known_types/google/protobuf/empty.pb.dart';
 
 /// A daemon for tests: the three services over gRPC on 127.0.0.1, answering the calls the window makes as boxdd
@@ -89,7 +90,7 @@ class FakeDaemonServer {
   int port = 0;
 
   Future<void> serve([int onPort = 0]) async {
-    final server = Server.create(services: [_Desktop(this), _Started(this), _Managed(this)]);
+    final server = Server.create(services: [_Desktop(this), _Started(this), _Managed(this), _NoNiko()]);
     await server.serve(address: '127.0.0.1', port: onPort);
     _server = server;
     port = server.port!;
@@ -346,6 +347,13 @@ class _Managed extends ManagedServiceBase {
     return Empty();
   }
 
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw GrpcError.unimplemented();
+}
+
+/// Stands in for a boxdd-only daemon without NikoService so package:grpc drains unary requests cleanly before
+/// answering UNIMPLEMENTED (an unregistered service leaves the HTTP/2 stream open and blocks Server.shutdown).
+class _NoNiko extends NikoServiceBase {
   @override
   dynamic noSuchMethod(Invocation invocation) => throw GrpcError.unimplemented();
 }

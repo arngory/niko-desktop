@@ -67,7 +67,8 @@ class _NikoHeaderState<S> extends State<NikoHeader<S>> {
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final narrow = constraints.maxWidth < NikoHeader.narrow;
+        final narrow = constraints.maxWidth < NikoHeader.narrow ||
+            (widget.sections.length > 5 && constraints.maxWidth < 860.0);
         if (!narrow && _menu.isShowing) {
           // the window grew wide while the list was open: the sections are in the line again
           WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? _closeMenu() : null);
@@ -108,7 +109,7 @@ class _NikoHeaderState<S> extends State<NikoHeader<S>> {
                         explicitChildNodes: true,
                         label: widget.sectionsLabel,
                         child: Wrap(
-                          // the advanced view's six sections stand closer, to keep to one line
+                          // the advanced view's seven sections stand closer, to fit neatly
                           spacing: widget.sections.length > 5 ? NikoSpace.s4 : NikoSpace.s6,
                           children: [
                             for (final (id, name) in widget.sections)

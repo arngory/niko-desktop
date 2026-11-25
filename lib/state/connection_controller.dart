@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:grpc/grpc.dart' show GrpcError, StatusCode;
 
 import '../daemon/daemon.dart';
 
@@ -42,6 +43,10 @@ class ConnectionController extends ChangeNotifier {
   // an immediate relink was spent and the status stream has not answered since: the next drop waits [retry]
   bool _quickSpent = false;
   String daemonVersion = '';
+
+  /// Versions reported by the connected daemon (for Settings -> About).
+  String coreVersion = '';
+  String nikoVersion = '';
 
   /// The version of the daemon's NikoService (its API); 0 for a daemon without it, or not asked yet.
   int nikoApi = 0;
@@ -92,12 +97,18 @@ class ConnectionController extends ChangeNotifier {
     try {
       final version = await daemon.version();
       if (_stale(generation)) return;
-      // without a config of the window's the button connects the daemon's profile, where it has NikoService (the
-      // core's daemon alone has none)
-      final api = _loadConfig != null ? 0 : await daemon.nikoInfo().then((info) => info.api, onError: (Object _) => 0);
+      // always ask NikoService for versions and API level; connectsProfile still checks _loadConfig == null
+      NikoInfo? info;
+      try {
+        info = await daemon.nikoInfo();
+      } on GrpcError catch (e) {
+        if (e.code != StatusCode.unimplemented && _loadConfig == null) rethrow;
+      }
       if (_stale(generation)) return;
       daemonVersion = version;
-      nikoApi = api;
+      nikoApi = info?.api ?? 0;
+      nikoVersion = info?.nikoVersion ?? '';
+      coreVersion = (info != null && info.coreVersion.isNotEmpty) ? info.coreVersion : version;
       link = LinkPhase.ready;
       linkError = '';
       notifyListeners();

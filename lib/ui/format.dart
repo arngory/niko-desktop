@@ -54,3 +54,16 @@ String formatDate(DateTime at) {
   String two(int value) => value.toString().padLeft(2, '0');
   return '${two(local.day)}.${two(local.month)}.${local.year}';
 }
+
+/// A recent moment in the system's time: `today, 09:14`, `yesterday, 09:14`, else [formatMoment].
+String formatRecent(DateTime at, DateTime now, {required String today, required String yesterday}) {
+  final localAt = at.toLocal();
+  final localNow = now.toLocal();
+  final atDay = DateTime(localAt.year, localAt.month, localAt.day);
+  final nowDay = DateTime(localNow.year, localNow.month, localNow.day);
+  String two(int value) => value.toString().padLeft(2, '0');
+  final hm = '${two(localAt.hour)}:${two(localAt.minute)}';
+  if (atDay == nowDay) return '$today, $hm';
+  if (atDay == DateTime(localNow.year, localNow.month, localNow.day - 1)) return '$yesterday, $hm';
+  return formatMoment(at);
+}

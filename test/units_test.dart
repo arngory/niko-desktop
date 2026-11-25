@@ -1,10 +1,18 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:niko_desktop/app.dart';
+import 'package:niko_desktop/app_info.dart';
 import 'package:niko_desktop/daemon/daemon.dart';
 import 'package:niko_desktop/daemon/endpoint.dart';
 import 'package:niko_desktop/platform/places.dart';
+import 'package:niko_desktop/state/connection_controller.dart';
+import 'package:niko_desktop/state/route_check.dart';
 import 'package:niko_desktop/state/window_settings.dart';
 import 'package:niko_desktop/ui/format.dart';
 import 'package:niko_desktop/ui/icons.dart';
@@ -107,6 +115,72 @@ void main() {
       expect(plainLogText('\x1b[36mINFO\x1b[0m[0000] started'), 'INFO[0000] started');
       expect(plainLogText('plain'), 'plain');
     });
+
+    test('recent moment formatting: today, yesterday, older', () {
+      final now = DateTime(2026, 11, 25, 16, 30);
+      expect(
+        formatRecent(DateTime(2026, 11, 25, 9, 14), now, today: 'сегодня', yesterday: 'вчера'),
+        'сегодня, 09:14',
+      );
+      expect(
+        formatRecent(DateTime(2026, 11, 24, 23, 5), now, today: 'сегодня', yesterday: 'вчера'),
+        'вчера, 23:05',
+      );
+      expect(
+        formatRecent(DateTime(2026, 11, 20, 8, 7), now, today: 'сегодня', yesterday: 'вчера'),
+        '20.11.2026 08:07',
+      );
+    });
+  });
+
+  group('route target parsing', () {
+    test('domains, URLs, host:port, and IPv6', () {
+      final plain = parseRouteTarget('  youtube.com  ')!;
+      expect((plain.host, plain.port, plain.display), ('youtube.com', 443, 'youtube.com'));
+
+      final httpUrl = parseRouteTarget('http://example.com/path?q=1#frag')!;
+      expect((httpUrl.host, httpUrl.port, httpUrl.display), ('example.com', 80, 'example.com:80'));
+
+      final httpsUrl = parseRouteTarget('https://example.com:8443/a/b')!;
+      expect((httpsUrl.host, httpsUrl.port, httpsUrl.display), ('example.com', 8443, 'example.com:8443'));
+
+      final hostPort = parseRouteTarget('git.corp.example:22')!;
+      expect((hostPort.host, hostPort.port, hostPort.display), ('git.corp.example', 22, 'git.corp.example:22'));
+
+      final bareV6 = parseRouteTarget('2001:db8::1')!;
+      expect((bareV6.host, bareV6.port, bareV6.display), ('2001:db8::1', 443, '2001:db8::1'));
+
+      final bracketV6 = parseRouteTarget('[2001:db8::1]:8443')!;
+      expect((bracketV6.host, bracketV6.port, bracketV6.display), ('2001:db8::1', 8443, '[2001:db8::1]:8443'));
+
+      final urlV6 = parseRouteTarget('http://[2001:db8::1]/test')!;
+      expect((urlV6.host, urlV6.port, urlV6.display), ('2001:db8::1', 80, '[2001:db8::1]:80'));
+    });
+
+    test('empty and malformed targets are rejected', () {
+      for (final bad in [
+        '',
+        '   ',
+        'example.com:0',
+        'example.com:65536',
+        'example.com:abc',
+        'example.com:',
+        'bad host.com',
+        'https://user@example.com',
+        '[2001:db8::1',
+        '[not-ipv6]:443',
+        'example.com/path-without-scheme',
+      ]) {
+        expect(parseRouteTarget(bad), isNull, reason: '"$bad"');
+      }
+    });
+  });
+
+  test('default windowVersion matches pubspec.yaml', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final match = RegExp(r'^version:\s*([^\s+]+)', multiLine: true).firstMatch(pubspec);
+    expect(match, isNotNull);
+    expect(windowVersion, match!.group(1));
   });
 
   group('places on the disk', () {
@@ -115,18 +189,93 @@ void main() {
           r'C:\Users\a\AppData\Roaming\Niko\window.json');
       expect(settingsFile({'HOME': '/home/a'}, 'linux')!.path, '/home/a/.config/niko/window.json');
       expect(settingsFile({'HOME': '/home/a', 'XDG_CONFIG_HOME': '/cfg'}, 'linux')!.path, '/cfg/niko/window.json');
+      expect(
+        settingsFile({'HOME': '/home/a', 'XDG_CONFIG_HOME': 'relative/cfg'}, 'linux')!.path,
+        '/home/a/.config/niko/window.json',
+      );
       expect(settingsFile({'HOME': '/Users/a'}, 'macos')!.path, '/Users/a/Library/Application Support/Niko/window.json');
       // no home: nothing kept, not a file in the working folder
       expect(settingsFile({}, 'linux'), isNull);
       expect(settingsFile({'APPDATA': ''}, 'windows'), isNull);
     });
 
-    test('the folder a file is saved into: Downloads, else home', () async {
+    test('xdg user-dirs.dirs parsing', () {
+      const sample = '''
+# Created by xdg-user-dirs-update
+XDG_DESKTOP_DIR="\$HOME/Рабочий стол"
+XDG_DOWNLOAD_DIR="\$HOME/Загрузки"
+# XDG_DOWNLOAD_DIR="\$HOME/Ignored"
+''';
+      expect(xdgUserDir(sample, '/home/a', 'XDG_DOWNLOAD_DIR'), '/home/a/Загрузки');
+      expect(xdgUserDir(sample, '/home/a/', 'XDG_DOWNLOAD_DIR'), '/home/a/Загрузки');
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="/mnt/data/dl"\r\n', '/home/a', 'XDG_DOWNLOAD_DIR'), '/mnt/data/dl');
+      // disabled directory per xdg-user-dirs specification
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME/"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      // relative, unquoted, unknown variable, or malformed lines are ignored
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="Downloads"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR=\$HOME/Downloads\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="\$OTHER/Downloads"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME2/Downloads"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('not even an assignment\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      // malformed line after a valid one is skipped rather than clearing it
+      expect(
+        xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME/Загрузки"\nXDG_DOWNLOAD_DIR=relative\n', '/home/a', 'XDG_DOWNLOAD_DIR'),
+        '/home/a/Загрузки',
+      );
+      // last valid line wins, including disabling an earlier value
+      expect(
+        xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME/First"\nXDG_DOWNLOAD_DIR="\$HOME"\n', '/home/a', 'XDG_DOWNLOAD_DIR'),
+        isNull,
+      );
+    });
+
+    test('the folder a file is saved into: XDG env, user-dirs.dirs, Downloads, else home', () async {
       final home = await Directory.systemTemp.createTemp('niko-home-');
       addTearDown(() => home.delete(recursive: true));
       expect(saveDirectory({'HOME': home.path}, 'linux')!.path, home.path);
-      await Directory('${home.path}/Downloads').create();
+      if (Platform.isWindows) {
+        expect(saveDirectory({'USERPROFILE': home.path}, 'windows')!.path, home.path);
+      }
+
+      final dl = await Directory('${home.path}${Platform.pathSeparator}Downloads').create();
       expect(saveDirectory({'HOME': home.path}, 'linux')!.path, '${home.path}/Downloads');
+      if (Platform.isWindows) {
+        expect(saveDirectory({'USERPROFILE': home.path}, 'windows')!.path, dl.path);
+      }
+
+      // XDG paths are POSIX-rooted ('/'); Windows temp paths (C:\...) are skipped here and covered by xdgUserDir above
+      if (home.path.startsWith('/')) {
+        // user-dirs.dirs beats ~/Downloads
+        final localized = await Directory('${home.path}/Загрузки').create();
+        final cfg = await Directory('${home.path}/.config').create();
+        await File('${cfg.path}/user-dirs.dirs').writeAsString('XDG_DOWNLOAD_DIR="\$HOME/Загрузки"\n');
+        expect(saveDirectory({'HOME': home.path}, 'linux')!.path, localized.path);
+
+        // XDG_CONFIG_HOME overrides ~/.config
+        final altCfg = await Directory('${home.path}/altcfg').create();
+        final custom = await Directory('${home.path}/CustomDL').create();
+        await File('${altCfg.path}/user-dirs.dirs').writeAsString('XDG_DOWNLOAD_DIR="${custom.path}"\n');
+        expect(
+          saveDirectory({'HOME': home.path, 'XDG_CONFIG_HOME': altCfg.path}, 'linux')!.path,
+          custom.path,
+        );
+
+        // explicit XDG_DOWNLOAD_DIR env var has top precedence
+        final envDir = await Directory('${home.path}/EnvDL').create();
+        expect(
+          saveDirectory({'HOME': home.path, 'XDG_DOWNLOAD_DIR': envDir.path}, 'linux')!.path,
+          envDir.path,
+        );
+
+        // relative XDG_CONFIG_HOME / XDG_DOWNLOAD_DIR are ignored per XDG spec
+        expect(
+          saveDirectory({'HOME': home.path, 'XDG_CONFIG_HOME': 'relative/cfg', 'XDG_DOWNLOAD_DIR': 'relative/dl'}, 'linux')!
+              .path,
+          localized.path,
+        );
+      }
+
       expect(saveDirectory({'HOME': '/nowhere/at/all'}, 'linux'), isNull);
     });
 
@@ -179,5 +328,177 @@ void main() {
       await memory.save();
       expect(memory.advanced, isTrue);
     });
+
+    test('theme, language, unknown values, and unknown keys are handled cleanly', () async {
+      final folder = await Directory.systemTemp.createTemp('niko-settings-ext-');
+      addTearDown(() => folder.delete(recursive: true));
+      final file = File('${folder.path}/window.json');
+      await file.writeAsString(jsonEncode({
+        'view': 'simple',
+        'theme': 'sepia',
+        'language': 'de',
+        'futureList': [
+          {'target': 'example.com', 'network': 'tcp'},
+        ],
+        'futureFlag': 42,
+      }));
+
+      final loaded = await WindowSettings.load(file);
+      expect(loaded.theme, 'system');
+      expect(loaded.language, 'system');
+
+      var notifications = 0;
+      loaded.addListener(() => notifications++);
+      loaded.theme = 'dark';
+      loaded.theme = 'dark'; // no-op
+      loaded.language = 'en';
+      expect(notifications, 2);
+      await loaded.save();
+
+      final saved = jsonDecode(await file.readAsString()) as Map<String, Object?>;
+      expect(saved['theme'], 'dark');
+      expect(saved['language'], 'en');
+      expect(saved['futureFlag'], 42);
+      expect(saved['futureList'], [
+        {'target': 'example.com', 'network': 'tcp'},
+      ]);
+
+      final reloaded = await WindowSettings.load(file);
+      expect((reloaded.theme, reloaded.language), ('dark', 'en'));
+    });
+
+    test('recent route checks persist, deduplicate, cap at 10, and clear', () async {
+      final folder = await Directory.systemTemp.createTemp('niko-settings-recent-');
+      addTearDown(() => folder.delete(recursive: true));
+      final file = File('${folder.path}/window.json');
+      final settings = await WindowSettings.load(file);
+
+      for (var i = 1; i <= 12; i++) {
+        settings.addRecentCheck(RecentRouteCheck(
+          target: 'host$i.example',
+          network: 'tcp',
+          outcome: 'proxy',
+          label: 'Node',
+        ));
+      }
+      expect(settings.recentChecks, hasLength(10));
+      expect(settings.recentChecks.first.target, 'host12.example');
+      expect(settings.recentChecks.last.target, 'host3.example');
+
+      // duplicate target+network moves to top; different network stays separate
+      settings.addRecentCheck(const RecentRouteCheck(
+        target: 'HOST5.EXAMPLE',
+        network: 'tcp',
+        outcome: 'direct',
+        label: 'Direct',
+      ));
+      settings.addRecentCheck(const RecentRouteCheck(
+        target: 'host5.example',
+        network: 'udp',
+        outcome: 'block',
+        label: 'Block',
+      ));
+      expect(settings.recentChecks, hasLength(10));
+      expect((settings.recentChecks[0].target, settings.recentChecks[0].network), ('host5.example', 'udp'));
+      expect((settings.recentChecks[1].target, settings.recentChecks[1].network), ('HOST5.EXAMPLE', 'tcp'));
+
+      await settings.save();
+      final reloaded = await WindowSettings.load(file);
+      expect(reloaded.recentChecks, hasLength(10));
+      expect(reloaded.recentChecks.first.outcome, 'block');
+
+      reloaded.clearRecentChecks();
+      await reloaded.save();
+      expect((await WindowSettings.load(file)).recentChecks, isEmpty);
+    });
   });
+
+  group('window close lifecycle', () {
+    testWidgets('System.requestAppExit waits for queued settings writes to flush', (tester) async {
+      final saveGate = Completer<void>();
+      final settings = _DelayedSaveSettings(saveGate);
+      final controller = ConnectionController(daemon: null, loadConfig: null);
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(NikoApp(controller: controller, settings: settings, locale: const Locale('en')));
+
+      Object? reply;
+      final call = SystemChannels.platform.codec.encodeMethodCall(
+        const MethodCall('System.requestAppExit', <String, dynamic>{'type': 'cancelable'}),
+      );
+      final handled = tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.platform.name,
+        call,
+        (data) => reply = data == null ? null : SystemChannels.platform.codec.decodeEnvelope(data),
+      );
+
+      await tester.pump();
+      expect(settings.flushCalls, 1);
+      expect(reply, isNull);
+
+      saveGate.complete();
+      await handled;
+      await tester.pump();
+      expect(reply, {'response': 'exit'});
+    });
+
+    testWidgets('System.requestAppExit still exits after 1s if flushing stalls', (tester) async {
+      final stalled = Completer<void>();
+      final settings = _DelayedSaveSettings(stalled);
+      final controller = ConnectionController(daemon: null, loadConfig: null);
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(NikoApp(controller: controller, settings: settings, locale: const Locale('en')));
+
+      Object? reply;
+      final call = SystemChannels.platform.codec.encodeMethodCall(
+        const MethodCall('System.requestAppExit', <String, dynamic>{'type': 'cancelable'}),
+      );
+      final handled = tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.platform.name,
+        call,
+        (data) => reply = data == null ? null : SystemChannels.platform.codec.decodeEnvelope(data),
+      );
+
+      await tester.pump();
+      expect(reply, isNull);
+      await tester.pump(const Duration(seconds: 1));
+      await handled;
+      expect(reply, {'response': 'exit'});
+    });
+  });
+}
+
+class _DelayedSaveSettings extends ChangeNotifier implements WindowSettings {
+  _DelayedSaveSettings(this._gate);
+
+  final Completer<void> _gate;
+  int flushCalls = 0;
+
+  @override
+  bool advanced = false;
+
+  @override
+  String theme = 'system';
+
+  @override
+  String language = 'system';
+
+  @override
+  List<RecentRouteCheck> get recentChecks => const [];
+
+  @override
+  void addRecentCheck(RecentRouteCheck entry) {}
+
+  @override
+  void clearRecentChecks() {}
+
+  @override
+  Future<void> flush() {
+    flushCalls++;
+    return _gate.future;
+  }
+
+  @override
+  Future<void> save() => _gate.future;
 }

@@ -2,25 +2,34 @@ import 'package:flutter/widgets.dart';
 
 import '../theme/niko_theme.dart';
 
-/// A group of rows with its overline (m-section, m-overline, m-list).
+/// A group of rows with its overline (m-section, m-overline, m-list) and an optional trailing [action].
 class NikoSection extends StatelessWidget {
-  const NikoSection({super.key, required this.overline, required this.rows});
+  const NikoSection({super.key, required this.overline, required this.rows, this.action});
 
   final String overline;
   final List<Widget> rows;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     final colors = NikoTheme.of(context);
+    final heading = Semantics(
+      header: true,
+      child: Text(overline.toUpperCase(), style: NikoType.label.style(colors.ink2)),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s4),
-          child: Semantics(
-            header: true,
-            child: Text(overline.toUpperCase(), style: NikoType.label.style(colors.ink2)),
-          ),
+          child: action == null
+              ? heading
+              : Row(
+                  children: [
+                    Expanded(child: heading),
+                    action!,
+                  ],
+                ),
         ),
         const SizedBox(height: NikoSpace.s2),
         NikoGroup(rows: rows),
@@ -102,7 +111,7 @@ class NikoTextRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(title, style: NikoType.body.style(colors.ink)),
-                Text(sub, style: (mono ? NikoType.code : NikoType.bodySm).style(colors.ink2)),
+                if (sub.isNotEmpty) Text(sub, style: (mono ? NikoType.code : NikoType.bodySm).style(colors.ink2)),
               ],
             ),
           ),

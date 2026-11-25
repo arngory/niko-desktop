@@ -21,6 +21,9 @@ class ProfilesFeed extends ChangeNotifier {
   /// The group of the selected profile, for the node it may be of (D-MAIN-13); 0: none read.
   int selectedGroup = 0;
 
+  /// The selected profile itself, when readable (for route check outbound label); null for none.
+  ProfileRow? selectedProfile;
+
   /// The group shown: 0 until the groups are read, then the first one, or the one chosen.
   int groupId = 0;
   List<ProfileRow> profiles = const [];
@@ -113,9 +116,12 @@ class ProfilesFeed extends ChangeNotifier {
       if (all || change.kind == StoreKind.selected) {
         selected = await daemon.selected();
         selectedGroup = 0;
+        selectedProfile = null;
         if (selected != 0) {
           try {
-            selectedGroup = (await daemon.profile(selected)).row.groupId;
+            final row = (await daemon.profile(selected)).row;
+            selectedProfile = row;
+            selectedGroup = row.groupId;
           } catch (_) {
             // its secrets sealed elsewhere: no node to show of it
           }
