@@ -76,6 +76,8 @@ class UnixWorkerTransportConnector implements ClientTransportConnector {
 
   Completer<void> _done = Completer<void>();
   Socket? _socket;
+  StreamSubscription<Uint8List>? _sub;
+  StreamController<List<int>>? _incoming;
 
   @override
   String get authority => 'localhost';
@@ -94,6 +96,7 @@ class UnixWorkerTransportConnector implements ClientTransportConnector {
     _socket = socket;
 
     final incoming = StreamController<List<int>>();
+    _incoming = incoming;
     final handshake = Completer<Uint8List>();
     // Prevent uncaught async errors if flush() fails before awaiting handshake.future.
     handshake.future.ignore();
@@ -133,6 +136,7 @@ class UnixWorkerTransportConnector implements ClientTransportConnector {
         if (handshakeDone && !activeDone.isCompleted) activeDone.complete();
       },
     );
+    _sub = sub;
     incoming.onCancel = sub.cancel;
     incoming.onPause = sub.pause;
     incoming.onResume = sub.resume;
@@ -166,7 +170,14 @@ class UnixWorkerTransportConnector implements ClientTransportConnector {
 
   @override
   Future<void> shutdown() async {
+    final sub = _sub;
+    final incoming = _incoming;
+    _sub = null;
+    _incoming = null;
+    if (sub != null) unawaited(sub.cancel());
+    if (incoming != null && !incoming.isClosed) unawaited(incoming.close());
     _socket?.destroy();
+    _socket = null;
     if (!_done.isCompleted) _done.complete();
   }
 }
@@ -325,7 +336,7 @@ Future<void> _verifyGrpcCall({
         stdout.writeln('[$label] second connection refused as expected');
       }
     } finally {
-      await channel.shutdown();
+      await channel.terminate().timeout(const Duration(seconds: 2), onTimeout: () {});
     }
 
     final workerExit = await worker.process.exitCode.timeout(const Duration(seconds: 5));
@@ -446,7 +457,7 @@ Future<void> main(List<String> arguments) async {
         failed = true;
         stdout.writeln('[wrong-secret] rejected before gRPC as expected: $error');
       } finally {
-        await channel.shutdown();
+        await channel.terminate().timeout(const Duration(seconds: 2), onTimeout: () {});
       }
       _expect(failed, 'wrong-secret: call unexpectedly succeeded');
       _expect(service.calls == callsBefore, 'wrong-secret: gRPC server received a call despite bad MAC');
@@ -480,11 +491,13 @@ Future<void> main(List<String> arguments) async {
 
     stdout.writeln('ALL AF_UNIX PROBE CHECKS PASSED');
   } finally {
-    await server.shutdown();
+    await server.shutdown().timeout(const Duration(seconds: 3), onTimeout: () {});
     try {
       root.deleteSync(recursive: true);
     } catch (_) {
       // Best-effort cleanup on Windows.
     }
   }
+  await stdout.flush();
+  exit(0);
 }
