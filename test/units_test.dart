@@ -189,6 +189,10 @@ void main() {
           r'C:\Users\a\AppData\Roaming\Niko\window.json');
       expect(settingsFile({'HOME': '/home/a'}, 'linux')!.path, '/home/a/.config/niko/window.json');
       expect(settingsFile({'HOME': '/home/a', 'XDG_CONFIG_HOME': '/cfg'}, 'linux')!.path, '/cfg/niko/window.json');
+      expect(
+        settingsFile({'HOME': '/home/a', 'XDG_CONFIG_HOME': 'relative/cfg'}, 'linux')!.path,
+        '/home/a/.config/niko/window.json',
+      );
       expect(settingsFile({'HOME': '/Users/a'}, 'macos')!.path, '/Users/a/Library/Application Support/Niko/window.json');
       // no home: nothing kept, not a file in the working folder
       expect(settingsFile({}, 'linux'), isNull);
@@ -230,38 +234,47 @@ XDG_DOWNLOAD_DIR="\$HOME/Загрузки"
       final home = await Directory.systemTemp.createTemp('niko-home-');
       addTearDown(() => home.delete(recursive: true));
       expect(saveDirectory({'HOME': home.path}, 'linux')!.path, home.path);
+      if (Platform.isWindows) {
+        expect(saveDirectory({'USERPROFILE': home.path}, 'windows')!.path, home.path);
+      }
 
-      final dl = await Directory('${home.path}/Downloads').create();
-      expect(saveDirectory({'HOME': home.path}, 'linux')!.path, dl.path);
+      final dl = await Directory('${home.path}${Platform.pathSeparator}Downloads').create();
+      expect(saveDirectory({'HOME': home.path}, 'linux')!.path, '${home.path}/Downloads');
+      if (Platform.isWindows) {
+        expect(saveDirectory({'USERPROFILE': home.path}, 'windows')!.path, dl.path);
+      }
 
-      // user-dirs.dirs beats ~/Downloads
-      final localized = await Directory('${home.path}/Загрузки').create();
-      final cfg = await Directory('${home.path}/.config').create();
-      await File('${cfg.path}/user-dirs.dirs').writeAsString('XDG_DOWNLOAD_DIR="\$HOME/Загрузки"\n');
-      expect(saveDirectory({'HOME': home.path}, 'linux')!.path, localized.path);
+      // XDG paths are POSIX-rooted ('/'); Windows temp paths (C:\...) are skipped here and covered by xdgUserDir above
+      if (home.path.startsWith('/')) {
+        // user-dirs.dirs beats ~/Downloads
+        final localized = await Directory('${home.path}/Загрузки').create();
+        final cfg = await Directory('${home.path}/.config').create();
+        await File('${cfg.path}/user-dirs.dirs').writeAsString('XDG_DOWNLOAD_DIR="\$HOME/Загрузки"\n');
+        expect(saveDirectory({'HOME': home.path}, 'linux')!.path, localized.path);
 
-      // XDG_CONFIG_HOME overrides ~/.config
-      final altCfg = await Directory('${home.path}/altcfg').create();
-      final custom = await Directory('${home.path}/CustomDL').create();
-      await File('${altCfg.path}/user-dirs.dirs').writeAsString('XDG_DOWNLOAD_DIR="${custom.path}"\n');
-      expect(
-        saveDirectory({'HOME': home.path, 'XDG_CONFIG_HOME': altCfg.path}, 'linux')!.path,
-        custom.path,
-      );
+        // XDG_CONFIG_HOME overrides ~/.config
+        final altCfg = await Directory('${home.path}/altcfg').create();
+        final custom = await Directory('${home.path}/CustomDL').create();
+        await File('${altCfg.path}/user-dirs.dirs').writeAsString('XDG_DOWNLOAD_DIR="${custom.path}"\n');
+        expect(
+          saveDirectory({'HOME': home.path, 'XDG_CONFIG_HOME': altCfg.path}, 'linux')!.path,
+          custom.path,
+        );
 
-      // explicit XDG_DOWNLOAD_DIR env var has top precedence
-      final envDir = await Directory('${home.path}/EnvDL').create();
-      expect(
-        saveDirectory({'HOME': home.path, 'XDG_DOWNLOAD_DIR': envDir.path}, 'linux')!.path,
-        envDir.path,
-      );
+        // explicit XDG_DOWNLOAD_DIR env var has top precedence
+        final envDir = await Directory('${home.path}/EnvDL').create();
+        expect(
+          saveDirectory({'HOME': home.path, 'XDG_DOWNLOAD_DIR': envDir.path}, 'linux')!.path,
+          envDir.path,
+        );
 
-      // relative XDG_CONFIG_HOME / XDG_DOWNLOAD_DIR are ignored per XDG spec
-      expect(
-        saveDirectory({'HOME': home.path, 'XDG_CONFIG_HOME': 'relative/cfg', 'XDG_DOWNLOAD_DIR': 'relative/dl'}, 'linux')!
-            .path,
-        localized.path,
-      );
+        // relative XDG_CONFIG_HOME / XDG_DOWNLOAD_DIR are ignored per XDG spec
+        expect(
+          saveDirectory({'HOME': home.path, 'XDG_CONFIG_HOME': 'relative/cfg', 'XDG_DOWNLOAD_DIR': 'relative/dl'}, 'linux')!
+              .path,
+          localized.path,
+        );
+      }
 
       expect(saveDirectory({'HOME': '/nowhere/at/all'}, 'linux'), isNull);
     });
