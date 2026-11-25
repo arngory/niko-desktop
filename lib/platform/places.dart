@@ -6,6 +6,7 @@ File? settingsFile([Map<String, String>? environment, String? os]) {
   final env = environment ?? Platform.environment;
   final system = os ?? Platform.operatingSystem;
   String? present(String? value) => value == null || value.isEmpty ? null : value;
+  String? absolute(String? value) => value != null && value.startsWith('/') ? value : null;
   switch (system) {
     case 'windows':
       final base = present(env['APPDATA']);
@@ -15,9 +16,41 @@ File? settingsFile([Map<String, String>? environment, String? os]) {
       return home == null ? null : File('$home/Library/Application Support/Niko/window.json');
     default:
       final home = present(env['HOME']);
-      final base = present(env['XDG_CONFIG_HOME']) ?? (home == null ? null : '$home/.config');
+      final base = absolute(env['XDG_CONFIG_HOME']) ?? (home == null ? null : '$home/.config');
       return base == null ? null : File('$base/niko/window.json');
   }
+}
+
+/// Reads [key] from the contents of an `xdg-user-dirs` `user-dirs.dirs` file.
+///
+/// Only `$HOME/` at the start of a quoted value is expanded, and only an absolute path is returned. Malformed lines
+/// are skipped (as glib does). A value equal to `$HOME` marks the directory as disabled by the xdg-user-dirs
+/// specification and returns null.
+String? xdgUserDir(String contents, String home, String key) {
+  final prefix = '$key=';
+  String? result;
+  for (final rawLine in contents.split('\n')) {
+    final line = rawLine.trim();
+    if (line.isEmpty || line.startsWith('#') || !line.startsWith(prefix)) continue;
+    final value = line.substring(prefix.length).trim();
+    if (value.length < 2 || !value.startsWith('"') || !value.endsWith('"')) continue;
+    final inner = value.substring(1, value.length - 1);
+    if (inner == r'$HOME' || inner == r'$HOME/') {
+      result = null;
+      continue;
+    }
+    String? candidate;
+    if (inner.startsWith(r'$HOME/')) {
+      if (home.startsWith('/')) {
+        final base = home.length > 1 && home.endsWith('/') ? home.substring(0, home.length - 1) : home;
+        candidate = base == '/' ? inner.substring(5) : '$base${inner.substring(5)}';
+      }
+    } else if (inner.startsWith('/')) {
+      candidate = inner;
+    }
+    if (candidate != null && !candidate.contains('\x00')) result = candidate;
+  }
+  return result;
 }
 
 /// Where a file the user asked for is saved: their Downloads folder where there is one, else their home.
@@ -26,8 +59,24 @@ Directory? saveDirectory([Map<String, String>? environment, String? os]) {
   final system = os ?? Platform.operatingSystem;
   final separator = system == 'windows' ? '\\' : '/';
   final home = system == 'windows' ? env['USERPROFILE'] : env['HOME'];
-  final named = system == 'windows' || system == 'macos' ? null : env['XDG_DOWNLOAD_DIR'];
-  for (final path in [named, if (home != null && home.isNotEmpty) '$home${separator}Downloads', home]) {
+  String? absolute(String? value) => value != null && value.startsWith('/') ? value : null;
+  final named = system == 'windows' || system == 'macos' ? null : absolute(env['XDG_DOWNLOAD_DIR']);
+  String? configured;
+  if (system != 'windows' && system != 'macos') {
+    final configBase =
+        absolute(env['XDG_CONFIG_HOME']) ?? (home != null && home.isNotEmpty ? '$home/.config' : null);
+    if (configBase != null) {
+      final dirsFile = File('$configBase/user-dirs.dirs');
+      try {
+        if (dirsFile.existsSync()) {
+          configured = xdgUserDir(dirsFile.readAsStringSync(), home ?? '', 'XDG_DOWNLOAD_DIR');
+        }
+      } catch (_) {
+        // unreadable user-dirs.dirs falls back to ~/Downloads and $HOME
+      }
+    }
+  }
+  for (final path in [named, configured, if (home != null && home.isNotEmpty) '$home${separator}Downloads', home]) {
     if (path != null && path.isNotEmpty && Directory(path).existsSync()) return Directory(path);
   }
   return null;

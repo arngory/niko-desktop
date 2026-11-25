@@ -4,6 +4,14 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+namespace {
+
+// Minimum client area in logical pixels (matches the B-Compact narrow layout).
+constexpr int kMinClientWidth = 420;
+constexpr int kMinClientHeight = 600;
+
+}  // namespace
+
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
@@ -51,6 +59,25 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == WM_GETMINMAXINFO && lparam != 0) {
+    auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+    UINT dpi = ::GetDpiForWindow(hwnd);
+    if (dpi == 0) {
+      dpi = 96;
+    }
+    const double scale = dpi / 96.0;
+    RECT rect = {0, 0, static_cast<LONG>(kMinClientWidth * scale + 0.5),
+                 static_cast<LONG>(kMinClientHeight * scale + 0.5)};
+    const DWORD style =
+        static_cast<DWORD>(::GetWindowLongPtr(hwnd, GWL_STYLE));
+    const DWORD ex_style =
+        static_cast<DWORD>(::GetWindowLongPtr(hwnd, GWL_EXSTYLE));
+    ::AdjustWindowRectExForDpi(&rect, style, FALSE, ex_style, dpi);
+    info->ptMinTrackSize.x = rect.right - rect.left;
+    info->ptMinTrackSize.y = rect.bottom - rect.top;
+    return 0;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

@@ -27,6 +27,9 @@ class WindowSettings {
   // the saves one after another: two at once would share the file beside, and one rename take the other's half
   Future<void> _saves = Future.value();
 
+  /// Finishes when all queued saves have completed; writes nothing on its own.
+  Future<void> flush() => _saves;
+
   /// Writes the settings as they are when its turn comes: a file beside, then renamed over the old one, so a crash
   /// midway leaves one of the two. Saves asked for quickly run one after another; the last writes the last choice.
   Future<void> save() => _saves = _saves.then((_) => _write());

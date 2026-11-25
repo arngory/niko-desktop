@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/widgets.dart';
 
@@ -58,6 +59,7 @@ class NikoShell extends StatefulWidget {
 }
 
 class _NikoShellState extends State<NikoShell> {
+  late AppLifecycleListener _lifecycle;
   late LogFeed _log;
   late ConnectionsFeed _connections;
   late StunTool _stun;
@@ -71,8 +73,19 @@ class _NikoShellState extends State<NikoShell> {
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
     _attach();
     _read();
+  }
+
+  // finish any queued settings write before closing; the service keeps the connection alive
+  Future<AppExitResponse> _onExitRequested() async {
+    try {
+      await widget.settings.flush().timeout(const Duration(seconds: 1));
+    } catch (_) {
+      // a stalled or failed write never blocks closing the window
+    }
+    return AppExitResponse.exit;
   }
 
   void _attach() {
@@ -107,6 +120,7 @@ class _NikoShellState extends State<NikoShell> {
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     _detach(widget.controller);
     super.dispose();
   }

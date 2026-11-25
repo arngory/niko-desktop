@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:niko_desktop/app.dart';
 import 'package:niko_desktop/daemon/daemon.dart';
 import 'package:niko_desktop/daemon/endpoint.dart';
 import 'package:niko_desktop/platform/places.dart';
+import 'package:niko_desktop/state/connection_controller.dart';
 import 'package:niko_desktop/state/window_settings.dart';
 import 'package:niko_desktop/ui/format.dart';
 import 'package:niko_desktop/ui/icons.dart';
@@ -121,12 +125,74 @@ void main() {
       expect(settingsFile({'APPDATA': ''}, 'windows'), isNull);
     });
 
-    test('the folder a file is saved into: Downloads, else home', () async {
+    test('xdg user-dirs.dirs parsing', () {
+      const sample = '''
+# Created by xdg-user-dirs-update
+XDG_DESKTOP_DIR="\$HOME/Рабочий стол"
+XDG_DOWNLOAD_DIR="\$HOME/Загрузки"
+# XDG_DOWNLOAD_DIR="\$HOME/Ignored"
+''';
+      expect(xdgUserDir(sample, '/home/a', 'XDG_DOWNLOAD_DIR'), '/home/a/Загрузки');
+      expect(xdgUserDir(sample, '/home/a/', 'XDG_DOWNLOAD_DIR'), '/home/a/Загрузки');
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="/mnt/data/dl"\r\n', '/home/a', 'XDG_DOWNLOAD_DIR'), '/mnt/data/dl');
+      // disabled directory per xdg-user-dirs specification
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME/"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      // relative, unquoted, unknown variable, or malformed lines are ignored
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="Downloads"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR=\$HOME/Downloads\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="\$OTHER/Downloads"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME2/Downloads"\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      expect(xdgUserDir('not even an assignment\n', '/home/a', 'XDG_DOWNLOAD_DIR'), isNull);
+      // malformed line after a valid one is skipped rather than clearing it
+      expect(
+        xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME/Загрузки"\nXDG_DOWNLOAD_DIR=relative\n', '/home/a', 'XDG_DOWNLOAD_DIR'),
+        '/home/a/Загрузки',
+      );
+      // last valid line wins, including disabling an earlier value
+      expect(
+        xdgUserDir('XDG_DOWNLOAD_DIR="\$HOME/First"\nXDG_DOWNLOAD_DIR="\$HOME"\n', '/home/a', 'XDG_DOWNLOAD_DIR'),
+        isNull,
+      );
+    });
+
+    test('the folder a file is saved into: XDG env, user-dirs.dirs, Downloads, else home', () async {
       final home = await Directory.systemTemp.createTemp('niko-home-');
       addTearDown(() => home.delete(recursive: true));
       expect(saveDirectory({'HOME': home.path}, 'linux')!.path, home.path);
-      await Directory('${home.path}/Downloads').create();
-      expect(saveDirectory({'HOME': home.path}, 'linux')!.path, '${home.path}/Downloads');
+
+      final dl = await Directory('${home.path}/Downloads').create();
+      expect(saveDirectory({'HOME': home.path}, 'linux')!.path, dl.path);
+
+      // user-dirs.dirs beats ~/Downloads
+      final localized = await Directory('${home.path}/Загрузки').create();
+      final cfg = await Directory('${home.path}/.config').create();
+      await File('${cfg.path}/user-dirs.dirs').writeAsString('XDG_DOWNLOAD_DIR="\$HOME/Загрузки"\n');
+      expect(saveDirectory({'HOME': home.path}, 'linux')!.path, localized.path);
+
+      // XDG_CONFIG_HOME overrides ~/.config
+      final altCfg = await Directory('${home.path}/altcfg').create();
+      final custom = await Directory('${home.path}/CustomDL').create();
+      await File('${altCfg.path}/user-dirs.dirs').writeAsString('XDG_DOWNLOAD_DIR="${custom.path}"\n');
+      expect(
+        saveDirectory({'HOME': home.path, 'XDG_CONFIG_HOME': altCfg.path}, 'linux')!.path,
+        custom.path,
+      );
+
+      // explicit XDG_DOWNLOAD_DIR env var has top precedence
+      final envDir = await Directory('${home.path}/EnvDL').create();
+      expect(
+        saveDirectory({'HOME': home.path, 'XDG_DOWNLOAD_DIR': envDir.path}, 'linux')!.path,
+        envDir.path,
+      );
+
+      // relative XDG_CONFIG_HOME / XDG_DOWNLOAD_DIR are ignored per XDG spec
+      expect(
+        saveDirectory({'HOME': home.path, 'XDG_CONFIG_HOME': 'relative/cfg', 'XDG_DOWNLOAD_DIR': 'relative/dl'}, 'linux')!
+            .path,
+        localized.path,
+      );
+
       expect(saveDirectory({'HOME': '/nowhere/at/all'}, 'linux'), isNull);
     });
 
@@ -180,4 +246,78 @@ void main() {
       expect(memory.advanced, isTrue);
     });
   });
+
+  group('window close lifecycle', () {
+    testWidgets('System.requestAppExit waits for queued settings writes to flush', (tester) async {
+      final saveGate = Completer<void>();
+      final settings = _DelayedSaveSettings(saveGate);
+      final controller = ConnectionController(daemon: null, loadConfig: null);
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(NikoApp(controller: controller, settings: settings, locale: const Locale('en')));
+
+      Object? reply;
+      final call = SystemChannels.platform.codec.encodeMethodCall(
+        const MethodCall('System.requestAppExit', <String, dynamic>{'type': 'cancelable'}),
+      );
+      final handled = tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.platform.name,
+        call,
+        (data) => reply = data == null ? null : SystemChannels.platform.codec.decodeEnvelope(data),
+      );
+
+      await tester.pump();
+      expect(settings.flushCalls, 1);
+      expect(reply, isNull);
+
+      saveGate.complete();
+      await handled;
+      await tester.pump();
+      expect(reply, {'response': 'exit'});
+    });
+
+    testWidgets('System.requestAppExit still exits after 1s if flushing stalls', (tester) async {
+      final stalled = Completer<void>();
+      final settings = _DelayedSaveSettings(stalled);
+      final controller = ConnectionController(daemon: null, loadConfig: null);
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(NikoApp(controller: controller, settings: settings, locale: const Locale('en')));
+
+      Object? reply;
+      final call = SystemChannels.platform.codec.encodeMethodCall(
+        const MethodCall('System.requestAppExit', <String, dynamic>{'type': 'cancelable'}),
+      );
+      final handled = tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.platform.name,
+        call,
+        (data) => reply = data == null ? null : SystemChannels.platform.codec.decodeEnvelope(data),
+      );
+
+      await tester.pump();
+      expect(reply, isNull);
+      await tester.pump(const Duration(seconds: 1));
+      await handled;
+      expect(reply, {'response': 'exit'});
+    });
+  });
+}
+
+class _DelayedSaveSettings implements WindowSettings {
+  _DelayedSaveSettings(this._gate);
+
+  final Completer<void> _gate;
+  int flushCalls = 0;
+
+  @override
+  bool advanced = false;
+
+  @override
+  Future<void> flush() {
+    flushCalls++;
+    return _gate.future;
+  }
+
+  @override
+  Future<void> save() => _gate.future;
 }

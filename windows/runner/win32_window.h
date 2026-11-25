@@ -25,6 +25,12 @@ class Win32Window {
         : width(width), height(height) {}
   };
 
+#ifdef _DEBUG
+  static constexpr wchar_t kWindowClassName[] = L"NIKO_DESKTOP_WINDOW_DEBUG";
+#else
+  static constexpr wchar_t kWindowClassName[] = L"NIKO_DESKTOP_WINDOW";
+#endif
+
   Win32Window();
   virtual ~Win32Window();
 
