@@ -457,6 +457,11 @@ class MemoryDaemon implements Daemon {
     return TaskResult(line: 'rule-sets: ${ruleSetRows.length} fetched');
   }
 
+  final locales = <String>[];
+
+  @override
+  Future<void> setLocale(String locale) async => locales.add(locale);
+
   @override
   Future<void> close() async {}
 }
@@ -1516,12 +1521,139 @@ void main() {
     expect(find.text('4000'), findsOneWidget);
   });
 
-  testWidgets('Настройки with no daemon: said, nothing to change', (tester) async {
+  testWidgets('Настройки with no daemon: window settings stay available, daemon rows hidden', (tester) async {
     await show(tester, withDaemon: false);
     await tester.tap(find.text('Настройки'));
     await tester.pump();
+    expect(find.text('Тема'), findsOneWidget);
+    expect(find.text('Язык'), findsOneWidget);
     expect(find.text('Нет связи со службой'), findsOneWidget);
     expect(find.text('Порт'), findsNothing);
+  });
+
+  testWidgets('Соединения: Ctrl+F focuses search, Escape clears and unfocuses', (tester) async {
+    await show(tester);
+    await core(tester, ServicePhase.started);
+    await tester.tap(find.text('Расширенный'));
+    await tester.pump();
+    await tester.tap(find.text('Соединения'));
+    await tester.pump();
+    daemon.connectionBatches.add(ConnectionBatch([
+      ConnectionChange.opened(
+        ConnectionInfo(
+          id: '1',
+          network: 'tcp',
+          destination: '93.184.216.34:443',
+          domain: 'alpha.example',
+          protocol: 'tls',
+          rule: 'final',
+          outbound: 'proxy',
+          outboundType: 'naive',
+          createdAt: daemonClock,
+          up: 100,
+          down: 200,
+          process: 'firefox',
+        ),
+      ),
+      ConnectionChange.opened(
+        ConnectionInfo(
+          id: '2',
+          network: 'tcp',
+          destination: '198.51.100.5:443',
+          domain: 'beta.example',
+          protocol: 'tls',
+          rule: 'final',
+          outbound: 'direct',
+          outboundType: 'direct',
+          createdAt: daemonClock,
+          up: 50,
+          down: 80,
+          process: 'curl',
+        ),
+      ),
+    ], reset: true));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('alpha.example:443'), findsOneWidget);
+    expect(find.text('beta.example:443'), findsOneWidget);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    final searchEditable = tester.widget<EditableText>(find.byType(EditableText));
+    expect(searchEditable.focusNode.hasFocus, isTrue);
+
+    await tester.enterText(find.byType(EditableText), 'alpha');
+    await tester.pump();
+    expect(find.text('alpha.example:443'), findsOneWidget);
+    expect(find.text('beta.example:443'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(searchEditable.controller.text, isEmpty);
+    expect(searchEditable.focusNode.hasFocus, isFalse);
+    expect(find.text('beta.example:443'), findsOneWidget);
+
+    // Ctrl+F works a second time after Escape
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(searchEditable.focusNode.hasFocus, isTrue);
+
+    // Escape returns focus to the screen, and Tab to header + Ctrl+F still focuses search
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(searchEditable.focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('Узлы: narrow layout stacks groups above profiles with no overflow', (tester) async {
+    await show(tester, brightness: Brightness.light, size: const Size(700, 720));
+    await core(tester, ServicePhase.idle);
+    daemon.groupRows = [
+      const GroupRow(id: 1, name: '', ungrouped: true, profiles: 2),
+      const GroupRow(id: 2, name: 'Работа', ungrouped: false, profiles: 1),
+    ];
+    daemon.profileRows = [
+      const ProfileRow(id: 1, groupId: 1, order: 1, type: 'naive', name: 'Хельсинки', address: '203.0.113.7:443'),
+      const ProfileRow(id: 2, groupId: 1, order: 2, type: 'ss', name: 'Амстердам', address: '198.51.100.20:8443'),
+    ];
+    daemon.selectedId = 1;
+    await tester.tap(find.bySemanticsLabel('Разделы'));
+    await tester.pump();
+    await tester.tap(find.text('Узлы'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump();
+    }
+    expect(tester.takeException(), isNull);
+    expect(find.text('Группы'), findsOneWidget);
+    expect(find.text('Хельсинки'), findsOneWidget);
+    await picture('nodes_narrow_light');
+  });
+
+  testWidgets('theme override switches dark app to light and syncs niko/window channel', (tester) async {
+    final sent = <bool>[];
+    const channel = MethodChannel('niko/window');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'setDark') sent.add(call.arguments as bool);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+
+    final settings = WindowSettings.memory(theme: 'light');
+    await show(tester, brightness: Brightness.dark, settings: settings);
+    await core(tester, ServicePhase.idle);
+    expect(sent, contains(false));
+    expect(find.text('Отключено'), findsOneWidget);
+    await picture('main_off_forced_light');
   });
 
   group('Правила', () {

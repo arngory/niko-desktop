@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../daemon/daemon.dart';
@@ -27,6 +29,8 @@ class ConnectionsScreen extends StatefulWidget {
 }
 
 class _ConnectionsScreenState extends State<ConnectionsScreen> {
+  final _screenFocus = FocusNode();
+  final _searchFocus = FocusNode();
   String _query = '';
   Timer? _clock;
 
@@ -34,8 +38,20 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   void initState() {
     super.initState();
     widget.feed.addListener(_changed);
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // the ages move on though nothing else does
     _clock = Timer.periodic(const Duration(seconds: 15), (_) => setState(() {}));
+  }
+
+  bool _onHardwareKey(KeyEvent event) {
+    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.keyF) return false;
+    final kb = HardwareKeyboard.instance;
+    final modifier = defaultTargetPlatform == TargetPlatform.macOS
+        ? (kb.isMetaPressed || kb.isControlPressed)
+        : kb.isControlPressed;
+    if (!modifier || kb.isAltPressed) return false;
+    _searchFocus.requestFocus();
+    return true;
   }
 
   @override
@@ -49,8 +65,11 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     widget.feed.removeListener(_changed);
     _clock?.cancel();
+    _searchFocus.dispose();
+    _screenFocus.dispose();
     super.dispose();
   }
 
@@ -85,6 +104,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     final count = Text(strings.connectionsOpen(all.length), style: NikoType.bodySm.style(colors.ink2));
     final search = NikoSearchField(
       label: strings.connectionsSearch,
+      focusNode: _searchFocus,
+      onEscape: _screenFocus.requestFocus,
       onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
     );
     final closeAll = NikoGhostButton(
@@ -93,78 +114,81 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       onPressed: all.isEmpty ? null : widget.feed.closeAll,
     );
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(NikoSpace.s8, NikoSpace.s4, NikoSpace.s8, NikoSpace.s8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) => constraints.maxWidth < 720
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
+    return Focus(
+      focusNode: _screenFocus,
+      child: Padding(
+          padding: const EdgeInsets.fromLTRB(NikoSpace.s8, NikoSpace.s4, NikoSpace.s8, NikoSpace.s8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) => constraints.maxWidth < 720
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              title,
+                              const SizedBox(width: NikoSpace.s3),
+                              Expanded(child: count),
+                              closeAll,
+                            ],
+                          ),
+                          const SizedBox(height: NikoSpace.s2),
+                          search,
+                        ],
+                      )
+                    : Row(
                         children: [
                           title,
                           const SizedBox(width: NikoSpace.s3),
                           Expanded(child: count),
+                          SizedBox(width: 320, child: search),
+                          const SizedBox(width: NikoSpace.s3),
                           closeAll,
                         ],
                       ),
-                      const SizedBox(height: NikoSpace.s2),
-                      search,
-                    ],
-                  )
-                : Row(
-                    children: [
-                      title,
-                      const SizedBox(width: NikoSpace.s3),
-                      Expanded(child: count),
-                      SizedBox(width: 320, child: search),
-                      const SizedBox(width: NikoSpace.s3),
-                      closeAll,
-                    ],
-                  ),
-          ),
-          const SizedBox(height: NikoSpace.s4),
-          if (widget.feed.error.isNotEmpty) ...[
-            NikoBanner(
-              icon: NikoIcons.alert,
-              title: strings.connectionsCloseFailed,
-              text: widget.feed.error,
-              danger: true,
-            ),
-            const SizedBox(height: NikoSpace.s4),
-          ],
-          if (!widget.running)
-            NikoBanner(icon: NikoIcons.alert, title: strings.connectionsIdle)
-          else if (shown.isNotEmpty)
-            Flexible(
-              child: Semantics(
-                container: true,
-                explicitChildNodes: true,
-                label: strings.connectionsList,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(NikoRadius.md),
-                  child: ColoredBox(
-                    color: colors.surface1,
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: shown.length,
-                      itemBuilder: (context, index) => _ConnectionRow(
-                        key: ValueKey(shown[index].id),
-                        connection: shown[index],
-                        now: now,
-                        strings: strings,
-                        onClose: () => widget.feed.close(shown[index].id),
+              ),
+              const SizedBox(height: NikoSpace.s4),
+              if (widget.feed.error.isNotEmpty) ...[
+                NikoBanner(
+                  icon: NikoIcons.alert,
+                  title: strings.connectionsCloseFailed,
+                  text: widget.feed.error,
+                  danger: true,
+                ),
+                const SizedBox(height: NikoSpace.s4),
+              ],
+              if (!widget.running)
+                NikoBanner(icon: NikoIcons.alert, title: strings.connectionsIdle)
+              else if (shown.isNotEmpty)
+                Flexible(
+                  child: Semantics(
+                    container: true,
+                    explicitChildNodes: true,
+                    label: strings.connectionsList,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(NikoRadius.md),
+                      child: ColoredBox(
+                        color: colors.surface1,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: shown.length,
+                          itemBuilder: (context, index) => _ConnectionRow(
+                            key: ValueKey(shown[index].id),
+                            connection: shown[index],
+                            now: now,
+                            strings: strings,
+                            onClose: () => widget.feed.close(shown[index].id),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-        ],
-      ),
+            ],
+          ),
+        ),
     );
   }
 }

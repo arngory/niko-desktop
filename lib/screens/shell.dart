@@ -69,6 +69,7 @@ class _NikoShellState extends State<NikoShell> {
   bool _adding = false;
   AppSection _section = AppSection.home;
   late bool _advanced = widget.settings.advanced;
+  bool _localeSynced = false;
 
   @override
   void initState() {
@@ -127,6 +128,18 @@ class _NikoShellState extends State<NikoShell> {
 
   // the connections screen says whether the core runs; the settings, whether the daemon is there
   void _changed() {
+    if (widget.controller.link == LinkPhase.ready) {
+      if (!_localeSynced) {
+        _localeSynced = true;
+        final lang = widget.settings.language;
+        if (lang != 'system') {
+          final daemon = widget.controller.daemon;
+          if (daemon != null) unawaited(daemon.setLocale(lang).catchError((Object _) {}));
+        }
+      }
+    } else {
+      _localeSynced = false;
+    }
     if (_section == AppSection.connections || _section == AppSection.settings) setState(() {});
     // the daemon found, or another one: whether the main screen reads the settings
     if (_section == AppSection.home) _read();
@@ -246,7 +259,14 @@ class _NikoShellState extends State<NikoShell> {
                 listenable: _settings,
                 builder: (context, _) => SettingsScreen(
                   values: _settings,
+                  window: widget.settings,
                   strings: strings,
+                  onLanguage: (lang) {
+                    final daemon = state.daemon;
+                    if (daemon != null && state.link == LinkPhase.ready) {
+                      unawaited(daemon.setLocale(lang == 'system' ? '' : lang).catchError((Object _) {}));
+                    }
+                  },
                   notice: switch (state.link) {
                     LinkPhase.ready when _settings.loaded => null,
                     LinkPhase.ready when _settings.readError.isNotEmpty => (

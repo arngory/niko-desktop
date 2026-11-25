@@ -6,62 +6,15 @@ import 'controls.dart';
 import 'icons.dart';
 import 'pressable.dart';
 
-// The design system's components of the settings screens (components/bundle.css: m-field, m-switch, a settings
-// page), as the phone's ui/settings/SettingsComponents.kt draws them. The list screens are made of them by hand
-// (lib/settings/inbound_screen.dart; docs/ui/platforms.md, variant А).
+// The design system's components of the settings screens (components/bundle.css: m-field, m-switch, m-row),
+// as the phone's ui/settings/SettingsComponents.kt draws them.
 
-/// What a field takes: text as typed, a port (digits, five at most), a secret (shown as dots).
 /// What a field takes: a line of text, a port's digits, a secret shown as dots, or several lines (a list, a line an
 /// item).
 enum FieldInput { text, port, secret, lines }
 
 /// m-fields-row > m-field--narrow: the width of a narrow field beside a wide one.
 const double narrowField = 104;
-
-/// A settings page: its name in a bar of size-bar, then its parts space-6 apart, scrolled when they do not fit.
-class NikoSettingsPage extends StatelessWidget {
-  const NikoSettingsPage({super.key, required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = NikoTheme.of(context);
-    return ColoredBox(
-      color: colors.surface0,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: NikoSize.bar,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s5),
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Semantics(header: true, child: Text(title, style: NikoType.headline.style(colors.ink))),
-              ),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(NikoSpace.s5, NikoSpace.s2, NikoSpace.s5, NikoSpace.s8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final (i, child) in children.indexed) ...[
-                    if (i > 0) const SizedBox(height: NikoSpace.s6),
-                    child,
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 /// m-fields-row: fields side by side, space-3 apart; a narrow one [narrowField] wide, the others share the rest.
 class NikoFieldsRow extends StatelessWidget {
@@ -415,18 +368,36 @@ class NikoChoiceRow<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = NikoTheme.of(context);
+    final segmented = NikoSegmented<T>(label: title, choices: choices, value: value, onChanged: onChanged, cell: cell);
+    final segWidth = choices.length * cell + (choices.length - 1) * NikoSpace.s1 + 2 * NikoSpace.s1;
     return CustomPaint(
       foregroundPainter: divider ? _Hairline(colors.line) : null,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 56),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s4, vertical: NikoSpace.s2),
-          child: Row(
-            children: [
-              Expanded(child: ExcludeSemantics(child: _RowTitle(title, null))),
-              const SizedBox(width: NikoSpace.s3),
-              NikoSegmented<T>(label: title, choices: choices, value: value, onChanged: onChanged, cell: cell),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // keep the title above the choices when the row is narrower than the segmented control
+              if (constraints.maxWidth < segWidth + NikoSpace.s3 + 16) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ExcludeSemantics(child: _RowTitle(title, null)),
+                    const SizedBox(height: NikoSpace.s2),
+                    SingleChildScrollView(scrollDirection: Axis.horizontal, child: segmented),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: ExcludeSemantics(child: _RowTitle(title, null))),
+                  const SizedBox(width: NikoSpace.s3),
+                  segmented,
+                ],
+              );
+            },
           ),
         ),
       ),

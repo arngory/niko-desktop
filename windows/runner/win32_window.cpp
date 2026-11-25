@@ -270,7 +270,23 @@ void Win32Window::OnDestroy() {
   // No-op; provided for subclasses.
 }
 
+void Win32Window::SetDarkTheme(bool dark) {
+  explicit_dark_mode_ = dark;
+  if (window_handle_ != nullptr) {
+    BOOL enable_dark_mode = dark ? TRUE : FALSE;
+    DwmSetWindowAttribute(window_handle_, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                          &enable_dark_mode, sizeof(enable_dark_mode));
+    // Windows 10 does not repaint the non-client frame until notified.
+    ::SetWindowPos(window_handle_, nullptr, 0, 0, 0, 0,
+                   SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                       SWP_NOACTIVATE);
+  }
+}
+
 void Win32Window::UpdateTheme(HWND const window) {
+  if (explicit_dark_mode_.has_value()) {
+    return;
+  }
   DWORD light_mode;
   DWORD light_mode_size = sizeof(light_mode);
   LSTATUS result = RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,

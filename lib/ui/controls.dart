@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../theme/niko_theme.dart';
@@ -378,11 +379,15 @@ class NikoSegmented<T> extends StatelessWidget {
 
 /// A line to type a search into (m-field__control with the search icon).
 class NikoSearchField extends StatefulWidget {
-  const NikoSearchField({super.key, required this.label, required this.onChanged});
+  const NikoSearchField({super.key, required this.label, required this.onChanged, this.focusNode, this.onEscape});
 
   /// The placeholder, and the field's name for a screen reader.
   final String label;
   final ValueChanged<String> onChanged;
+  final FocusNode? focusNode;
+
+  /// Called on Escape after clearing; null unfocuses the field.
+  final VoidCallback? onEscape;
 
   @override
   State<NikoSearchField> createState() => _NikoSearchFieldState();
@@ -390,7 +395,9 @@ class NikoSearchField extends StatefulWidget {
 
 class _NikoSearchFieldState extends State<NikoSearchField> {
   final _controller = TextEditingController();
-  final _focus = FocusNode();
+  FocusNode? _ownedFocus;
+
+  FocusNode get _focus => widget.focusNode ?? (_ownedFocus ??= FocusNode());
 
   @override
   void initState() {
@@ -399,11 +406,37 @@ class _NikoSearchFieldState extends State<NikoSearchField> {
     _controller.addListener(_repaint);
   }
 
+  @override
+  void didUpdateWidget(NikoSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      (oldWidget.focusNode ?? _ownedFocus)?.removeListener(_repaint);
+      if (widget.focusNode != null) {
+        _ownedFocus?.dispose();
+        _ownedFocus = null;
+      }
+      _focus.addListener(_repaint);
+    }
+  }
+
   void _repaint() => setState(() {});
+
+  void _clearAndUnfocus() {
+    if (_controller.text.isNotEmpty) {
+      _controller.clear();
+      widget.onChanged('');
+    }
+    if (widget.onEscape case final onEscape?) {
+      onEscape();
+    } else {
+      _focus.unfocus();
+    }
+  }
 
   @override
   void dispose() {
-    _focus.dispose();
+    _focus.removeListener(_repaint);
+    _ownedFocus?.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -412,48 +445,51 @@ class _NikoSearchFieldState extends State<NikoSearchField> {
   Widget build(BuildContext context) {
     final colors = NikoTheme.of(context);
     final style = NikoType.body.style(colors.ink);
-    return Semantics(
-      textField: true,
-      label: widget.label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _focus.requestFocus,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.surface2,
-            borderRadius: BorderRadius.circular(NikoRadius.sm),
-            border: Border.all(width: NikoStroke.bold, color: _focus.hasFocus ? colors.ink : const Color(0x00000000)),
-          ),
-          child: SizedBox(
-            height: NikoSize.control,
-            child: Padding(
-              padding: const EdgeInsetsDirectional.only(start: NikoSpace.s4, end: NikoSpace.s2),
-              child: Row(
-                children: [
-                  NikoIcon(NikoIcons.search, size: 20, color: colors.ink2),
-                  const SizedBox(width: NikoSpace.s2),
-                  Expanded(
-                    child: Stack(
-                      alignment: AlignmentDirectional.centerStart,
-                      children: [
-                        if (_controller.text.isEmpty)
-                          ExcludeSemantics(
-                            child: Text(widget.label, maxLines: 1, style: NikoType.body.style(colors.ink2)),
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): _clearAndUnfocus},
+      child: Semantics(
+        textField: true,
+        label: widget.label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _focus.requestFocus,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surface2,
+              borderRadius: BorderRadius.circular(NikoRadius.sm),
+              border: Border.all(width: NikoStroke.bold, color: _focus.hasFocus ? colors.ink : const Color(0x00000000)),
+            ),
+            child: SizedBox(
+              height: NikoSize.control,
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(start: NikoSpace.s4, end: NikoSpace.s2),
+                child: Row(
+                  children: [
+                    NikoIcon(NikoIcons.search, size: 20, color: colors.ink2),
+                    const SizedBox(width: NikoSpace.s2),
+                    Expanded(
+                      child: Stack(
+                        alignment: AlignmentDirectional.centerStart,
+                        children: [
+                          if (_controller.text.isEmpty)
+                            ExcludeSemantics(
+                              child: Text(widget.label, maxLines: 1, style: NikoType.body.style(colors.ink2)),
+                            ),
+                          EditableText(
+                            controller: _controller,
+                            focusNode: _focus,
+                            style: style,
+                            cursorColor: colors.ink,
+                            backgroundCursorColor: colors.ink2,
+                            selectionColor: colors.surface3,
+                            maxLines: 1,
+                            onChanged: widget.onChanged,
                           ),
-                        EditableText(
-                          controller: _controller,
-                          focusNode: _focus,
-                          style: style,
-                          cursorColor: colors.ink,
-                          backgroundCursorColor: colors.ink2,
-                          selectionColor: colors.surface3,
-                          maxLines: 1,
-                          onChanged: widget.onChanged,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

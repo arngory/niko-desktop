@@ -11,9 +11,38 @@ struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
   GtkWindow* window;
+  FlMethodChannel* window_channel;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+// Handles window-level method calls from Dart on the niko/window channel.
+static void window_method_call_cb(FlMethodChannel* /*channel*/,
+                                  FlMethodCall* method_call,
+                                  gpointer /*user_data*/) {
+  g_autoptr(FlMethodResponse) response = nullptr;
+  const gchar* method = fl_method_call_get_name(method_call);
+  if (g_strcmp0(method, "setDark") == 0) {
+    FlValue* args = fl_method_call_get_args(method_call);
+    if (args == nullptr || fl_value_get_type(args) != FL_VALUE_TYPE_BOOL) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new(
+          "invalid_args", "expected bool", nullptr));
+    } else {
+      GtkSettings* settings = gtk_settings_get_default();
+      if (settings != nullptr) {
+        g_object_set(settings, "gtk-application-prefer-dark-theme",
+                     fl_value_get_bool(args) ? TRUE : FALSE, nullptr);
+      }
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+    }
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  g_autoptr(GError) error = nullptr;
+  if (!fl_method_call_respond(method_call, response, &error)) {
+    g_warning("Failed to respond to %s: %s", method, error->message);
+  }
+}
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
@@ -22,6 +51,7 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 
 static void window_destroy_cb(GtkWidget* widget, MyApplication* self) {
   if (self->window == GTK_WINDOW(widget)) {
+    g_clear_object(&self->window_channel);
     self->window = nullptr;
   }
 }
@@ -91,6 +121,14 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  g_clear_object(&self->window_channel);
+  self->window_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)), "niko/window",
+      FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(
+      self->window_channel, window_method_call_cb, self, nullptr);
+
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
 
@@ -137,6 +175,7 @@ static void my_application_shutdown(GApplication* application) {
 // Implements GObject::dispose.
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
+  g_clear_object(&self->window_channel);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }

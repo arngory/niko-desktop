@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:niko_desktop/app.dart';
@@ -245,6 +247,44 @@ XDG_DOWNLOAD_DIR="\$HOME/Загрузки"
       await memory.save();
       expect(memory.advanced, isTrue);
     });
+
+    test('theme, language, unknown values, and unknown keys are handled cleanly', () async {
+      final folder = await Directory.systemTemp.createTemp('niko-settings-ext-');
+      addTearDown(() => folder.delete(recursive: true));
+      final file = File('${folder.path}/window.json');
+      await file.writeAsString(jsonEncode({
+        'view': 'simple',
+        'theme': 'sepia',
+        'language': 'de',
+        'recentChecks': [
+          {'target': 'example.com', 'network': 'tcp'},
+        ],
+        'futureFlag': 42,
+      }));
+
+      final loaded = await WindowSettings.load(file);
+      expect(loaded.theme, 'system');
+      expect(loaded.language, 'system');
+
+      var notifications = 0;
+      loaded.addListener(() => notifications++);
+      loaded.theme = 'dark';
+      loaded.theme = 'dark'; // no-op
+      loaded.language = 'en';
+      expect(notifications, 2);
+      await loaded.save();
+
+      final saved = jsonDecode(await file.readAsString()) as Map<String, Object?>;
+      expect(saved['theme'], 'dark');
+      expect(saved['language'], 'en');
+      expect(saved['futureFlag'], 42);
+      expect(saved['recentChecks'], [
+        {'target': 'example.com', 'network': 'tcp'},
+      ]);
+
+      final reloaded = await WindowSettings.load(file);
+      expect((reloaded.theme, reloaded.language), ('dark', 'en'));
+    });
   });
 
   group('window close lifecycle', () {
@@ -303,7 +343,7 @@ XDG_DOWNLOAD_DIR="\$HOME/Загрузки"
   });
 }
 
-class _DelayedSaveSettings implements WindowSettings {
+class _DelayedSaveSettings extends ChangeNotifier implements WindowSettings {
   _DelayedSaveSettings(this._gate);
 
   final Completer<void> _gate;
@@ -311,6 +351,12 @@ class _DelayedSaveSettings implements WindowSettings {
 
   @override
   bool advanced = false;
+
+  @override
+  String theme = 'system';
+
+  @override
+  String language = 'system';
 
   @override
   Future<void> flush() {

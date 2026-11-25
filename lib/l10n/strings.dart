@@ -187,6 +187,12 @@ class NikoStrings {
   String get settingsNotKept => _ru ? 'Не сохранено' : 'Not saved';
   String get save => _ru ? 'Сохранить' : 'Save';
   String get setGeneral => _ru ? 'Общие' : 'General';
+  String get setTheme => _ru ? 'Тема' : 'Theme';
+  String get themeSystem => _ru ? 'Как в системе' : 'As the system';
+  String get themeLight => _ru ? 'Светлая' : 'Light';
+  String get themeDark => _ru ? 'Тёмная' : 'Dark';
+  String get setLanguage => _ru ? 'Язык' : 'Language';
+  String get langSystem => _ru ? 'Как в системе' : 'As the system';
   String get setMode => _ru ? 'Режим' : 'Mode';
   String get setModeVpn => 'VPN';
   String get setModeProxy => _ru ? 'Прокси' : 'Proxy';
@@ -265,12 +271,9 @@ class NikoStrings {
   String get setLog => _ru ? 'Журнал' : 'Log';
   String get setLogLevel => _ru ? 'Уровень журнала' : 'Log level';
 
-  String get inboundTitle => _ru ? 'Вход' : 'Inbound';
   String get inboundUser => _ru ? 'Пользователь' : 'User';
   String get inboundPort => _ru ? 'Порт' : 'Port';
   String get inboundPassword => _ru ? 'Пароль' : 'Password';
-  String get inboundNewPassword => _ru ? 'Новый пароль' : 'New password';
-  String get inboundLan => _ru ? 'Доступ из локальной сети' : 'Access from the LAN';
 
   String get sectionRules => _ru ? 'Правила' : 'Rules';
   String get rulesList => _ru ? 'Правила маршрутизации' : 'Route rules';

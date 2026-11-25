@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -8,6 +10,7 @@ import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
 import '../ui/controls.dart';
 import '../ui/format.dart';
+import '../ui/header.dart';
 import '../ui/icons.dart';
 import '../ui/pressable.dart';
 
@@ -31,113 +34,152 @@ class NodesScreen extends StatelessWidget {
     final strings = NikoStrings.of(Localizations.localeOf(context));
     final group = feed.groups.where((g) => g.id == feed.groupId).firstOrNull;
 
-    final Widget profiles;
-    if (!linked) {
-      profiles = NikoBanner(icon: NikoIcons.alert, title: strings.storeNoLink);
-    } else if (!feed.loaded) {
-      profiles = const SizedBox.shrink();
-    } else if (feed.profiles.isEmpty) {
-      profiles = Text(strings.groupEmpty, style: NikoType.body.style(colors.ink2));
-    } else {
-      profiles = Flexible(
-        child: Semantics(
-          container: true,
-          explicitChildNodes: true,
-          label: strings.profilesList,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(NikoRadius.md),
-            child: ColoredBox(
-              color: colors.surface1,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: feed.profiles.length,
-                itemBuilder: (context, i) {
-                  final p = feed.profiles[i];
-                  final share = !feed.shownIsNode;
-                  return _ProfileRow(
-                    key: ValueKey(p.id),
-                    profile: p,
-                    selected: p.id == feed.selected,
-                    divider: i > 0,
-                    onPressed: () => feed.select(p.id),
-                    onDelete: () => feed.delete(p),
-                    onShare: share ? () => feed.share(p, copyText) : null,
-                  );
-                },
-              ),
-            ),
+    Widget buildProfiles({required bool scrollable}) {
+      if (!linked) {
+        return NikoBanner(icon: NikoIcons.alert, title: strings.storeNoLink);
+      } else if (!feed.loaded) {
+        return const SizedBox.shrink();
+      } else if (feed.profiles.isEmpty) {
+        return Text(strings.groupEmpty, style: NikoType.body.style(colors.ink2));
+      }
+      final share = !feed.shownIsNode;
+      Widget row(int i) {
+        final p = feed.profiles[i];
+        return _ProfileRow(
+          key: ValueKey(p.id),
+          profile: p,
+          selected: p.id == feed.selected,
+          divider: i > 0,
+          onPressed: () => feed.select(p.id),
+          onDelete: () => feed.delete(p),
+          onShare: share ? () => feed.share(p, copyText) : null,
+        );
+      }
+
+      final card = Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: strings.profilesList,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(NikoRadius.md),
+          child: ColoredBox(
+            color: colors.surface1,
+            child: scrollable
+                ? ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: feed.profiles.length,
+                    itemBuilder: (context, i) => row(i),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [for (var i = 0; i < feed.profiles.length; i++) row(i)],
+                  ),
           ),
         ),
       );
+      return scrollable ? Flexible(child: card) : card;
     }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(NikoSpace.s8, NikoSpace.s4, NikoSpace.s8, NikoSpace.s8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 260,
-            child: _Groups(feed: feed, strings: strings, onAdd: linked ? onAdd : null),
-          ),
-          const SizedBox(width: NikoSpace.s6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    group == null ? strings.sectionNodes : groupName(group, strings),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: NikoType.title.style(colors.ink),
-                  ),
-                ),
-                if (group != null && linked && feed.nodeOfGroup(group.id) != null) ...[
-                  const SizedBox(height: NikoSpace.s2),
-                  NodeCard(
-                    key: ValueKey('node-${group.nodeId}'),
-                    node: feed.nodeOfGroup(group.id)!,
-                    strings: strings,
-                    onUpdate: () => feed.refreshNode(group.nodeId),
-                    onDelete: () => feed.deleteNode(group.nodeId),
-                  ),
-                ] else if (group?.info case final info? when linked) ...[
-                  const SizedBox(height: NikoSpace.s2),
-                  _SubscriptionLine(
-                    info: info,
-                    strings: strings,
-                    onUpdate: info.updating ? null : () => feed.refresh(group!.id),
-                  ),
-                ],
-                const SizedBox(height: NikoSpace.s4),
-                if (feed.error.isNotEmpty) ...[
-                  NikoBanner(icon: NikoIcons.alert, title: strings.storeUnreachable, text: feed.error, danger: true),
-                  const SizedBox(height: NikoSpace.s4),
-                ],
-                profiles,
-                if (feed.deleted case final gone?) ...[
-                  const SizedBox(height: NikoSpace.s4),
-                  _Snackbar(text: strings.profileDeleted(gone.saved.row.name), action: strings.undo, onAction: feed.undo),
-                ] else if (feed.copied case final name?) ...[
-                  const SizedBox(height: NikoSpace.s4),
-                  _Snackbar(text: strings.linkCopied(name)),
-                ] else if (feed.updated case final line?) ...[
-                  const SizedBox(height: NikoSpace.s4),
-                  _Snackbar(
-                    text: !feed.updateFailed
-                        ? line
-                        : group?.nodeId.isNotEmpty == true
-                            ? '${strings.nodeUpdateFailed}: $line'
-                            : '${strings.subscriptionUpdateFailed}: $line',
-                  ),
-                ],
-              ],
+    List<Widget> detailChildren({required bool scrollable}) => [
+          Semantics(
+            header: true,
+            child: Text(
+              group == null ? strings.sectionNodes : groupName(group, strings),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: NikoType.title.style(colors.ink),
             ),
           ),
-        ],
-      ),
+          if (group != null && linked && feed.nodeOfGroup(group.id) != null) ...[
+            const SizedBox(height: NikoSpace.s2),
+            NodeCard(
+              key: ValueKey('node-${group.nodeId}'),
+              node: feed.nodeOfGroup(group.id)!,
+              strings: strings,
+              onUpdate: () => feed.refreshNode(group.nodeId),
+              onDelete: () => feed.deleteNode(group.nodeId),
+            ),
+          ] else if (group?.info case final info? when linked) ...[
+            const SizedBox(height: NikoSpace.s2),
+            _SubscriptionLine(
+              info: info,
+              strings: strings,
+              onUpdate: info.updating ? null : () => feed.refresh(group!.id),
+            ),
+          ],
+          const SizedBox(height: NikoSpace.s4),
+          if (feed.error.isNotEmpty) ...[
+            NikoBanner(icon: NikoIcons.alert, title: strings.storeUnreachable, text: feed.error, danger: true),
+            const SizedBox(height: NikoSpace.s4),
+          ],
+          buildProfiles(scrollable: scrollable),
+          if (feed.deleted case final gone?) ...[
+            const SizedBox(height: NikoSpace.s4),
+            _Snackbar(text: strings.profileDeleted(gone.saved.row.name), action: strings.undo, onAction: feed.undo),
+          ] else if (feed.copied case final name?) ...[
+            const SizedBox(height: NikoSpace.s4),
+            _Snackbar(text: strings.linkCopied(name)),
+          ] else if (feed.updated case final line?) ...[
+            const SizedBox(height: NikoSpace.s4),
+            _Snackbar(
+              text: !feed.updateFailed
+                  ? line
+                  : group?.nodeId.isNotEmpty == true
+                      ? '${strings.nodeUpdateFailed}: $line'
+                      : '${strings.subscriptionUpdateFailed}: $line',
+            ),
+          ],
+        ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pad = constraints.maxWidth < NikoHeader.narrow ? NikoSpace.s4 : NikoSpace.s8;
+        final available = constraints.maxWidth - 2 * pad;
+        // two-column layout from 840 px up (matches SettingsScreen); below that groups stack above profiles
+        if (constraints.maxWidth >= 840) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(pad, NikoSpace.s4, pad, NikoSpace.s8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 260,
+                  child: _Groups(feed: feed, strings: strings, onAdd: linked ? onAdd : null, scrollable: true),
+                ),
+                const SizedBox(width: NikoSpace.s6),
+                Expanded(
+                  child: CustomScrollView(
+                    slivers: [SliverList.list(children: detailChildren(scrollable: false))],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        final groupWidth = available > 0 ? math.min(available, 320.0) : 320.0;
+        return CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(pad, NikoSpace.s4, pad, NikoSpace.s8),
+              sliver: SliverList.list(
+                children: [
+                  Align(
+                    alignment: AlignmentDirectional.topStart,
+                    child: SizedBox(
+                      width: groupWidth,
+                      child: _Groups(feed: feed, strings: strings, onAdd: linked ? onAdd : null, scrollable: false),
+                    ),
+                  ),
+                  const SizedBox(height: NikoSpace.s6),
+                  ...detailChildren(scrollable: false),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -315,11 +357,32 @@ class _SubscriptionLine extends StatelessWidget {
 
 /// The panel of groups (m-list with its title): the one shown on surface-2.
 class _Groups extends StatelessWidget {
-  const _Groups({required this.feed, required this.strings, required this.onAdd});
+  const _Groups({required this.feed, required this.strings, required this.onAdd, required this.scrollable});
 
   final ProfilesFeed feed;
   final NikoStrings strings;
   final VoidCallback? onAdd;
+  final bool scrollable;
+
+  Widget _row(GroupRow g) => _GroupRow(
+        key: ValueKey(g.id),
+        name: groupName(g, strings),
+        sub: g.ungrouped
+            ? strings.groupOwnSub(g.profiles)
+            : g.nodeId.isNotEmpty
+                ? [
+                    strings.groupNodeSub(g.profiles),
+                    if (feed.nodeOfGroup(g.id) case final node?) nodeUsage(node, strings),
+                  ].where((part) => part.isNotEmpty).join(' · ')
+                : g.subscription
+                    ? [
+                        strings.groupSubscriptionSub(g.profiles),
+                        if (g.info case final info?) subscriptionUsage(info, strings),
+                      ].where((part) => part.isNotEmpty).join(' · ')
+                    : strings.groupBasicSub(g.profiles),
+        chosen: g.id == feed.groupId,
+        onPressed: () => feed.choose(g.id),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -343,26 +406,17 @@ class _Groups extends StatelessWidget {
                 ],
               ),
             ),
-            for (final g in feed.groups)
-              _GroupRow(
-                key: ValueKey(g.id),
-                name: groupName(g, strings),
-                sub: g.ungrouped
-                    ? strings.groupOwnSub(g.profiles)
-                    : g.nodeId.isNotEmpty
-                        ? [
-                            strings.groupNodeSub(g.profiles),
-                            if (feed.nodeOfGroup(g.id) case final node?) nodeUsage(node, strings),
-                          ].where((part) => part.isNotEmpty).join(' · ')
-                    : g.subscription
-                        ? [
-                            strings.groupSubscriptionSub(g.profiles),
-                            if (g.info case final info?) subscriptionUsage(info, strings),
-                          ].where((part) => part.isNotEmpty).join(' · ')
-                        : strings.groupBasicSub(g.profiles),
-                chosen: g.id == feed.groupId,
-                onPressed: () => feed.choose(g.id),
-              ),
+            if (scrollable)
+              Flexible(
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  shrinkWrap: true,
+                  itemCount: feed.groups.length,
+                  itemBuilder: (context, i) => _row(feed.groups[i]),
+                ),
+              )
+            else
+              for (final g in feed.groups) _row(g),
             const SizedBox(height: NikoSpace.s2),
           ],
         ),

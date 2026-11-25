@@ -1,31 +1,44 @@
-import 'package:flutter/services.dart';
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../l10n/strings.dart';
+import '../state/window_settings.dart';
 import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
 import '../ui/controls.dart';
+import '../ui/dialog.dart';
 import '../ui/fields.dart';
 import '../ui/icons.dart';
 import '../ui/list.dart';
 import '../ui/pressable.dart';
 import 'setting_values.dart';
 
-/// Настройки (B-Settings), made by hand on the settings components (variant А, decision of 2026-11-21): the
-/// computer's settings the daemon's build takes (NikoService.GetSettings), each kept by the daemon as it is changed.
-/// The canvas's sections of what the window has not yet (the theme, the language, the start with the system,
-/// raycontrol's nodes, naive, Yggdrasil, the backup, the updates) come with their features; of the others only the
-/// rows the build of a computer applies are here. A value row opens a dialog; the dialog keeps what the daemon took,
-/// or says why not.
+/// Настройки (B-Settings), made by hand on the settings components: the window's own choices (theme, language —
+/// always available) and the computer's settings the daemon's build takes (NikoService.GetSettings), each kept as it is
+/// changed. A value row opens a dialog; the dialog keeps what the daemon took, or says why not.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.values, required this.strings, this.notice});
+  const SettingsScreen({
+    super.key,
+    required this.values,
+    required this.strings,
+    this.window,
+    this.onLanguage,
+    this.notice,
+  });
 
   /// The settings by the app's names (SettingsFeed: the daemon's).
   final SettingValues values;
   final NikoStrings strings;
 
-  /// What is shown instead of the settings, a title and what to know under it: no link to the daemon, the settings not
-  /// read; an empty title: nothing yet (they are being read); null: the settings.
+  /// The window's own remembered choices (theme, language); null: kept in memory.
+  final WindowSettings? window;
+
+  /// Called after the user saves a language choice, so the shell can inform the daemon.
+  final ValueChanged<String>? onLanguage;
+
+  /// What is shown in place of the daemon's sections, a title and what to know under it: no link to the daemon, the
+  /// settings not read; an empty title: nothing yet (they are being read); null: the daemon's sections are shown.
   final (String, String)? notice;
 
   @override
@@ -35,15 +48,15 @@ class SettingsScreen extends StatefulWidget {
 /// The sections, in the canvas's order.
 enum _Section { general, connection, dns, programs, inbound, experiments, log }
 
-/// A dialog of a value row: its title, its fields (key, label, input) and what it says under them; or the domain
-/// strategies' choices.
+/// A dialog of a settings row: a daemon value row (fields or domain strategies) or the window's language choice.
 class _Dialog {
-  const _Dialog(this.title, this.fields, {this.hint = '', this.strategies = false});
+  const _Dialog(this.title, this.fields, {this.hint = '', this.strategies = false, this.language = false});
 
   final String title;
   final List<(String, String, FieldInput)> fields;
   final String hint;
   final bool strategies;
+  final bool language;
 }
 
 const _strategyKeys = ['domainStrategyForRemote', 'domainStrategyForDirect', 'domainStrategyForServer'];
@@ -52,17 +65,53 @@ const _strategies = ['auto', 'prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_on
 class _SettingsScreenState extends State<SettingsScreen> {
   final _scroll = ScrollController();
   final _keys = {for (final s in _Section.values) s: GlobalKey()};
+  WindowSettings? _ownedWindow;
+  FocusNode? _returnFocus;
   _Section _current = _Section.general;
   _Dialog? _dialog;
 
+  WindowSettings get _window => widget.window ?? (_ownedWindow ??= WindowSettings.memory());
+
+  @override
+  void didUpdateWidget(SettingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.window != null && _ownedWindow != null) {
+      _ownedWindow!.dispose();
+      _ownedWindow = null;
+    }
+  }
+
   @override
   void dispose() {
+    _ownedWindow?.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
   NikoStrings get _s => widget.strings;
   SettingValues get _v => widget.values;
+
+  void _openDialog(_Dialog dialog) {
+    _returnFocus = FocusManager.instance.primaryFocus;
+    setState(() => _dialog = dialog);
+  }
+
+  void _closeDialog() {
+    final target = _returnFocus;
+    _returnFocus = null;
+    setState(() => _dialog = null);
+    if (target != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && target.context != null && target.canRequestFocus) target.requestFocus();
+      });
+    }
+  }
+
+  String _languageName(String code) => switch (code) {
+        'ru' => 'Русский',
+        'en' => 'English',
+        _ => _s.langSystem,
+      };
 
   String _name(_Section section) => switch (section) {
         _Section.general => _s.setGeneral,
@@ -141,18 +190,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         value: value,
         mono: mono,
         divider: divider,
-        onPressed: () => setState(() => _dialog = dialog),
+        onPressed: () => _openDialog(dialog),
       );
 
   Widget _section(_Section section, String overline, List<Widget> rows) =>
       KeyedSubtree(key: _keys[section], child: NikoSection(overline: overline, rows: rows));
 
-  List<Widget> _sections() => [
-        _section(_Section.general, _s.setGeneral, [
-          _choice('serviceMode', _s.setMode, [('vpn', _s.setModeVpn), ('proxy', _s.setModeProxy)], cell: 96,
-              divider: false),
+  Widget _generalSection({required bool withDaemon}) => _section(_Section.general, _s.setGeneral, [
+        // D-SET-03
+        NikoChoiceRow<String>(
+          title: _s.setTheme,
+          choices: [('system', _s.themeSystem), ('light', _s.themeLight), ('dark', _s.themeDark)],
+          value: _window.theme,
+          onChanged: (value) {
+            _window.theme = value;
+            unawaited(_window.save());
+          },
+          cell: 136,
+          divider: false,
+        ),
+        // D-SET-13
+        NikoLinkRow(
+          title: _s.setLanguage,
+          value: _languageName(_window.language),
+          divider: true,
+          onPressed: () => _openDialog(_Dialog(_s.setLanguage, const [], language: true)),
+        ),
+        if (withDaemon) ...[
+          _choice('serviceMode', _s.setMode, [('vpn', _s.setModeVpn), ('proxy', _s.setModeProxy)], cell: 96),
           _switch('systemProxy', _s.setSystemProxy, sub: _s.setSystemProxySub),
-        ]),
+        ],
+      ]);
+
+  List<Widget> _daemonSections() => [
         _section(_Section.connection, _s.setConnection, [
           _choice('tunImplementation', _s.setTun, [('0', 'gVisor'), ('1', 'System'), ('2', 'Mixed')], cell: 88,
               divider: false),
@@ -213,83 +283,107 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = NikoTheme.of(context);
+    final hasDaemon = widget.notice == null;
+    final menuSections = hasDaemon ? _Section.values : const [_Section.general];
     return ColoredBox(
       color: colors.surface0,
       child: ListenableBuilder(
-        listenable: _v,
+        listenable: Listenable.merge([_v, _window]),
         builder: (context, _) => Stack(
           children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 840;
-                final content = Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Semantics(header: true, child: Text(_s.sectionSettings, style: NikoType.title.style(colors.ink))),
-                    if (widget.notice case (final title, final text)) ...[
-                      if (title.isNotEmpty) ...[
-                        const SizedBox(height: NikoSpace.s6),
-                        NikoBanner(icon: NikoIcons.alert, title: title, text: text),
+            ExcludeSemantics(
+              excluding: _dialog != null,
+              child: ExcludeFocus(
+                excluding: _dialog != null,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide = constraints.maxWidth >= 840;
+                    final content = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Semantics(header: true, child: Text(_s.sectionSettings, style: NikoType.title.style(colors.ink))),
+                        if (hasDaemon && _v.error.isNotEmpty) ...[
+                          const SizedBox(height: NikoSpace.s6),
+                          NikoBanner(icon: NikoIcons.alert, title: _s.settingsNotKept, text: _v.error, danger: true),
+                        ],
+                        const SizedBox(height: NikoSpace.s8),
+                        _generalSection(withDaemon: hasDaemon),
+                        if (widget.notice case (final title, final text)) ...[
+                          if (title.isNotEmpty) ...[
+                            const SizedBox(height: NikoSpace.s6),
+                            NikoBanner(icon: NikoIcons.alert, title: title, text: text),
+                          ],
+                        ] else ...[
+                          for (final section in _daemonSections()) ...[const SizedBox(height: NikoSpace.s8), section],
+                        ],
                       ],
-                    ] else ...[
-                      if (_v.error.isNotEmpty) ...[
-                        const SizedBox(height: NikoSpace.s6),
-                        NikoBanner(icon: NikoIcons.alert, title: _s.settingsNotKept, text: _v.error, danger: true),
-                      ],
-                      for (final section in _sections()) ...[const SizedBox(height: NikoSpace.s8), section],
-                    ],
-                  ],
-                );
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (wide && widget.notice == null)
-                      Padding(
-                        padding: const EdgeInsetsDirectional.only(start: NikoSpace.s8, top: NikoSpace.s4),
-                        child: SizedBox(
-                          width: 220,
-                          child: Semantics(
-                            container: true,
-                            explicitChildNodes: true,
-                            label: _s.settingsMenu,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                for (final section in _Section.values)
-                                  _MenuItem(
-                                    name: _name(section),
-                                    active: section == _current,
-                                    onPressed: () => _jump(section),
-                                  ),
-                              ],
+                    );
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (wide)
+                          Padding(
+                            padding: const EdgeInsetsDirectional.only(start: NikoSpace.s8, top: NikoSpace.s4),
+                            child: SizedBox(
+                              width: 220,
+                              child: Semantics(
+                                container: true,
+                                explicitChildNodes: true,
+                                label: _s.settingsMenu,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    for (final section in menuSections)
+                                      _MenuItem(
+                                        name: _name(section),
+                                        active: section == _current || !menuSections.contains(_current) && section == _Section.general,
+                                        onPressed: () => _jump(section),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            controller: _scroll,
+                            padding: EdgeInsets.fromLTRB(wide ? NikoSpace.s8 : NikoSpace.s5, NikoSpace.s4,
+                                wide ? NikoSpace.s8 : NikoSpace.s5, 48),
+                            child: Align(
+                              alignment: AlignmentDirectional.topStart,
+                              child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: content),
                             ),
                           ),
                         ),
-                      ),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: _scroll,
-                        padding: EdgeInsets.fromLTRB(wide ? NikoSpace.s8 : NikoSpace.s5, NikoSpace.s4,
-                            wide ? NikoSpace.s8 : NikoSpace.s5, 48),
-                        child: Align(
-                          alignment: AlignmentDirectional.topStart,
-                          child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: content),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
+                      ],
+                    );
+                  },
+                ),
+              ),
             ),
             if (_dialog case final dialog?)
-              _ValueDialog(
-                key: ValueKey(dialog.title),
-                dialog: dialog,
-                values: _v,
-                strings: _s,
-                strategy: _strategy,
-                onClose: () => setState(() => _dialog = null),
-              ),
+              if (dialog.language)
+                _LanguageDialog(
+                  key: const ValueKey('language'),
+                  initial: _window.language,
+                  strings: _s,
+                  onSave: (lang) {
+                    _window.language = lang;
+                    unawaited(_window.save());
+                    widget.onLanguage?.call(lang);
+                    _closeDialog();
+                  },
+                  onClose: _closeDialog,
+                )
+              else
+                _ValueDialog(
+                  key: ValueKey(dialog.title),
+                  dialog: dialog,
+                  values: _v,
+                  strings: _s,
+                  strategy: _strategy,
+                  onClose: _closeDialog,
+                ),
           ],
         ),
       ),
@@ -394,100 +488,107 @@ class _ValueDialogState extends State<_ValueDialog> {
     final colors = NikoTheme.of(context);
     final s = widget.strings;
     final dialog = widget.dialog;
-    return Shortcuts(
-      shortcuts: const {SingleActivator(LogicalKeyboardKey.escape): DismissIntent()},
-      child: Actions(
-        actions: {DismissIntent: CallbackAction<DismissIntent>(onInvoke: (_) => widget.onClose())},
-        child: Focus(
-          autofocus: true,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: GestureDetector(onTap: widget.onClose, child: ColoredBox(color: colors.scrim)),
-              ),
-              Center(
-                child: Semantics(
-                  scopesRoute: true,
-                  namesRoute: true,
-                  explicitChildNodes: true,
-                  label: dialog.title,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: dialog.strategies ? 640 : 480),
-                    child: Padding(
-                      padding: const EdgeInsets.all(NikoSpace.s5),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: colors.surface1,
-                          borderRadius: BorderRadius.circular(NikoRadius.md),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(NikoSpace.s6),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Semantics(
-                                header: true,
-                                child: Text(dialog.title, style: NikoType.headline.style(colors.ink)),
-                              ),
-                              const SizedBox(height: NikoSpace.s5),
-                              for (final (key, label, input) in dialog.fields) ...[
-                                NikoField(
-                                  label: label,
-                                  value: _texts[key]!,
-                                  input: input,
-                                  mono: true,
-                                  onChanged: (v) => _texts[key] = v,
-                                ),
-                                const SizedBox(height: NikoSpace.s4),
-                              ],
-                              if (dialog.strategies)
-                                for (final (key, label) in [
-                                  (_strategyKeys[0], s.setStrategyRemote),
-                                  (_strategyKeys[1], s.setStrategyDirect),
-                                  (_strategyKeys[2], s.setStrategyServer),
-                                ]) ...[
-                                  ExcludeSemantics(child: Text(label, style: NikoType.caption.style(colors.ink2))),
-                                  const SizedBox(height: NikoSpace.s2),
-                                  Align(
-                                    alignment: AlignmentDirectional.centerStart,
-                                    child: NikoSegmented<String>(
-                                      label: label,
-                                      choices: [for (final v in _strategies) (v, s.strategy(v))],
-                                      value: _texts[key]!,
-                                      onChanged: (v) => setState(() => _texts[key] = v),
-                                      cell: 96,
-                                    ),
-                                  ),
-                                  const SizedBox(height: NikoSpace.s4),
-                                ],
-                              if (dialog.hint.isNotEmpty) ...[
-                                Text(dialog.hint, style: NikoType.bodySm.style(colors.ink2)),
-                                const SizedBox(height: NikoSpace.s4),
-                              ],
-                              if (_error.isNotEmpty) ...[
-                                NikoBanner(icon: NikoIcons.alert, title: s.settingsNotKept, text: _error, danger: true),
-                                const SizedBox(height: NikoSpace.s4),
-                              ],
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  NikoGhostButton(label: s.cancel, onPressed: widget.onClose),
-                                  const SizedBox(width: NikoSpace.s2),
-                                  NikoPrimaryButton(label: s.save, onPressed: _saving ? null : _save),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+    return NikoDialog(
+      title: dialog.title,
+      maxWidth: dialog.strategies ? 640 : 480,
+      cancelLabel: s.cancel,
+      saveLabel: s.save,
+      errorTitle: s.settingsNotKept,
+      error: _error,
+      onClose: widget.onClose,
+      onSave: _saving ? null : _save,
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (key, label, input) in dialog.fields) ...[
+            NikoField(
+              label: label,
+              value: _texts[key]!,
+              input: input,
+              mono: true,
+              onChanged: (v) => _texts[key] = v,
+            ),
+            const SizedBox(height: NikoSpace.s4),
+          ],
+          if (dialog.strategies)
+            for (final (key, label) in [
+              (_strategyKeys[0], s.setStrategyRemote),
+              (_strategyKeys[1], s.setStrategyDirect),
+              (_strategyKeys[2], s.setStrategyServer),
+            ]) ...[
+              ExcludeSemantics(child: Text(label, style: NikoType.caption.style(colors.ink2))),
+              const SizedBox(height: NikoSpace.s2),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: NikoSegmented<String>(
+                  label: label,
+                  choices: [for (final v in _strategies) (v, s.strategy(v))],
+                  value: _texts[key]!,
+                  onChanged: (v) => setState(() => _texts[key] = v),
+                  cell: 96,
                 ),
               ),
+              const SizedBox(height: NikoSpace.s4),
             ],
+          if (dialog.hint.isNotEmpty) ...[
+            Text(dialog.hint, style: NikoType.bodySm.style(colors.ink2)),
+            const SizedBox(height: NikoSpace.s4),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The language choice dialog (D-SET-13): system, Русский or English, each named in its own language.
+class _LanguageDialog extends StatefulWidget {
+  const _LanguageDialog({
+    super.key,
+    required this.initial,
+    required this.strings,
+    required this.onSave,
+    required this.onClose,
+  });
+
+  final String initial;
+  final NikoStrings strings;
+  final ValueChanged<String> onSave;
+  final VoidCallback onClose;
+
+  @override
+  State<_LanguageDialog> createState() => _LanguageDialogState();
+}
+
+class _LanguageDialogState extends State<_LanguageDialog> {
+  late String _choice = widget.initial;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.strings;
+    return NikoDialog(
+      title: s.setLanguage,
+      maxWidth: 520,
+      cancelLabel: s.cancel,
+      saveLabel: s.save,
+      onClose: widget.onClose,
+      onSave: () => widget.onSave(_choice),
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: NikoSegmented<String>(
+              label: s.setLanguage,
+              choices: [('system', s.langSystem), ('ru', 'Русский'), ('en', 'English')],
+              value: _choice,
+              onChanged: (value) => setState(() => _choice = value),
+              cell: 136,
+            ),
           ),
-        ),
+          const SizedBox(height: NikoSpace.s5),
+        ],
       ),
     );
   }

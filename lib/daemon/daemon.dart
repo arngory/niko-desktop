@@ -821,6 +821,9 @@ abstract interface class Daemon {
   /// [force] (NikoService.UpdateRuleSets): what the task did, or why it failed.
   Future<TaskResult> updateRuleSets({List<String> items = const [], bool force = false});
 
+  /// Tells the daemon which locale to use for its own messages (DesktopService.SetLocale).
+  Future<void> setLocale(String locale);
+
   Future<void> close();
 }
 
@@ -1450,6 +1453,11 @@ class GrpcDaemon implements Daemon {
   @override
   Future<TaskResult> updateRuleSets({List<String> items = const [], bool force = false}) =>
       _taskResult(_niko.updateRuleSets(niko.RuleSetRequest(items: items, force: force), options: _ruleSetTasks));
+
+  @override
+  Future<void> setLocale(String locale) async {
+    await _desktop.setLocale(SetLocaleRequest(locale: locale), options: _short);
+  }
 
   @override
   Future<void> close() => _channel.shutdown();

@@ -177,6 +177,8 @@ class TracedDaemon implements Daemon {
   Future<void> moveProfiles(List<int> ids, {required int groupId, int before = 0}) =>
       _inner.moveProfiles(ids, groupId: groupId, before: before);
   @override
+  Future<void> setLocale(String locale) => _inner.setLocale(locale);
+  @override
   Future<void> close() => _inner.close();
 }
 
