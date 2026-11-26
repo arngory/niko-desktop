@@ -92,9 +92,9 @@ BEGIN
             VALUE "CompanyName", "io.niko" "\0"
             VALUE "FileDescription", "Niko" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "niko_desktop" "\0"
+            VALUE "InternalName", "niko" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 io.niko. All rights reserved." "\0"
-            VALUE "OriginalFilename", "niko_desktop.exe" "\0"
+            VALUE "OriginalFilename", "niko.exe" "\0"
             VALUE "ProductName", "Niko" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

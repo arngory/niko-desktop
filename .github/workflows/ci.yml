@@ -79,11 +79,12 @@ jobs:
                 -tags="$TAGS,with_naive_outbound,with_purego,with_external_windivert,with_external_usbip_drivers" \
                 -o "$out/$(basename "$pkg").exe" "./$pkg"
             done
-            # Niko's daemon: boxdd with NikoService beside it (Niko's docs/design/desktop-stage3.md, slice 1)
+            # Niko's daemon: boxdd with NikoService beside it (Niko's docs/design/desktop-stage3.md, slices 1 and 14).
+            # Built with -X main.development=true here so real_daemon_test.dart can connect over 127.0.0.1.
             (cd "$GITHUB_WORKSPACE/niko/libcore" && GOOS=windows GOARCH=$arch CGO_ENABLED=0 go build -trimpath \
-              -ldflags="-s -w -checklinkname=0 -X libcore/nikoservice.Version=$NIKO_VERSION" \
+              -ldflags="-s -w -checklinkname=0 -X libcore/nikoservice.Version=$NIKO_VERSION -X main.development=true" \
               -tags="$TAGS,with_naive_outbound,with_purego,with_external_windivert,with_external_usbip_drivers" \
-              -o "$out/nikod.exe" ./cmd/nikod)
+              -o "$out/niko-daemon.exe" ./cmd/nikod)
             go mod download "github.com/sagernet/cronet-go/lib/windows_$arch"
             lib="$(go list -m -f '{{.Dir}}' "github.com/sagernet/cronet-go/lib/windows_$arch")"
             sums="$(go list -m -f '{{.Dir}}' github.com/sagernet/cronet-go)/SHA256SUMS"
@@ -102,18 +103,18 @@ jobs:
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -checklinkname=0" -tags="$TAGS" \
             -o "$out_root/linux-amd64/boxdd" ./cmd/boxdd
           (cd "$GITHUB_WORKSPACE/niko/libcore" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
-            -ldflags="-s -w -checklinkname=0 -X libcore/nikoservice.Version=$NIKO_VERSION" -tags="$TAGS" \
-            -o "$out_root/linux-amd64/nikod" ./cmd/nikod)
+            -ldflags="-s -w -checklinkname=0 -X libcore/nikoservice.Version=$NIKO_VERSION -X main.development=true" -tags="$TAGS" \
+            -o "$out_root/linux-amd64/niko-daemon" ./cmd/nikod)
           # port knocking is in the core: a profile of a raycontrol node needs it to reach the node; and naive
-          for daemon in boxdd nikod; do
+          for daemon in boxdd niko-daemon; do
             go version -m "$out_root/windows-amd64/$daemon.exe" > /dev/null
             for pkg in knock naive; do
               strings "$out_root/windows-amd64/$daemon.exe" | grep -q "sing-box/protocol/$pkg" ||
                 { echo "::error::$daemon has no $pkg"; exit 1; }
             done
           done
-          strings "$out_root/windows-amd64/nikod.exe" | grep -q "niko.v1.NikoService" ||
-            { echo "::error::nikod has no NikoService"; exit 1; }
+          strings "$out_root/windows-amd64/niko-daemon.exe" | grep -q "niko.v1.NikoService" ||
+            { echo "::error::niko-daemon has no NikoService"; exit 1; }
           # AF_UNIX worker-link probe (tool/probe_af_unix): pure stdlib Go, tested/vetted and cross-compiled separately
           # from the daemon artifact so the test helper never ships beside nikod
           probe_root="$RUNNER_TEMP/probe-af-unix"
@@ -126,10 +127,10 @@ jobs:
             GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$probe_root/windows-amd64/probe-af-unix.exe" . &&
             GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$probe_root/linux-amd64/probe-af-unix" .)
 
-      - name: The binaries
+      - name: The binaries (dev)
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: daemon
+          name: daemon-dev
           path: ${{ runner.temp }}/daemon
           retention-days: 7
 
@@ -232,7 +233,7 @@ jobs:
       - name: The daemon of this run
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: daemon
+          name: daemon-dev
           path: ${{ runner.temp }}/daemon
 
       # the runner's own proxy settings (WinINet's, in HKCU), kept before any real daemon runs here: put back at the end
@@ -247,14 +248,14 @@ jobs:
         working-directory: niko-desktop
         run: |
           if [ "$RUNNER_OS" = Windows ]; then
-            daemon="$RUNNER_TEMP/daemon/windows-amd64/nikod.exe"
+            daemon="$RUNNER_TEMP/daemon/windows-amd64/niko-daemon.exe"
           else
-            daemon="$RUNNER_TEMP/daemon/linux-amd64/nikod"
+            daemon="$RUNNER_TEMP/daemon/linux-amd64/niko-daemon"
             chmod +x "$daemon"
           fi
           NIKO_DAEMON="$daemon" flutter test test/real_daemon_test.dart
 
-      # VPN mode (slice 8b of Niko's docs/design/desktop-stage3.md): nikod in development mode opens its TUN on the
+      # VPN mode (slice 8b of Niko's docs/design/desktop-stage3.md): niko-daemon in development mode opens its TUN on the
       # runner (an administrator's), Connect in VPN mode carries a request to an address of TEST-NET-3 through the
       # profile, by the programs chosen. Not the runner's system proxy: the test reads it before, while and after the
       # TUN, the same
@@ -264,10 +265,10 @@ jobs:
         env:
           NIKO_VPN_TEST: "1"
         run: |
-          NIKO_DAEMON="$RUNNER_TEMP/daemon/windows-amd64/nikod.exe" flutter test test/real_daemon_test.dart \
+          NIKO_DAEMON="$RUNNER_TEMP/daemon/windows-amd64/niko-daemon.exe" flutter test test/real_daemon_test.dart \
             --plain-name 'VPN mode'
 
-      # The system proxy of proxy mode (slice 8b): set for the user by nikod's platform, off and on through
+      # The system proxy of proxy mode (slice 8b): set for the user by niko-daemon's platform, off and on through
       # ManagedService, gone with the core; WinINet's values of HKCU are read while it runs and checked to be as before
       # after
       - name: The system proxy against the real daemon
@@ -276,7 +277,7 @@ jobs:
         env:
           NIKO_PROXY_TEST: "1"
         run: |
-          NIKO_DAEMON="$RUNNER_TEMP/daemon/windows-amd64/nikod.exe" flutter test test/real_daemon_test.dart \
+          NIKO_DAEMON="$RUNNER_TEMP/daemon/windows-amd64/niko-daemon.exe" flutter test test/real_daemon_test.dart \
             --plain-name 'the system proxy'
 
       - name: The runner's proxy settings, put back
@@ -343,14 +344,16 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then
             flutter build windows --release --dart-define="NIKO_WINDOW_VERSION=$window_version"
             out=build/windows/x64/runner/Release
+            test -f "$out/niko.exe"
           else
             flutter build linux --release --dart-define="NIKO_WINDOW_VERSION=$window_version"
             out=build/linux/x64/release/bundle
+            test -x "$out/niko"
           fi
           ls -la "$out"
           du -sh "$out"
           # forbidden development/unsafe strings must never appear in a release (and a grep error fails the build)
-          for forbidden in "--daemon takes 127.0.0.1" "--allow-unsafe-installation-directory-permissions"; do
+          for forbidden in "--daemon takes 127.0.0.1" "DevEndpoint" "--allow-unsafe-installation-directory-permissions"; do
             rc=0
             grep -rqaF -- "$forbidden" "$out" || rc=$?
             if [ "$rc" -eq 0 ]; then
