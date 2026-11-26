@@ -26,6 +26,9 @@ class NikoStrings {
   String get noServiceInstallText => _ru
       ? 'Установите службу Niko в Program Files (потребуются права администратора)'
       : 'Install the Niko service into Program Files (administrator privileges required)';
+  String get noServiceInstallLinuxText => _ru
+      ? 'Установите системную службу Niko для работы VPN (TUN); система запросит пароль администратора'
+      : 'Install the Niko system service for VPN (TUN); the system will ask for your administrator password';
   String get installService => _ru ? 'Установить службу' : 'Install service';
   String get installingService => _ru ? 'Установка…' : 'Installing…';
   String get portableInstalledTitle =>
@@ -36,6 +39,11 @@ class NikoStrings {
   String get openInstalled => _ru ? 'Открыть установленный Niko' : 'Open installed Niko';
   String get updateService => _ru ? 'Обновить службу' : 'Update service';
   String get installCancelled => _ru ? 'Установка отменена пользователем' : 'Installation cancelled';
+  String get installPolkitUnavailable => _ru
+      ? 'Нет агента Polkit (pkexec). Установите службу вручную в терминале:'
+      : 'Polkit agent (pkexec) is unavailable. Install the service manually in a terminal:';
+  String get copyCommand => _ru ? 'Скопировать команду' : 'Copy command';
+  String get commandCopied => _ru ? 'Команда скопирована' : 'Command copied';
   String get installNotElevated => _ru ? 'Нужны права администратора' : 'Administrator privileges are required';
   String get installInvalidLayout =>
       _ru ? 'Неверная структура папки: отсутствует resources\\daemon\\niko-daemon.exe' : 'Invalid folder layout: missing resources\\daemon\\niko-daemon.exe';

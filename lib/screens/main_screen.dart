@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 
 import '../daemon/daemon.dart';
@@ -276,16 +277,31 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ];
     }
-    return [
+    final defaultInstallText =
+        installer.manualCommand.isNotEmpty ? strings.noServiceInstallLinuxText : strings.noServiceInstallText;
+    final widgets = <Widget>[
       NikoBanner(
         icon: NikoIcons.alert,
         title: strings.noServiceTitle,
-        text: outcomeText.isNotEmpty ? outcomeText : strings.noServiceInstallText,
+        text: outcomeText.isNotEmpty ? outcomeText : defaultInstallText,
         danger: isDanger,
         action: installer.installing ? strings.installingService : strings.installService,
         onAction: installer.installing ? null : () => unawaited(installer.installService()),
       ),
     ];
+    if (installer.lastOutcome == InstallOutcome.polkitUnavailable && installer.manualCommand.isNotEmpty) {
+      widgets.addAll([
+        const SizedBox(height: NikoSpace.s3),
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: NikoTonalButton(
+            label: strings.copyCommand,
+            onPressed: () => unawaited(Clipboard.setData(ClipboardData(text: installer.manualCommand))),
+          ),
+        ),
+      ]);
+    }
+    return widgets;
   }
 
   String _installOutcomeMessage(ServiceController installer, NikoStrings strings) {
@@ -294,6 +310,9 @@ class _MainScreenState extends State<MainScreen> {
     return switch (outcome) {
       InstallOutcome.ok => '',
       InstallOutcome.cancelled => strings.installCancelled,
+      InstallOutcome.polkitUnavailable => installer.manualCommand.isNotEmpty
+          ? '${strings.installPolkitUnavailable}\n${installer.manualCommand}'
+          : strings.installPolkitUnavailable,
       InstallOutcome.notElevated => strings.installNotElevated,
       InstallOutcome.invalidLayout => strings.installInvalidLayout,
       InstallOutcome.signatureFailed => strings.installSignatureFailed,

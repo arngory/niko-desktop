@@ -49,10 +49,12 @@ InstallResult parseInstallChannelResult(Object? raw) {
   return const InstallResult.exit(1);
 }
 
-/// Structured outcome of elevated `niko-daemon.exe service install` (matches boxdd `InstallExit*` + UAC 1223).
+/// Structured outcome of elevated `niko-daemon` service install (matches boxdd `InstallExit*`,
+/// Windows UAC 1223, and Linux `pkexec` 126/127).
 enum InstallOutcome {
   ok,
   cancelled,
+  polkitUnavailable,
   notElevated,
   invalidLayout,
   signatureFailed,
@@ -63,10 +65,12 @@ enum InstallOutcome {
   failed,
 }
 
-/// Maps a Windows exit code from `niko-daemon.exe service install` to [InstallOutcome].
+/// Maps an exit code from `niko-daemon service install` / `pkexec` to [InstallOutcome].
 InstallOutcome installOutcomeFromExitCode(int exitCode) => switch (exitCode) {
       0 => InstallOutcome.ok,
-      1223 => InstallOutcome.cancelled,
+      126 => InstallOutcome.cancelled, // pkexec user dismissed auth dialog
+      127 => InstallOutcome.polkitUnavailable, // pkexec missing or no polkit auth agent
+      1223 => InstallOutcome.cancelled, // Windows UAC ERROR_CANCELLED
       10 => InstallOutcome.notElevated,
       11 => InstallOutcome.invalidLayout,
       12 => InstallOutcome.signatureFailed,
@@ -254,11 +258,13 @@ Future<WindowsInstallDetection> detectWindowsInstallState({
 
 const _windowChannel = MethodChannel('niko/window');
 
-/// Controls UAC service installation and transition from a portable copy to the installed `niko.exe`.
+/// Controls elevated service installation (Windows UAC + handoff, or Linux `pkexec` + hot-attach).
 class ServiceController extends ChangeNotifier {
   ServiceController({
     required this.mode,
     required this.installedWindowPath,
+    this.manualCommand = '',
+    this.onInstalledInPlace,
     Future<InstallResult> Function()? runElevatedInstall,
     this.probeStatus,
     Future<void> Function(String windowPath)? launchInstalled,
@@ -269,6 +275,13 @@ class ServiceController extends ChangeNotifier {
 
   InstallMode mode;
   String installedWindowPath;
+
+  /// Copyable manual command (e.g. `sudo /path/to/niko-daemon service install` on Linux when polkit is unavailable).
+  final String manualCommand;
+
+  /// When set (Linux), called on successful install to attach the running window directly to the
+  /// newly started service without relaunching the window.
+  final Future<void> Function()? onInstalledInPlace;
   final Future<InstallResult> Function() _runElevatedInstall;
   final Future<WindowsInstallDetection> Function()? probeStatus;
   final Future<void> Function(String windowPath) _launchInstalled;
@@ -301,9 +314,9 @@ class ServiceController extends ChangeNotifier {
     }
   }
 
-  /// Triggers elevated `niko-daemon.exe service install` via UAC; on success re-probes SCM for the
-  /// installed binary path, launches installed `niko.exe --after-install=<pid>`, and closes this
-  /// portable window cleanly.
+  /// Triggers elevated `niko-daemon service install`:
+  /// - On Linux (`onInstalledInPlace` set): attaches this window directly to the running service.
+  /// - On Windows: re-probes SCM, launches installed `niko.exe --after-install=<pid>`, and exits.
   Future<void> installService() async {
     if (installing) return;
     installing = true;
@@ -316,6 +329,11 @@ class ServiceController extends ChangeNotifier {
       lastOutcome = outcome;
       lastError = detail;
       if (outcome == InstallOutcome.ok) {
+        if (onInstalledInPlace case final onInstalled?) {
+          mode = InstallMode.installed;
+          await onInstalled();
+          return;
+        }
         if (probeStatus case final probe?) {
           try {
             final updated = await probe();

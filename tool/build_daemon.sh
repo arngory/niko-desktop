@@ -58,7 +58,7 @@ copy_verified_cronet() {
   want="$(awk -v f="lib/${goos}_${arch}/$libfile" '$2 == f {print $1}' "$rootdir/SHA256SUMS")"
   have="$(sha256sum "$libdir/$libfile" | cut -d' ' -f1)"
   [ -n "$want" ] && [ "$have" = "$want" ] || { echo "ERROR: $libfile SHA256 mismatch ($have vs ${want:-none})" >&2; exit 1; }
-  grep -q "const Version = \"$CHROMIUM\"" "$libdir/libcronet.go" || { echo "ERROR: $mod is not Chromium $CHROMIUM" >&2; exit 1; }
+  grep -q "const Version = \"$CHROMIUM\"" "$libdir"/libcronet*.go || { echo "ERROR: $mod is not Chromium $CHROMIUM" >&2; exit 1; }
   cp -a "$libdir/$libfile" "$dest/$libfile"
 }
 

@@ -27,7 +27,7 @@ class ConnectionController extends ChangeNotifier {
   })  : _daemon = daemon,
         link = daemon == null ? LinkPhase.none : LinkPhase.connecting;
 
-  final Daemon? _daemon;
+  Daemon? _daemon;
   final Future<String> Function()? _loadConfig;
   final Duration retry;
   final Duration trafficInterval;
@@ -88,6 +88,24 @@ class ConnectionController extends ChangeNotifier {
   /// Starts asking the daemon; nothing to do without one.
   void attach() {
     if (_daemon == null || _disposed) return;
+    unawaited(_connect());
+  }
+
+  /// Replaces the daemon endpoint at runtime (e.g. right after Linux 1-click service install) and connects immediately.
+  void attachDaemon(Daemon daemon) {
+    if (_disposed) return;
+    _generation++;
+    unawaited(_statusSubscription?.cancel());
+    _statusSubscription = null;
+    _dropTraffic();
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _daemon = daemon;
+    link = LinkPhase.connecting;
+    linkError = '';
+    drops = 0;
+    _quickSpent = false;
+    notifyListeners();
     unawaited(_connect());
   }
 
@@ -172,7 +190,7 @@ class ConnectionController extends ChangeNotifier {
           onError: (Object _) {},
           cancelOnError: true,
         );
-        unawaited(_daemon.startedAt().then((value) {
+        unawaited(_daemon!.startedAt().then((value) {
           if (_stale(generation) || service.phase != ServicePhase.started) return;
           startedAt = value;
           notifyListeners();

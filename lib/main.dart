@@ -5,7 +5,9 @@ import 'package:flutter/widgets.dart';
 import 'app.dart';
 import 'daemon/daemon.dart';
 import 'daemon/endpoint.dart';
+import 'daemon/locator.dart';
 import 'daemon/worker_process.dart';
+import 'platform/linux_service_install.dart';
 import 'platform/places.dart';
 import 'platform/service_install.dart';
 import 'state/connection_controller.dart';
@@ -15,9 +17,6 @@ import 'state/window_settings.dart';
 /// no way to reach a daemon over TCP at all, whatever its arguments say; a release is built without it.
 const _dev = bool.fromEnvironment('NIKO_DEV');
 
-const _linuxDaemonDir = '/var/lib/niko-daemon';
-const _linuxDaemonSocket = '$_linuxDaemonDir/niko-daemon.sock';
-
 /// `niko --daemon 127.0.0.1:<port> --config <file.json>` (development builds): the daemon started as
 /// `niko-daemon run --listen 127.0.0.1:<port>`, and the ready config the connect button starts.
 ///
@@ -25,12 +24,13 @@ const _linuxDaemonSocket = '$_linuxDaemonDir/niko-daemon.sock';
 /// - Windows: detects whether the `niko-daemon` service is installed and whether this executable is running from
 ///   the installed Program Files location. When installed, launches the bundled `niko-daemon.exe worker` over AF_UNIX
 ///   with a mutual HMAC-SHA256 handshake; otherwise offers UAC service installation or opening the installed `niko.exe`.
-/// - Linux: connects directly to `/var/lib/niko-daemon/niko-daemon.sock` (authenticated by SO_PEERCRED) when the
-///   system service is installed.
+/// - Linux: locates `/run/niko-daemon/niko-daemon.sock` (SO_PEERCRED); if the service is not installed yet and a
+///   bundled `niko-daemon` binary is present, offers 1-click `pkexec` installation (with copyable `sudo` fallback).
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
   Daemon? daemon;
   ServiceController? serviceInstall;
+  LinuxDaemonLocation? linuxLocation;
   var address = '';
   File? config;
   // all of the development link stands in this branch: without NIKO_DEV the compiler drops it whole, and the gRPC
@@ -66,12 +66,9 @@ Future<void> main(List<String> arguments) async {
       );
     }
   } else if (Platform.isLinux) {
-    final hasService = FileSystemEntity.typeSync(_linuxDaemonSocket) != FileSystemEntityType.notFound ||
-        File('/etc/systemd/system/niko-daemon.service').existsSync() ||
-        File('/usr/lib/systemd/system/niko-daemon.service').existsSync() ||
-        File('/lib/systemd/system/niko-daemon.service').existsSync();
-    if (hasService) {
-      daemon = GrpcDaemon.unix(_linuxDaemonSocket);
+    linuxLocation = await locateLinuxDaemon();
+    if (linuxLocation.socketPath case final sock?) {
+      daemon = GrpcDaemon.unix(sock);
     }
   }
 
@@ -81,6 +78,19 @@ Future<void> main(List<String> arguments) async {
     // read at each press: the file may be edited between two starts
     loadConfig: file?.readAsString,
   )..attach();
+
+  if (!_dev && Platform.isLinux && daemon == null && linuxLocation != null && linuxLocation.hasBundledDaemon) {
+    final bundled = linuxLocation.bundledDaemonPath;
+    serviceInstall = ServiceController(
+      mode: InstallMode.notInstalled,
+      installedWindowPath: Platform.resolvedExecutable,
+      manualCommand: buildLinuxManualInstallCommand(bundled),
+      runElevatedInstall: () => runLinuxPkexecInstall(bundledDaemonPath: bundled),
+      onInstalledInPlace: () async {
+        controller.attachDaemon(GrpcDaemon.unix(linuxSystemSocketPath));
+      },
+    );
+  }
   // the view chosen last time, before the first frame: the window does not open in one view and turn to the other
   final settings = await WindowSettings.load(settingsFile());
   runApp(NikoApp(
