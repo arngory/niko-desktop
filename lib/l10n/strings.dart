@@ -59,6 +59,26 @@ class NikoStrings {
       ? 'Служба установлена, но не удалось открыть установленный Niko'
       : 'Service installed, but failed to open the installed Niko';
   String get installFailed => _ru ? 'Не удалось установить службу' : 'Failed to install the service';
+  String get userModeTitle => _ru ? 'Режим без службы (только прокси)' : 'User mode (proxy only)';
+  String get userModeText => _ru
+      ? 'Прокси работает без прав администратора. Для режима VPN (TUN) установите системную службу Niko'
+      : 'Proxy mode works without administrator privileges. Install the Niko system service to use VPN (TUN) mode';
+  String get vpnNeedsServiceTitle =>
+      _ru ? 'Для режима VPN нужна служба Niko' : 'VPN mode requires the Niko service';
+  String get vpnNeedsServiceText => _ru
+      ? 'Установите системную службу для маршрутизации всего трафика через TUN или переключитесь на режим Прокси'
+      : 'Install the system service to route all traffic via TUN, or switch to Proxy mode';
+  String get migrationTitle =>
+      _ru ? 'Найдены данные из режима без службы' : 'Data from user mode found';
+  String get migrationText => _ru
+      ? 'Перенести профили, подписки, правила и узлы в системную службу Niko?'
+      : 'Transfer profiles, subscriptions, rules, and nodes to the Niko system service?';
+  String get migrationAction => _ru ? 'Перенести' : 'Transfer';
+  String get migrationBusy => _ru ? 'Перенос…' : 'Transferring…';
+  String get migrationDismiss => _ru ? 'Позже' : 'Dismiss';
+  String migrationDone(int profiles, int rules, int nodes) => _ru
+      ? 'Перенесено в службу: профилей $profiles, правил $rules, узлов $nodes'
+      : 'Transferred to service: $profiles profiles, $rules rules, $nodes nodes';
   String get serviceSilentTitle => _ru ? 'Служба не отвечает' : 'The service does not answer';
   String get noConfigTitle => _ru ? 'Нет конфига' : 'No config';
   String get oldServiceTitle => _ru ? 'Служба Niko старее окна' : 'The Niko service is older than the window';

@@ -107,12 +107,16 @@ class Info extends $pb.GeneratedMessage {
     $core.String? coreVersion,
     $core.int? storeSchema,
     $core.int? api,
+    $core.bool? privileged,
+    $core.bool? tun,
   }) {
     final result = Info._();
     if (nikoVersion != null) result.nikoVersion = nikoVersion;
     if (coreVersion != null) result.coreVersion = coreVersion;
     if (storeSchema != null) result.storeSchema = storeSchema;
     if (api != null) result.api = api;
+    if (privileged != null) result.privileged = privileged;
+    if (tun != null) result.tun = tun;
     return result;
   }
 
@@ -133,6 +137,8 @@ class Info extends $pb.GeneratedMessage {
     ..aOS(2, _omitFieldNames ? '' : 'coreVersion')
     ..aI(3, _omitFieldNames ? '' : 'storeSchema')
     ..aI(4, _omitFieldNames ? '' : 'api')
+    ..aOB(5, _omitFieldNames ? '' : 'privileged')
+    ..aOB(6, _omitFieldNames ? '' : 'tun')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -189,7 +195,8 @@ class Info extends $pb.GeneratedMessage {
   /// 4: ShareProfile; 5: Connect; 6: Connect's mode, the config a computer's; 7: the computer's settings, Connect
   /// with them; 8: the programs through Niko; 9: subscriptions (Group.subscription, Refresh, their import); 10: the
   /// route rules, the Russian preset and the rule-sets (ListRules…UpdateRuleSets), their settings; 11: raycontrol
-  /// nodes (their import by invite with its PIN, ListNodes, DeleteNode, Refresh of a node, their profiles in Connect)
+  /// nodes (their import by invite with its PIN, ListNodes, DeleteNode, Refresh of a node, their profiles in Connect);
+  /// 13: user-mode capabilities (privileged, tun) and store migration (ExportUserStore, ImportUserStore)
   @$pb.TagNumber(4)
   $core.int get api => $_getIZ(3);
   @$pb.TagNumber(4)
@@ -198,6 +205,179 @@ class Info extends $pb.GeneratedMessage {
   $core.bool hasApi() => $_has(3);
   @$pb.TagNumber(4)
   void clearApi() => $_clearField(4);
+
+  /// True when running as the privileged system service; false in unprivileged --user-mode.
+  @$pb.TagNumber(5)
+  $core.bool get privileged => $_getBF(4);
+  @$pb.TagNumber(5)
+  set privileged($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasPrivileged() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearPrivileged() => $_clearField(5);
+
+  /// True when VPN (TUN) mode is available; false in unprivileged --user-mode.
+  @$pb.TagNumber(6)
+  $core.bool get tun => $_getBF(5);
+  @$pb.TagNumber(6)
+  set tun($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasTun() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearTun() => $_clearField(6);
+}
+
+class UserStoreSnapshot extends $pb.GeneratedMessage {
+  factory UserStoreSnapshot({
+    $core.List<$core.int>? json,
+  }) {
+    final result = UserStoreSnapshot._();
+    if (json != null) result.json = json;
+    return result;
+  }
+
+  UserStoreSnapshot._();
+
+  factory UserStoreSnapshot.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      UserStoreSnapshot()..mergeFromBuffer(data, registry);
+  factory UserStoreSnapshot.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      UserStoreSnapshot()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UserStoreSnapshot',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: UserStoreSnapshot.$_createMessage)
+    ..a<$core.List<$core.int>>(
+        1, _omitFieldNames ? '' : 'json', $pb.PbFieldType.OY)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UserStoreSnapshot clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UserStoreSnapshot copyWith(void Function(UserStoreSnapshot) updates) =>
+      super.copyWith((message) => updates(message as UserStoreSnapshot))
+          as UserStoreSnapshot;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use UserStoreSnapshot() / UserStoreSnapshot.new instead')
+  static UserStoreSnapshot create() => UserStoreSnapshot._();
+  static $pb.GeneratedMessage $_createMessage() => UserStoreSnapshot._();
+  @$core.override
+  UserStoreSnapshot createEmptyInstance() => UserStoreSnapshot._();
+  @$core.pragma('dart2js:noInline')
+  static UserStoreSnapshot getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<UserStoreSnapshot>(
+          UserStoreSnapshot.$_createMessage);
+  static UserStoreSnapshot? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.List<$core.int> get json => $_getN(0);
+  @$pb.TagNumber(1)
+  set json($core.List<$core.int> value) => $_setBytes(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasJson() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearJson() => $_clearField(1);
+}
+
+class ImportUserStoreResult extends $pb.GeneratedMessage {
+  factory ImportUserStoreResult({
+    $core.int? groups,
+    $core.int? profiles,
+    $core.int? rules,
+    $core.int? nodes,
+  }) {
+    final result = ImportUserStoreResult._();
+    if (groups != null) result.groups = groups;
+    if (profiles != null) result.profiles = profiles;
+    if (rules != null) result.rules = rules;
+    if (nodes != null) result.nodes = nodes;
+    return result;
+  }
+
+  ImportUserStoreResult._();
+
+  factory ImportUserStoreResult.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      ImportUserStoreResult()..mergeFromBuffer(data, registry);
+  factory ImportUserStoreResult.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      ImportUserStoreResult()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ImportUserStoreResult',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: ImportUserStoreResult.$_createMessage)
+    ..aI(1, _omitFieldNames ? '' : 'groups')
+    ..aI(2, _omitFieldNames ? '' : 'profiles')
+    ..aI(3, _omitFieldNames ? '' : 'rules')
+    ..aI(4, _omitFieldNames ? '' : 'nodes')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ImportUserStoreResult clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ImportUserStoreResult copyWith(
+          void Function(ImportUserStoreResult) updates) =>
+      super.copyWith((message) => updates(message as ImportUserStoreResult))
+          as ImportUserStoreResult;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated(
+      'Use ImportUserStoreResult() / ImportUserStoreResult.new instead')
+  static ImportUserStoreResult create() => ImportUserStoreResult._();
+  static $pb.GeneratedMessage $_createMessage() => ImportUserStoreResult._();
+  @$core.override
+  ImportUserStoreResult createEmptyInstance() => ImportUserStoreResult._();
+  @$core.pragma('dart2js:noInline')
+  static ImportUserStoreResult getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ImportUserStoreResult>(
+          ImportUserStoreResult.$_createMessage);
+  static ImportUserStoreResult? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get groups => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set groups($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasGroups() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearGroups() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get profiles => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set profiles($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasProfiles() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearProfiles() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get rules => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set rules($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRules() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRules() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get nodes => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set nodes($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasNodes() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearNodes() => $_clearField(4);
 }
 
 class RouteTestRequest extends $pb.GeneratedMessage {

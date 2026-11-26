@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'platform/service_install.dart';
+import 'platform/user_store_migration.dart';
 import 'screens/shell.dart';
 import 'state/connection_controller.dart';
 import 'state/window_settings.dart';
@@ -25,6 +26,7 @@ class NikoApp extends StatefulWidget {
     this.brightness,
     this.now = DateTime.now,
     this.serviceInstall,
+    this.userMigration,
   });
 
   final ConnectionController controller;
@@ -42,6 +44,7 @@ class NikoApp extends StatefulWidget {
   final Brightness? brightness;
   final DateTime Function() now;
   final ServiceController? serviceInstall;
+  final UserStoreMigrationController? userMigration;
 
   @override
   State<NikoApp> createState() => _NikoAppState();
@@ -115,6 +118,7 @@ class _NikoAppState extends State<NikoApp> {
                     configName: widget.configName,
                     now: widget.now,
                     serviceInstall: widget.serviceInstall,
+                    userMigration: widget.userMigration,
                   ),
                 ),
               );

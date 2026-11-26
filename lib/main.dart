@@ -1,15 +1,19 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
+import 'package:grpc/grpc.dart' show GrpcError, StatusCode;
 
 import 'app.dart';
 import 'daemon/daemon.dart';
 import 'daemon/endpoint.dart';
 import 'daemon/locator.dart';
+import 'daemon/user_mode_daemon.dart';
 import 'daemon/worker_process.dart';
 import 'platform/linux_service_install.dart';
 import 'platform/places.dart';
 import 'platform/service_install.dart';
+import 'platform/user_store_migration.dart';
 import 'state/connection_controller.dart';
 import 'state/window_settings.dart';
 
@@ -23,16 +27,24 @@ const _dev = bool.fromEnvironment('NIKO_DEV');
 /// Release builds (`NIKO_DEV` unset):
 /// - Windows: detects whether the `niko-daemon` service is installed and whether this executable is running from
 ///   the installed Program Files location. When installed, launches the bundled `niko-daemon.exe worker` over AF_UNIX
-///   with a mutual HMAC-SHA256 handshake; otherwise offers UAC service installation or opening the installed `niko.exe`.
-/// - Linux: locates `/run/niko-daemon/niko-daemon.sock` (SO_PEERCRED); if the service is not installed yet and a
-///   bundled `niko-daemon` binary is present, offers 1-click `pkexec` installation (with copyable `sudo` fallback).
+///   with a mutual HMAC-SHA256 handshake (and offers one-time user-mode store migration if present). When the service
+///   is not installed yet, launches an unprivileged `niko-daemon.exe worker --user-mode` so Proxy mode works out of
+///   the box without UAC, while offering 1-click UAC service installation for VPN (TUN) mode.
+/// - Linux: locates `/run/niko-daemon/niko-daemon.sock` (SO_PEERCRED). If no system service is running and a bundled
+///   `niko-daemon` binary is present, starts an unprivileged `niko-daemon run --user-mode` for immediate Proxy mode
+///   and offers 1-click `pkexec` installation (with copyable `sudo` fallback and automatic store migration).
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
   Daemon? daemon;
   ServiceController? serviceInstall;
+  UserStoreMigrationController? userMigration;
   LinuxDaemonLocation? linuxLocation;
+  LinuxUserModeDaemon? linuxUserMode;
   var address = '';
   File? config;
+  String? migrationDaemonExe;
+  String? migrationDataDir;
+
   // all of the development link stands in this branch: without NIKO_DEV the compiler drops it whole, and the gRPC
   // client over TCP with it
   if (_dev) {
@@ -58,6 +70,23 @@ Future<void> main(List<String> arguments) async {
     final detection = await probe();
     if (detection.mode == InstallMode.installed) {
       daemon = GrpcDaemon.worker(WorkerProcess(daemonExecutablePath: daemonExe));
+      migrationDaemonExe = daemonExe;
+      migrationDataDir = defaultWindowsUserDataDir();
+    } else if (detection.mode == InstallMode.notInstalled) {
+      if (File(daemonExe).existsSync()) {
+        daemon = GrpcDaemon.worker(
+          WorkerProcess(
+            daemonExecutablePath: daemonExe,
+            userMode: true,
+            workingDirectory: defaultWindowsUserDataDir(),
+          ),
+        );
+      }
+      serviceInstall = ServiceController(
+        mode: detection.mode,
+        installedWindowPath: detection.installedWindowPath,
+        probeStatus: probe,
+      );
     } else {
       serviceInstall = ServiceController(
         mode: detection.mode,
@@ -67,8 +96,26 @@ Future<void> main(List<String> arguments) async {
     }
   } else if (Platform.isLinux) {
     linuxLocation = await locateLinuxDaemon();
-    if (linuxLocation.socketPath case final sock?) {
-      daemon = GrpcDaemon.unix(sock);
+    final active = linuxLocation.activeCandidate;
+    if (active != null && active.kind == DaemonCandidateKind.systemService) {
+      daemon = GrpcDaemon.unix(active.socketPath);
+      if (linuxLocation.hasBundledDaemon) {
+        migrationDaemonExe = linuxLocation.bundledDaemonPath;
+      } else if (linuxLocation.serviceStatus.binary.isNotEmpty) {
+        migrationDaemonExe = linuxLocation.serviceStatus.binary;
+      }
+      migrationDataDir = defaultLinuxUserDataDir();
+      // Ensure no orphaned user-mode daemon keeps holding port 2080 or desktop proxy settings.
+      unawaited(stopExistingUserModeDaemon(migrationDataDir));
+    } else if (active != null && active.kind == DaemonCandidateKind.userMode) {
+      daemon = GrpcDaemon.unix(active.socketPath);
+    } else if (linuxLocation.hasBundledDaemon) {
+      linuxUserMode = await LinuxUserModeDaemon.ensureRunning(
+        daemonExecutablePath: linuxLocation.bundledDaemonPath,
+      );
+      if (linuxUserMode != null) {
+        daemon = GrpcDaemon.unix(linuxUserMode.socketPath, onClose: linuxUserMode.stop);
+      }
     }
   }
 
@@ -79,18 +126,85 @@ Future<void> main(List<String> arguments) async {
     loadConfig: file?.readAsString,
   )..attach();
 
-  if (!_dev && Platform.isLinux && daemon == null && linuxLocation != null && linuxLocation.hasBundledDaemon) {
+  if (!_dev && migrationDaemonExe != null && migrationDataDir != null) {
+    final exe = migrationDaemonExe;
+    final dir = migrationDataDir;
+    userMigration = UserStoreMigrationController(
+      userDataDir: dir,
+      exportUserSnapshot: () => UserStoreMigrationController.exportViaTemporaryUserDaemon(
+        daemonExecutablePath: exe,
+        userDataDir: dir,
+      ),
+      getServiceDaemon: () => controller.privileged ? controller.daemon : null,
+    );
+  }
+
+  if (!_dev &&
+      Platform.isLinux &&
+      linuxLocation != null &&
+      linuxLocation.hasBundledDaemon &&
+      linuxLocation.activeCandidate?.kind != DaemonCandidateKind.systemService) {
     final bundled = linuxLocation.bundledDaemonPath;
+    final userDataDir = defaultLinuxUserDataDir();
+    userMigration ??= userDataDir == null
+        ? null
+        : UserStoreMigrationController(
+            userDataDir: userDataDir,
+            exportUserSnapshot: () => UserStoreMigrationController.exportViaTemporaryUserDaemon(
+              daemonExecutablePath: bundled,
+              userDataDir: userDataDir,
+            ),
+            getServiceDaemon: () => controller.privileged ? controller.daemon : null,
+          );
     serviceInstall = ServiceController(
       mode: InstallMode.notInstalled,
       installedWindowPath: Platform.resolvedExecutable,
       manualCommand: buildLinuxManualInstallCommand(bundled),
       runElevatedInstall: () => runLinuxPkexecInstall(bundledDaemonPath: bundled),
       onInstalledInPlace: () async {
-        controller.attachDaemon(GrpcDaemon.unix(linuxSystemSocketPath));
+        // Export user-mode snapshot and stop any running user-mode proxy core before switching to service.
+        List<int>? snapshot;
+        final oldDaemon = controller.daemon;
+        if (oldDaemon != null && controller.isUserMode) {
+          try {
+            snapshot = await oldDaemon.exportUserStore();
+          } catch (_) {}
+          try {
+            await oldDaemon.stop();
+          } catch (_) {}
+        }
+        await linuxUserMode?.stop();
+        linuxUserMode = null;
+        await stopExistingUserModeDaemon(userDataDir);
+
+        final serviceDaemon = GrpcDaemon.unix(linuxSystemSocketPath);
+        controller.attachDaemon(serviceDaemon);
+
+        if (snapshot != null && snapshot.isNotEmpty && userDataDir != null) {
+          try {
+            // Wait briefly for the newly started system service to come online; retry only on UNAVAILABLE.
+            for (var i = 0; i < 20; i++) {
+              try {
+                await serviceDaemon.importUserStore(snapshot);
+                await markUserStoreMigrated(userDataDir);
+                userMigration?.refresh();
+                return;
+              } on GrpcError catch (e) {
+                if (e.code != StatusCode.unavailable) break;
+                await Future<void>.delayed(const Duration(milliseconds: 250));
+              } catch (_) {
+                break;
+              }
+            }
+          } finally {
+            zeroBytes(snapshot);
+          }
+          userMigration?.refresh();
+        }
       },
     );
   }
+
   // the view chosen last time, before the first frame: the window does not open in one view and turn to the other
   final settings = await WindowSettings.load(settingsFile());
   runApp(NikoApp(
@@ -99,5 +213,6 @@ Future<void> main(List<String> arguments) async {
     daemonAddress: address,
     configName: file == null ? '' : file.uri.pathSegments.last,
     serviceInstall: serviceInstall,
+    userMigration: userMigration,
   ));
 }

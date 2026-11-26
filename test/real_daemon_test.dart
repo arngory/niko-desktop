@@ -18,6 +18,7 @@ import 'package:grpc/grpc.dart';
 import 'package:protobuf/well_known_types/google/protobuf/empty.pb.dart';
 import 'package:niko_desktop/daemon/daemon.dart';
 import 'package:niko_desktop/daemon/endpoint.dart';
+import 'package:niko_desktop/daemon/user_mode_daemon.dart';
 import 'package:niko_desktop/gen/daemon/managed_service.pbgrpc.dart';
 import 'package:niko_desktop/state/connection_controller.dart';
 import 'package:niko_desktop/state/connections_feed.dart';
@@ -835,6 +836,140 @@ void main() {
       await daemon.stop();
       await until(() async => !await listening(mixedPort), 'the local proxy closed');
       expect(await proxyValues(), before, reason: 'the core stopped');
+    },
+  );
+
+  test(
+    'Linux user-mode: proxy without root, VPN refused with SERVICE_REQUIRED, and idempotent user->service migration',
+    skip: (Platform.environment['NIKO_DAEMON'] ?? '').isEmpty
+        ? 'NIKO_DAEMON is not set'
+        : Platform.isLinux
+            ? null
+            : 'Linux user-mode test runs on Linux',
+    timeout: const Timeout(Duration(minutes: 2)),
+    () async {
+      final daemonBin = Platform.environment['NIKO_DAEMON']!;
+      final tmp = await Directory.systemTemp.createTemp('niko-p4-live-');
+      LinuxUserModeDaemon? userHandle;
+      Process? svcProc;
+      GrpcDaemon? userDaemon;
+      GrpcDaemon? svcDaemon;
+      addTearDown(() async {
+        await userDaemon?.close();
+        await svcDaemon?.close();
+        await userHandle?.stop();
+        if (svcProc != null) {
+          svcProc.kill(ProcessSignal.sigterm);
+          await svcProc.exitCode.timeout(const Duration(seconds: 2), onTimeout: () => -1);
+        }
+        if (tmp.existsSync()) await tmp.delete(recursive: true);
+      });
+
+      final userDir = '${tmp.path}/user-daemon';
+      final userSock = '${tmp.path}/run/user.sock';
+      final svcDir = '${tmp.path}/service-daemon';
+      final svcSock = '${tmp.path}/run-svc/svc.sock';
+      Directory('${tmp.path}/run').createSync(recursive: true);
+      Directory('${tmp.path}/run-svc').createSync(recursive: true);
+
+      userHandle = await LinuxUserModeDaemon.ensureRunning(
+        daemonExecutablePath: daemonBin,
+        socketPath: userSock,
+        dataDir: userDir,
+      );
+      expect(userHandle, isNotNull);
+
+      final dirStat = await FileStat.stat('${tmp.path}/run');
+      final sockStat = await FileStat.stat(userSock);
+      expect(dirStat.mode & 0x1ff, 0x1c0); // 0700
+      expect(sockStat.mode & 0x1ff, 0x180); // 0600
+      expect(int.tryParse(File('$userDir/niko-daemon.lock').readAsStringSync().trim()), userHandle!.process?.pid);
+
+      // Duplicate launch on same workingDirectory with a different socket must fail on flock.
+      final dup = await Process.run(daemonBin, [
+        'run',
+        '--user-mode',
+        '--socket',
+        '${tmp.path}/run/other.sock',
+        '--working-directory',
+        userDir,
+      ]);
+      expect(dup.exitCode, isNot(0));
+
+      userDaemon = GrpcDaemon.unix(userSock);
+      final info = await userDaemon.nikoInfo();
+      expect(info.api, greaterThanOrEqualTo(13));
+      expect(info.privileged, isFalse);
+      expect(info.tun, isFalse);
+
+      final proxyPort = await freePort();
+      final ids = await userDaemon.importLinks('socks5://user:p4secret@127.0.0.1:19999#UserModeProxy');
+      expect(ids, hasLength(1));
+      await userDaemon.select(ids.single);
+      await userDaemon.saveRule(
+        const RuleRow(name: 'P4 Direct', enabled: true, domains: 'example.internal', outbound: RuleOutbound.direct),
+      );
+      await userDaemon.updateSettings({'mixedPort': proxyPort, 'systemProxy': false});
+
+      await expectLater(
+        userDaemon.connect(0, mode: ConnectMode.vpn),
+        throwsA(
+          isA<GrpcError>()
+              .having((e) => e.code, 'code', StatusCode.failedPrecondition)
+              .having((e) => e.message, 'message', contains('SERVICE_REQUIRED')),
+        ),
+      );
+
+      await userDaemon.connect(0, mode: ConnectMode.proxy);
+      await until(() => listening(proxyPort), 'user-mode local proxy');
+      await userDaemon.stop();
+      await until(() async => !await listening(proxyPort), 'user-mode local proxy stopped');
+
+      final snapshot = await userDaemon.exportUserStore();
+      expect(utf8.decode(snapshot), contains('p4secret'));
+
+      // Fresh service daemon (no owner.json yet): ImportUserStore must succeed and be idempotent on retry.
+      svcProc = await Process.start(daemonBin, [
+        'run',
+        '--no-restore',
+        '--socket',
+        svcSock,
+        '--working-directory',
+        svcDir,
+      ]);
+      svcProc.stdout.drain<void>().ignore();
+      svcProc.stderr.drain<void>().ignore();
+      await until(() async {
+        try {
+          final s = await Socket.connect(InternetAddress(svcSock, type: InternetAddressType.unix), 0);
+          s.destroy();
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }, 'service socket');
+
+      svcDaemon = GrpcDaemon.unix(svcSock);
+      final svcInfo = await svcDaemon.nikoInfo();
+      expect(svcInfo.privileged, isTrue);
+      expect(svcInfo.tun, isTrue);
+
+      final res1 = await svcDaemon.importUserStore(snapshot);
+      expect(res1.profiles, 1);
+      expect(res1.rules, 1);
+
+      final res2 = await svcDaemon.importUserStore(snapshot);
+      expect(res2.isEmpty, isTrue);
+
+      expect(await svcDaemon.profiles(), hasLength(1));
+      expect(await svcDaemon.rules(), hasLength(1));
+      expect((await svcDaemon.settings())['mixedPort'], proxyPort);
+
+      await userDaemon.close();
+      userDaemon = null;
+      await stopExistingUserModeDaemon(userDir);
+      expect(await userHandle.process!.exitCode.timeout(const Duration(seconds: 3)), 0);
+      userHandle = null;
     },
   );
 }

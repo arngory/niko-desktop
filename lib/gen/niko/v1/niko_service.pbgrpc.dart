@@ -324,6 +324,24 @@ class NikoServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// Exports the caller's decrypted user-mode store for one-time migration to the system service.
+  /// Available only when the daemon runs in --user-mode (FAILED_PRECONDITION on the system service).
+  $grpc.ResponseFuture<$0.UserStoreSnapshot> exportUserStore(
+    $0.Empty request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$exportUserStore, request, options: options);
+  }
+
+  /// Imports a decrypted user-mode store snapshot into the caller's service store, re-sealing all
+  /// secrets under the service's context. Available to any verified caller on its own store (PolicyCaller).
+  $grpc.ResponseFuture<$0.ImportUserStoreResult> importUserStore(
+    $0.UserStoreSnapshot request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$importUserStore, request, options: options);
+  }
+
   // method descriptors
 
   static final _$getInfo = $grpc.ClientMethod<$0.GetInfoRequest, $0.Info>(
@@ -449,6 +467,16 @@ class NikoServiceClient extends $grpc.Client {
           '/niko.v1.NikoService/UpdateRuleSets',
           ($0.RuleSetRequest value) => value.writeToBuffer(),
           $0.TaskProgress.fromBuffer);
+  static final _$exportUserStore =
+      $grpc.ClientMethod<$0.Empty, $0.UserStoreSnapshot>(
+          '/niko.v1.NikoService/ExportUserStore',
+          ($0.Empty value) => value.writeToBuffer(),
+          $0.UserStoreSnapshot.fromBuffer);
+  static final _$importUserStore =
+      $grpc.ClientMethod<$0.UserStoreSnapshot, $0.ImportUserStoreResult>(
+          '/niko.v1.NikoService/ImportUserStore',
+          ($0.UserStoreSnapshot value) => value.writeToBuffer(),
+          $0.ImportUserStoreResult.fromBuffer);
 }
 
 @$pb.GrpcServiceName('niko.v1.NikoService')
@@ -660,6 +688,22 @@ abstract class NikoServiceBase extends $grpc.Service {
         true,
         ($core.List<$core.int> value) => $0.RuleSetRequest.fromBuffer(value),
         ($0.TaskProgress value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.Empty, $0.UserStoreSnapshot>(
+        'ExportUserStore',
+        exportUserStore_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.Empty.fromBuffer(value),
+        ($0.UserStoreSnapshot value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UserStoreSnapshot, $0.ImportUserStoreResult>(
+            'ImportUserStore',
+            importUserStore_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UserStoreSnapshot.fromBuffer(value),
+            ($0.ImportUserStoreResult value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.Info> getInfo_Pre($grpc.ServiceCall $call,
@@ -889,4 +933,21 @@ abstract class NikoServiceBase extends $grpc.Service {
 
   $async.Stream<$0.TaskProgress> updateRuleSets(
       $grpc.ServiceCall call, $0.RuleSetRequest request);
+
+  $async.Future<$0.UserStoreSnapshot> exportUserStore_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.Empty> $request) async {
+    return exportUserStore($call, await $request);
+  }
+
+  $async.Future<$0.UserStoreSnapshot> exportUserStore(
+      $grpc.ServiceCall call, $0.Empty request);
+
+  $async.Future<$0.ImportUserStoreResult> importUserStore_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UserStoreSnapshot> $request) async {
+    return importUserStore($call, await $request);
+  }
+
+  $async.Future<$0.ImportUserStoreResult> importUserStore(
+      $grpc.ServiceCall call, $0.UserStoreSnapshot request);
 }

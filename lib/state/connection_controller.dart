@@ -51,6 +51,15 @@ class ConnectionController extends ChangeNotifier {
   /// The version of the daemon's NikoService (its API); 0 for a daemon without it, or not asked yet.
   int nikoApi = 0;
 
+  /// True when connected to the privileged system service; false in unprivileged `--user-mode`.
+  bool privileged = true;
+
+  /// True when VPN (TUN) mode is supported by the connected daemon.
+  bool tunAvailable = true;
+
+  /// True when connected to an unprivileged user-mode daemon (proxy-only, no TUN).
+  bool get isUserMode => link == LinkPhase.ready && !tunAvailable;
+
   /// NikoService's first version that has what the button connects with without a config: Connect in a mode, the
   /// computer's settings with the mode chosen (D-NAV-02).
   static const connectApi = 7;
@@ -100,9 +109,14 @@ class ConnectionController extends ChangeNotifier {
     _dropTraffic();
     _retryTimer?.cancel();
     _retryTimer = null;
+    final previous = _daemon;
     _daemon = daemon;
+    if (previous != null && previous != daemon) {
+      unawaited(previous.close());
+    }
     link = LinkPhase.connecting;
     linkError = '';
+    actionError = '';
     drops = 0;
     _quickSpent = false;
     notifyListeners();
@@ -127,6 +141,8 @@ class ConnectionController extends ChangeNotifier {
       nikoApi = info?.api ?? 0;
       nikoVersion = info?.nikoVersion ?? '';
       coreVersion = (info != null && info.coreVersion.isNotEmpty) ? info.coreVersion : version;
+      privileged = info?.privileged ?? true;
+      tunAvailable = info?.tun ?? true;
       link = LinkPhase.ready;
       linkError = '';
       notifyListeners();

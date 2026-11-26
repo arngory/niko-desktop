@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
 import '../platform/service_install.dart';
+import '../platform/user_store_migration.dart';
 import '../state/connection_controller.dart';
 import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
@@ -33,12 +34,16 @@ class MainScreen extends StatefulWidget {
     this.onMode,
     this.node,
     this.serviceInstall,
+    this.userMigration,
   });
 
   final ConnectionController controller;
 
-  /// Windows release service installer controller when running without an installed service link.
+  /// Windows/Linux release service installer controller when running without an installed service link.
   final ServiceController? serviceInstall;
+
+  /// One-time migration controller from unprivileged user-mode store to system service store.
+  final UserStoreMigrationController? userMigration;
 
   /// The raycontrol node of the selected profile, for its term, traffic and last update (D-MAIN-13); null for none.
   final NodeRow? node;
@@ -67,6 +72,7 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     widget.controller.addListener(_changed);
     widget.serviceInstall?.addListener(_changed);
+    widget.userMigration?.addListener(_changed);
     _syncClock();
   }
 
@@ -81,12 +87,17 @@ class _MainScreenState extends State<MainScreen> {
       oldWidget.serviceInstall?.removeListener(_changed);
       widget.serviceInstall?.addListener(_changed);
     }
+    if (oldWidget.userMigration != widget.userMigration) {
+      oldWidget.userMigration?.removeListener(_changed);
+      widget.userMigration?.addListener(_changed);
+    }
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_changed);
     widget.serviceInstall?.removeListener(_changed);
+    widget.userMigration?.removeListener(_changed);
     _clock?.cancel();
     super.dispose();
   }
@@ -196,6 +207,13 @@ class _MainScreenState extends State<MainScreen> {
                   const SizedBox(height: NikoSpace.s6),
                   NikoBanner(icon: NikoIcons.alert, title: strings.errorTitle, text: error, danger: true),
                 ],
+                if (state.isUserMode) ...[
+                  const SizedBox(height: NikoSpace.s6),
+                  ..._buildUserModeBanner(strings, vpnRequested: mode == ConnectMode.vpn || error.contains('SERVICE_REQUIRED')),
+                ],
+                if (ready && state.privileged && widget.userMigration != null) ...[
+                  ..._buildMigrationBanner(strings, widget.userMigration!),
+                ],
                 if (state.link == LinkPhase.none) ...[
                   const SizedBox(height: NikoSpace.s6),
                   ..._buildNoServiceBanner(strings),
@@ -246,6 +264,84 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildUserModeBanner(NikoStrings strings, {required bool vpnRequested}) {
+    final installer = widget.serviceInstall;
+    final outcomeText = installer == null ? '' : _installOutcomeMessage(installer, strings);
+    final isDanger = vpnRequested ||
+        (installer != null &&
+            installer.lastOutcome != null &&
+            installer.lastOutcome != InstallOutcome.ok &&
+            installer.lastOutcome != InstallOutcome.cancelled);
+    final title = vpnRequested ? strings.vpnNeedsServiceTitle : strings.userModeTitle;
+    final body = outcomeText.isNotEmpty
+        ? outcomeText
+        : (vpnRequested ? strings.vpnNeedsServiceText : strings.userModeText);
+    final widgets = <Widget>[
+      NikoBanner(
+        icon: NikoIcons.alert,
+        title: title,
+        text: body,
+        danger: isDanger,
+        action: installer == null
+            ? null
+            : (installer.installing ? strings.installingService : strings.installService),
+        onAction: installer == null || installer.installing
+            ? null
+            : () => unawaited(installer.installService()),
+      ),
+    ];
+    if (installer != null &&
+        installer.lastOutcome == InstallOutcome.polkitUnavailable &&
+        installer.manualCommand.isNotEmpty) {
+      widgets.addAll([
+        const SizedBox(height: NikoSpace.s3),
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: NikoTonalButton(
+            label: strings.copyCommand,
+            onPressed: () => unawaited(Clipboard.setData(ClipboardData(text: installer.manualCommand))),
+          ),
+        ),
+      ]);
+    }
+    return widgets;
+  }
+
+  List<Widget> _buildMigrationBanner(NikoStrings strings, UserStoreMigrationController migration) {
+    if (migration.imported case final res? when !res.isEmpty) {
+      return [
+        const SizedBox(height: NikoSpace.s6),
+        NikoBanner(
+          icon: NikoIcons.alert,
+          title: strings.migrationDone(res.profiles, res.rules, res.nodes),
+        ),
+      ];
+    }
+    if (!migration.visible) return const [];
+    final text = migration.error.isNotEmpty ? migration.error : strings.migrationText;
+    return [
+      const SizedBox(height: NikoSpace.s6),
+      NikoBanner(
+        icon: NikoIcons.alert,
+        title: strings.migrationTitle,
+        text: text,
+        danger: migration.error.isNotEmpty,
+        action: migration.migrating ? strings.migrationBusy : strings.migrationAction,
+        onAction: migration.migrating ? null : () => unawaited(migration.migrateNow()),
+      ),
+      if (!migration.migrating) ...[
+        const SizedBox(height: NikoSpace.s3),
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: NikoTonalButton(
+            label: strings.migrationDismiss,
+            onPressed: migration.dismiss,
+          ),
+        ),
+      ],
+    ];
   }
 
   List<Widget> _buildNoServiceBanner(NikoStrings strings) {

@@ -470,6 +470,12 @@ class MemoryDaemon implements Daemon {
   Future<void> setLocale(String locale) async => locales.add(locale);
 
   @override
+  Future<List<int>> exportUserStore() async => const <int>[];
+
+  @override
+  Future<StoreImportResult> importUserStore(List<int> snapshotJson) async => const StoreImportResult();
+
+  @override
   Future<void> close() async {}
 }
 

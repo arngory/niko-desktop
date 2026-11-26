@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:fixnum/fixnum.dart';
 import 'package:grpc/grpc.dart';
@@ -189,7 +190,14 @@ class StunProgress {
 
 /// What Niko's daemon, nikod, is (NikoService.GetInfo).
 class NikoInfo {
-  const NikoInfo({required this.nikoVersion, required this.coreVersion, required this.storeSchema, required this.api});
+  const NikoInfo({
+    required this.nikoVersion,
+    required this.coreVersion,
+    required this.storeSchema,
+    required this.api,
+    this.privileged = true,
+    this.tun = true,
+  });
 
   final String nikoVersion;
   final String coreVersion;
@@ -199,6 +207,24 @@ class NikoInfo {
 
   /// The version of NikoService: what the window may ask of this daemon.
   final int api;
+
+  /// True when connected to the privileged system service; false in unprivileged `--user-mode`.
+  final bool privileged;
+
+  /// True when VPN (TUN) mode is available; false in unprivileged `--user-mode`.
+  final bool tun;
+}
+
+/// Counts of items imported into the system service store from a user-mode snapshot.
+class StoreImportResult {
+  const StoreImportResult({this.groups = 0, this.profiles = 0, this.rules = 0, this.nodes = 0});
+
+  final int groups;
+  final int profiles;
+  final int rules;
+  final int nodes;
+
+  bool get isEmpty => groups == 0 && profiles == 0 && rules == 0 && nodes == 0;
 }
 
 /// A rule a connection matched on its way (NikoService.RouteTest).
@@ -828,6 +854,12 @@ abstract interface class Daemon {
   /// Tells the daemon which locale to use for its own messages (DesktopService.SetLocale).
   Future<void> setLocale(String locale);
 
+  /// Exports the caller's decrypted user-mode store for one-time migration to the system service.
+  Future<List<int>> exportUserStore();
+
+  /// Imports a decrypted user-mode store snapshot into the system service store.
+  Future<StoreImportResult> importUserStore(List<int> snapshotJson);
+
   Future<void> close();
 }
 
@@ -872,12 +904,13 @@ class GrpcDaemon implements Daemon {
   );
 
   /// The Linux release link: direct AF_UNIX to the daemon socket (authenticated by SO_PEERCRED).
-  factory GrpcDaemon.unix(String socketPath) => GrpcDaemon(
+  factory GrpcDaemon.unix(String socketPath, {Future<void> Function()? onClose}) => GrpcDaemon(
     ClientChannel(
       InternetAddress(socketPath, type: InternetAddressType.unix),
       port: 0,
       options: const ChannelOptions(credentials: ChannelCredentials.insecure(), connectTimeout: Duration(seconds: 3)),
     ),
+    onClose,
   );
 
   final ClientChannelBase _channel;
@@ -1080,11 +1113,14 @@ class GrpcDaemon implements Daemon {
   @override
   Future<NikoInfo> nikoInfo() async {
     final info = await _niko.getInfo(niko.GetInfoRequest(), options: _short);
+    final hasCaps = info.api >= 13;
     return NikoInfo(
       nikoVersion: info.nikoVersion,
       coreVersion: info.coreVersion,
       storeSchema: info.storeSchema,
       api: info.api,
+      privileged: hasCaps ? info.privileged : true,
+      tun: hasCaps ? info.tun : true,
     );
   }
 
@@ -1485,6 +1521,23 @@ class GrpcDaemon implements Daemon {
   @override
   Future<void> setLocale(String locale) async {
     await _desktop.setLocale(SetLocaleRequest(locale: locale), options: _short);
+  }
+
+  @override
+  Future<List<int>> exportUserStore() async {
+    final snap = await _niko.exportUserStore(niko.Empty(), options: _long);
+    return Uint8List.fromList(snap.json);
+  }
+
+  @override
+  Future<StoreImportResult> importUserStore(List<int> snapshotJson) async {
+    final res = await _niko.importUserStore(niko.UserStoreSnapshot(json: snapshotJson), options: _long);
+    return StoreImportResult(
+      groups: res.groups,
+      profiles: res.profiles,
+      rules: res.rules,
+      nodes: res.nodes,
+    );
   }
 
   @override

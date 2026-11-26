@@ -47,6 +47,29 @@ class LinuxDaemonLocation {
       serviceStatus.kind == ServiceStatusKind.running || serviceStatus.kind == ServiceStatusKind.stopped;
 }
 
+/// Resolves `$XDG_RUNTIME_DIR/niko/niko-daemon.sock` for the unprivileged Linux user-mode daemon.
+/// Returns null if `XDG_RUNTIME_DIR` is not set.
+String? defaultLinuxUserSocketPath({Map<String, String>? environment}) {
+  final env = environment ?? Platform.environment;
+  final runtimeDir = env['XDG_RUNTIME_DIR'];
+  if (runtimeDir == null || runtimeDir.trim().isEmpty) return null;
+  return '${runtimeDir.trim()}/niko/niko-daemon.sock';
+}
+
+/// Resolves `$XDG_DATA_HOME/niko/user-daemon` (or `$HOME/.local/share/niko/user-daemon`) on Linux.
+String? defaultLinuxUserDataDir({Map<String, String>? environment}) {
+  final env = environment ?? Platform.environment;
+  final xdgData = env['XDG_DATA_HOME'];
+  if (xdgData != null && xdgData.trim().isNotEmpty) {
+    return '${xdgData.trim()}/niko/user-daemon';
+  }
+  final home = env['HOME'];
+  if (home != null && home.trim().isNotEmpty) {
+    return '${home.trim()}/.local/share/niko/user-daemon';
+  }
+  return null;
+}
+
 /// Resolves `<exeDir>/resources/daemon/niko-daemon` beside the running Linux window executable.
 String defaultLinuxBundledDaemonPath({String? resolvedExecutable}) {
   final exeDir = File(resolvedExecutable ?? Platform.resolvedExecutable).parent.path;
@@ -75,6 +98,8 @@ Future<bool> probeUnixSocketReachable(
 Future<LinuxDaemonLocation> locateLinuxDaemon({
   String? bundledDaemonPath,
   List<String>? systemSocketPaths,
+  String? userSocketPath,
+  Map<String, String>? environment,
   ProcessRunner? runProcess,
   Future<bool> Function(String socketPath)? probeSocket,
   bool Function(String path)? fileExists,
@@ -85,6 +110,7 @@ Future<LinuxDaemonLocation> locateLinuxDaemon({
   final hasBundled = existsFn(daemonPath);
   final probeFn = probeSocket ?? probeUnixSocketReachable;
   final sockets = systemSocketPaths ?? const [linuxSystemSocketPath, linuxLegacySocketPath];
+  final userSock = userSocketPath ?? defaultLinuxUserSocketPath(environment: environment);
 
   final candidates = <DaemonCandidate>[];
   DaemonCandidate? active;
@@ -97,6 +123,17 @@ Future<LinuxDaemonLocation> locateLinuxDaemon({
     );
     candidates.add(candidate);
     active ??= reachable ? candidate : null;
+  }
+
+  DaemonCandidate? userCandidate;
+  if (userSock != null && userSock.isNotEmpty) {
+    final reachable = await probeFn(userSock);
+    userCandidate = DaemonCandidate(
+      kind: DaemonCandidateKind.userMode,
+      socketPath: userSock,
+      reachable: reachable,
+    );
+    candidates.add(userCandidate);
   }
 
   var status = const WindowsServiceStatus(ServiceStatusKind.notInstalled);
@@ -138,6 +175,11 @@ Future<LinuxDaemonLocation> locateLinuxDaemon({
       socketPath: sockets.first,
       reachable: false,
     );
+  }
+
+  // Fall back to an already-running user-mode daemon when no system service is active.
+  if (active == null && userCandidate != null && userCandidate.reachable) {
+    active = userCandidate;
   }
 
   return LinuxDaemonLocation(

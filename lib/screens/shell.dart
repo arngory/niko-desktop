@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
 import '../platform/service_install.dart';
+import '../platform/user_store_migration.dart';
 import '../state/connection_controller.dart';
 import '../state/connections_feed.dart';
 import '../state/log_feed.dart';
@@ -44,6 +45,7 @@ class NikoShell extends StatefulWidget {
     this.configName = '',
     this.now = DateTime.now,
     this.serviceInstall,
+    this.userMigration,
   });
 
   final ConnectionController controller;
@@ -57,6 +59,7 @@ class NikoShell extends StatefulWidget {
   final String configName;
   final DateTime Function() now;
   final ServiceController? serviceInstall;
+  final UserStoreMigrationController? userMigration;
 
   @override
   State<NikoShell> createState() => _NikoShellState();
@@ -84,12 +87,24 @@ class _NikoShellState extends State<NikoShell> {
     _read();
   }
 
-  // finish any queued settings write before closing; the service keeps the connection alive
+  // finish any queued settings write before closing; in user-mode also shut down the unprivileged
+  // daemon cleanly so GNOME/KDE/WinINet system proxy settings are restored (the system service stays up).
   Future<AppExitResponse> _onExitRequested() async {
     try {
       await widget.settings.flush().timeout(const Duration(seconds: 1));
     } catch (_) {
       // a stalled or failed write never blocks closing the window
+    }
+    if (widget.controller.isUserMode) {
+      final daemon = widget.controller.daemon;
+      if (daemon != null) {
+        try {
+          await daemon.stop().timeout(const Duration(seconds: 2));
+        } catch (_) {}
+        try {
+          await daemon.close().timeout(const Duration(seconds: 2));
+        } catch (_) {}
+      }
     }
     return AppExitResponse.exit;
   }
@@ -246,6 +261,7 @@ class _NikoShellState extends State<NikoShell> {
                   mode: _mode(),
                   onMode: _setMode,
                   serviceInstall: widget.serviceInstall,
+                  userMigration: widget.userMigration,
                 ),
               ),
               AppSection.check => ListenableBuilder(

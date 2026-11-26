@@ -34,6 +34,8 @@ class WorkerProcess {
   WorkerProcess({
     required this.daemonExecutablePath,
     this.socketDirectory,
+    this.userMode = false,
+    this.workingDirectory,
     this.readyTimeout = const Duration(seconds: 20),
     this.initialBackoff = const Duration(seconds: 1),
     this.maxBackoff = const Duration(seconds: 30),
@@ -46,6 +48,8 @@ class WorkerProcess {
 
   final String daemonExecutablePath;
   final String? socketDirectory;
+  final bool userMode;
+  final String? workingDirectory;
   final Duration readyTimeout;
   final Duration initialBackoff;
   final Duration maxBackoff;
@@ -148,6 +152,11 @@ class WorkerProcess {
 
     final proc = await _startProcess(daemonExecutablePath, [
       'worker',
+      if (userMode) '--user-mode',
+      if (workingDirectory != null && workingDirectory!.isNotEmpty) ...[
+        '--working-directory',
+        workingDirectory!,
+      ],
       '--parent-pid',
       '$_windowPid',
       '--daemon-relay-unix',

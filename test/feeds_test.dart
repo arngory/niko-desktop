@@ -179,6 +179,10 @@ class TracedDaemon implements Daemon {
   @override
   Future<void> setLocale(String locale) => _inner.setLocale(locale);
   @override
+  Future<List<int>> exportUserStore() => _inner.exportUserStore();
+  @override
+  Future<StoreImportResult> importUserStore(List<int> snapshotJson) => _inner.importUserStore(snapshotJson);
+  @override
   Future<void> close() => _inner.close();
 }
 
