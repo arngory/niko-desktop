@@ -1,14 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:fixnum/fixnum.dart';
 import 'package:grpc/grpc.dart';
+import 'package:grpc/grpc_connection_interface.dart' show ClientChannelBase;
 import 'package:protobuf/well_known_types/google/protobuf/empty.pb.dart';
 
 import '../gen/daemon/managed_service.pbgrpc.dart';
 import '../gen/daemon/started_service.pbgrpc.dart';
 import '../gen/experimental/boxdd/desktop_service.pbgrpc.dart';
 import '../gen/niko/v1/niko_service.pbgrpc.dart' as niko;
+import 'af_unix_connector.dart';
 import 'endpoint.dart';
+import 'worker_process.dart';
 
 /// What the core is doing (the daemon's ServiceStatus).
 enum ServicePhase { idle, starting, started, stopping, fatal }
@@ -838,7 +842,7 @@ String daemonError(Object error) {
 }
 
 class GrpcDaemon implements Daemon {
-  GrpcDaemon(this._channel)
+  GrpcDaemon(this._channel, [this._onClose])
     : _desktop = DesktopServiceClient(_channel),
       _started = StartedServiceClient(_channel),
       _managed = ManagedServiceClient(_channel),
@@ -853,7 +857,31 @@ class GrpcDaemon implements Daemon {
     ),
   );
 
-  final ClientChannel _channel;
+  /// The Windows release link: AF_UNIX to our own worker child with mutual HMAC-SHA256 on every
+  /// connection (including reconnects after [ChannelOptions.idleTimeout]). Keepalive pings are
+  /// intentionally disabled so grpc-go's default EnforcementPolicy never sends GOAWAY too_many_pings.
+  factory GrpcDaemon.worker(WorkerProcess worker) => GrpcDaemon(
+    ClientTransportConnectorChannel(
+      WorkerTransportConnector(worker),
+      options: const ChannelOptions(
+        credentials: ChannelCredentials.insecure(),
+        idleTimeout: Duration(minutes: 5),
+      ),
+    ),
+    worker.dispose,
+  );
+
+  /// The Linux release link: direct AF_UNIX to the daemon socket (authenticated by SO_PEERCRED).
+  factory GrpcDaemon.unix(String socketPath) => GrpcDaemon(
+    ClientChannel(
+      InternetAddress(socketPath, type: InternetAddressType.unix),
+      port: 0,
+      options: const ChannelOptions(credentials: ChannelCredentials.insecure(), connectTimeout: Duration(seconds: 3)),
+    ),
+  );
+
+  final ClientChannelBase _channel;
+  final Future<void> Function()? _onClose;
   final DesktopServiceClient _desktop;
   final StartedServiceClient _started;
   final ManagedServiceClient _managed;
@@ -1460,7 +1488,14 @@ class GrpcDaemon implements Daemon {
   }
 
   @override
-  Future<void> close() => _channel.shutdown();
+  Future<void> close() async {
+    try {
+      await _channel.shutdown();
+    } finally {
+      final onClose = _onClose;
+      if (onClose != null) await onClose();
+    }
+  }
 }
 
 final _terminalColours = RegExp('\x1b\\[[0-9;]*m');
