@@ -4,6 +4,8 @@ import 'package:flutter/widgets.dart';
 
 import '../app_info.dart';
 import '../l10n/strings.dart';
+import '../platform/autostart.dart';
+import '../platform/desktop_integration.dart';
 import '../state/window_settings.dart';
 import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
@@ -28,6 +30,8 @@ class SettingsScreen extends StatefulWidget {
     this.coreVersion = '',
     this.nikoVersion = '',
     this.notice,
+    this.autostart,
+    this.pickDirectory,
   });
 
   /// The settings by the app's names (SettingsFeed: the daemon's).
@@ -47,6 +51,12 @@ class SettingsScreen extends StatefulWidget {
   /// What is shown in place of the daemon's sections, a title and what to know under it: no link to the daemon, the
   /// settings not read; an empty title: nothing yet (they are being read); null: the daemon's sections are shown.
   final (String, String)? notice;
+
+  /// Optional autostart manager override (D-SET-04).
+  final DesktopAutostart? autostart;
+
+  /// Optional native directory picker override (used for save folder selection).
+  final Future<String?> Function()? pickDirectory;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -76,8 +86,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
   FocusNode? _returnFocus;
   _Section _current = _Section.general;
   _Dialog? _dialog;
+  bool _autostartEnabled = false;
+  late final DesktopAutostart _autostart = widget.autostart ?? DesktopAutostart();
 
   WindowSettings get _window => widget.window ?? (_ownedWindow ??= WindowSettings.memory());
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadAutostart());
+  }
+
+  Future<void> _loadAutostart() async {
+    final on = await _autostart.isEnabled();
+    if (mounted && on != _autostartEnabled) {
+      setState(() => _autostartEnabled = on);
+    }
+  }
+
+  Future<void> _setAutostart(bool enabled) async {
+    try {
+      await _autostart.setEnabled(enabled);
+      if (mounted) setState(() => _autostartEnabled = enabled);
+    } catch (_) {}
+  }
+
+  Future<void> _chooseSaveFolder() async {
+    final picker = widget.pickDirectory ?? () => DesktopIntegration().pickDirectory(title: _s.setSaveFolder);
+    final chosen = await picker();
+    if (chosen != null && chosen.isNotEmpty) {
+      _window.saveDirectory = chosen;
+      unawaited(_window.save());
+    }
+  }
 
   @override
   void didUpdateWidget(SettingsScreen oldWidget) {
@@ -224,6 +265,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
           divider: true,
           onPressed: () => _openDialog(_Dialog(_s.setLanguage, const [], language: true)),
         ),
+        // D-SET-04, D-SET-05, D-TRAY, native save folder
+        NikoSwitchRow(
+          title: _s.setAutostart,
+          on: _autostartEnabled,
+          divider: true,
+          onChanged: (on) => unawaited(_setAutostart(on)),
+        ),
+        NikoSwitchRow(
+          title: _s.setConnectOnStartup,
+          on: _window.connectOnStartup,
+          divider: true,
+          onChanged: (on) {
+            _window.connectOnStartup = on;
+            unawaited(_window.save());
+          },
+        ),
+        NikoSwitchRow(
+          title: _s.setCloseToTray,
+          on: _window.closeToTray,
+          divider: true,
+          onChanged: (on) {
+            _window.closeToTray = on;
+            unawaited(_window.save());
+          },
+        ),
+        NikoSwitchRow(
+          title: _s.setNotifications,
+          on: _window.notifications,
+          divider: true,
+          onChanged: (on) {
+            _window.notifications = on;
+            unawaited(_window.save());
+          },
+        ),
+        NikoLinkRow(
+          title: _s.setSaveFolder,
+          value: _window.saveDirectory.isEmpty ? _s.setSaveFolderDefault : _window.saveDirectory,
+          mono: _window.saveDirectory.isNotEmpty,
+          divider: true,
+          onPressed: () => unawaited(_chooseSaveFolder()),
+        ),
         if (withDaemon) ...[
           _choice('serviceMode', _s.setMode, [('vpn', _s.setModeVpn), ('proxy', _s.setModeProxy)], cell: 96),
           _switch('systemProxy', _s.setSystemProxy, sub: _s.setSystemProxySub),
@@ -249,6 +331,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _value(_s.setStrategy, _strategySummary(), _Dialog(_s.setStrategy, const [], strategies: true), mono: false),
           _switch('dnsOptimisticCache', _s.setOptimisticCache),
           _switch('bypassLanInCore', _s.setLanDirect),
+          _switch('enableDnsRouting', _s.setEnableDnsRouting),
+          _value(
+            _s.setRuleSetHours,
+            _v.text('ruleSetUpdateHours').isEmpty ? '24' : _v.text('ruleSetUpdateHours'),
+            _Dialog(_s.setRuleSetHours, [('ruleSetUpdateHours', _s.setRuleSetHours, FieldInput.port)]),
+          ),
+          _choice(
+            'dpiDirect',
+            _s.setDpiDirect,
+            [('0', _s.setDpiOff), ('1', _s.setDpiPreset), ('2', _s.setDpiCustom)],
+            cell: 96,
+          ),
+          if (_v.text('dpiDirect') == '1')
+            _choice(
+              'dpiDirectPreset',
+              _s.setDpiPresetName,
+              const [
+                ('tlsrec_sni', 'TLS'),
+                ('split_sni', 'Split'),
+                ('disoob_sld', 'DisOOB'),
+                ('disorder_1', 'Disorder'),
+              ],
+              cell: 84,
+            ),
+          if (_v.text('dpiDirect') == '2')
+            _value(
+              _s.setDpiCustomArgs,
+              _v.text('dpiDirectCustom').isEmpty ? '—' : _v.text('dpiDirectCustom'),
+              _Dialog(_s.setDpiCustomArgs, [('dpiDirectCustom', _s.setDpiCustomArgs, FieldInput.text)]),
+            ),
         ]),
         // D-RULES-06: as the phone's apps through the VPN, a rule by program ahead of the rules (D-RULES-02)
         _section(_Section.programs, _s.setPrograms, [

@@ -258,6 +258,17 @@ class ConnectionController extends ChangeNotifier {
     });
   }
 
+  /// Reloads the running core with the current selected profile and settings (D-STATE-RELOAD).
+  Future<void> reconnect({ConnectMode? mode}) async {
+    final running = service.phase == ServicePhase.starting || service.phase == ServicePhase.started;
+    if (!connectsProfile || !running) return;
+    await _act(() async {
+      final effective = mode ?? startedMode;
+      await _daemon!.connect(0, mode: effective);
+      startedMode = effective;
+    });
+  }
+
   Future<void> _act(Future<void> Function() action) async {
     final daemon = _daemon;
     if (daemon == null || link != LinkPhase.ready || busy) return;

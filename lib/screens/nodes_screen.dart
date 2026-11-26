@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
@@ -9,17 +10,19 @@ import '../state/profiles_feed.dart';
 import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
 import '../ui/controls.dart';
+import '../ui/dialog.dart';
+import '../ui/fields.dart';
 import '../ui/format.dart';
 import '../ui/header.dart';
 import '../ui/icons.dart';
+import '../ui/list.dart';
 import '../ui/pressable.dart';
+import 'profile_editor.dart';
 
-/// Узлы (B-Profiles, D-MAIN-07): the groups beside the profiles of the one chosen; a profile pressed is the one the
-/// window connects with; one is added from a link (+) and deleted, with a way back for a while. A subscription's
-/// group says its traffic, expiry and last update, and updates on demand (D-SUB-01…03). A raycontrol node's group is
-/// its card (D-NODE-01…07): its name, its owner's note, its traffic and term, when its subscription came and comes
-/// next, that it is signed, its ways to connect (the group's profiles), its update, its removal.
-class NodesScreen extends StatelessWidget {
+/// Узлы (B-Profiles, D-MAIN-07, D-GROUP-01, D-SUB-01..08, D-PROFILE-01..05, D-MAIN-08/12):
+/// groups beside profiles, custom group management, subscription settings/update-all/copy/delete,
+/// raycontrol node cards, per-profile latency testing, and manual profile creation/editing.
+class NodesScreen extends StatefulWidget {
   const NodesScreen({super.key, required this.feed, required this.linked, required this.onAdd});
 
   final ProfilesFeed feed;
@@ -29,10 +32,67 @@ class NodesScreen extends StatelessWidget {
   final VoidCallback onAdd;
 
   @override
+  State<NodesScreen> createState() => _NodesScreenState();
+}
+
+class _NodesScreenState extends State<NodesScreen> {
+  // Dialogs & inline overlays
+  GroupRow? _editingGroup; // id 0 = new basic group; >0 = rename basic group or edit subscription settings
+  bool _confirmDeleteGroup = false;
+  // Manual profile editor state
+  bool _editingProfile = false;
+  int _editProfileId = 0;
+  String _editProfileType = 'socks';
+  String _editProfileJson = '';
+
+  Future<void> _openProfileEditor({ProfileRow? existing}) async {
+    if (existing == null) {
+      setState(() {
+        _editingProfile = true;
+        _editProfileId = 0;
+        _editProfileType = 'socks';
+        _editProfileJson = '';
+      });
+      return;
+    }
+    final saved = await widget.feed.loadProfile(existing.id);
+    if (!mounted || saved == null) return;
+    setState(() {
+      _editingProfile = true;
+      _editProfileId = saved.row.id;
+      _editProfileType = saved.row.type;
+      _editProfileJson = saved.beanJson;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = NikoTheme.of(context);
     final strings = NikoStrings.of(Localizations.localeOf(context));
+    final feed = widget.feed;
+    final linked = widget.linked;
     final group = feed.groups.where((g) => g.id == feed.groupId).firstOrNull;
+    final hasSubscriptions = feed.groups.any((g) => g.subscription);
+    final canAddManual = group != null && !group.subscription && group.nodeId.isEmpty;
+
+    if (_editingProfile) {
+      return ProfileEditor(
+        key: ValueKey('profile-edit-$_editProfileId'),
+        strings: strings,
+        profileId: _editProfileId,
+        groupId: feed.importGroup,
+        initialType: _editProfileType,
+        initialBeanJson: _editProfileJson,
+        onSave: ({required int id, required int groupId, required String type, required String beanJson}) async {
+          final err = await feed.saveProfile(id: id, groupId: groupId, type: type, beanJson: beanJson);
+          if (err == null && mounted) {
+            setState(() => _editingProfile = false);
+          }
+          return err;
+        },
+        onCancel: () => setState(() => _editingProfile = false),
+      );
+    }
 
     Widget buildProfiles({required bool scrollable}) {
       if (!linked) {
@@ -50,7 +110,9 @@ class NodesScreen extends StatelessWidget {
           profile: p,
           selected: p.id == feed.selected,
           divider: i > 0,
+          latency: feed.latencies[p.id],
           onPressed: () => feed.select(p.id),
+          onEdit: canAddManual ? () => unawaited(_openProfileEditor(existing: p)) : null,
           onDelete: () => feed.delete(p),
           onShare: share ? () => feed.share(p, copyText) : null,
         );
@@ -83,15 +145,55 @@ class NodesScreen extends StatelessWidget {
     }
 
     List<Widget> detailChildren({required bool scrollable}) => [
-          Semantics(
-            header: true,
-            child: Text(
-              group == null ? strings.sectionNodes : groupName(group, strings),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: NikoType.title.style(colors.ink),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    group == null ? strings.sectionNodes : groupName(group, strings),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: NikoType.title.style(colors.ink),
+                  ),
+                ),
+              ),
+              if (linked && feed.profiles.isNotEmpty) ...[
+                const SizedBox(width: NikoSpace.s2),
+                NikoTonalButton(
+                  label: feed.testing ? strings.profileTesting : strings.profileTestAll,
+                  onPressed: feed.testing ? null : () => unawaited(feed.testGroupProfiles(feed.groupId)),
+                ),
+              ],
+              if (linked && canAddManual) ...[
+                const SizedBox(width: NikoSpace.s2),
+                NikoTonalButton(
+                  label: strings.profileNew,
+                  onPressed: () => unawaited(_openProfileEditor()),
+                ),
+              ],
+            ],
           ),
+          if (group != null && linked && !group.ungrouped && !group.subscription && group.nodeId.isEmpty) ...[
+            const SizedBox(height: NikoSpace.s2),
+            Wrap(
+              spacing: NikoSpace.s2,
+              runSpacing: NikoSpace.s2,
+              children: [
+                NikoGhostButton(
+                  label: strings.groupRename,
+                  onPressed: () => setState(() {
+                    _confirmDeleteGroup = false;
+                    _editingGroup = group;
+                  }),
+                ),
+                NikoGhostButton(
+                  label: strings.groupDelete,
+                  onPressed: () => setState(() => _confirmDeleteGroup = true),
+                ),
+              ],
+            ),
+          ],
           if (group != null && linked && feed.nodeOfGroup(group.id) != null) ...[
             const SizedBox(height: NikoSpace.s2),
             NodeCard(
@@ -107,6 +209,40 @@ class NodesScreen extends StatelessWidget {
               info: info,
               strings: strings,
               onUpdate: info.updating ? null : () => feed.refresh(group!.id),
+              onSettings: () => setState(() {
+                _confirmDeleteGroup = false;
+                _editingGroup = group;
+              }),
+              onCopyLink: info.link.isEmpty
+                  ? null
+                  : () => unawaited(feed.copyNotice(info.link, strings.subscriptionLinkCopied, copyText)),
+              onDelete: () => setState(() => _confirmDeleteGroup = true),
+            ),
+          ],
+          if (_confirmDeleteGroup && group != null && !group.ungrouped && group.nodeId.isEmpty) ...[
+            const SizedBox(height: NikoSpace.s3),
+            NikoBanner(
+              icon: NikoIcons.trash,
+              title: strings.groupDeleteConfirm(groupName(group, strings)),
+              danger: true,
+            ),
+            const SizedBox(height: NikoSpace.s2),
+            Row(
+              children: [
+                NikoPrimaryButton(
+                  label: group.subscription ? strings.subscriptionDelete : strings.groupDelete,
+                  onPressed: () {
+                    final id = group.id;
+                    setState(() => _confirmDeleteGroup = false);
+                    unawaited(feed.deleteGroup(id));
+                  },
+                ),
+                const SizedBox(width: NikoSpace.s3),
+                NikoGhostButton(
+                  label: strings.cancel,
+                  onPressed: () => setState(() => _confirmDeleteGroup = false),
+                ),
+              ],
             ),
           ],
           const SizedBox(height: NikoSpace.s4),
@@ -120,7 +256,7 @@ class NodesScreen extends StatelessWidget {
             _Snackbar(text: strings.profileDeleted(gone.saved.row.name), action: strings.undo, onAction: feed.undo),
           ] else if (feed.copied case final name?) ...[
             const SizedBox(height: NikoSpace.s4),
-            _Snackbar(text: strings.linkCopied(name)),
+            _Snackbar(text: name == strings.subscriptionLinkCopied ? name : strings.linkCopied(name)),
           ] else if (feed.updated case final line?) ...[
             const SizedBox(height: NikoSpace.s4),
             _Snackbar(
@@ -133,21 +269,29 @@ class NodesScreen extends StatelessWidget {
           ],
         ];
 
-    return LayoutBuilder(
+    final mainLayout = LayoutBuilder(
       builder: (context, constraints) {
         final pad = constraints.maxWidth < NikoHeader.narrow ? NikoSpace.s4 : NikoSpace.s8;
         final available = constraints.maxWidth - 2 * pad;
-        // two-column layout from 840 px up (matches SettingsScreen); below that groups stack above profiles
+        final groupsWidget = _Groups(
+          feed: feed,
+          strings: strings,
+          onAdd: linked ? widget.onAdd : null,
+          onNewGroup: linked ? () => setState(() => _editingGroup = const GroupRow(id: 0, name: '')) : null,
+          onUpdateAll: linked && hasSubscriptions ? () => unawaited(feed.refreshAllSubscriptions()) : null,
+          onChoose: (id) {
+            setState(() => _confirmDeleteGroup = false);
+            unawaited(feed.choose(id));
+          },
+          scrollable: constraints.maxWidth >= 840,
+        );
         if (constraints.maxWidth >= 840) {
           return Padding(
             padding: EdgeInsets.fromLTRB(pad, NikoSpace.s4, pad, NikoSpace.s8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 260,
-                  child: _Groups(feed: feed, strings: strings, onAdd: linked ? onAdd : null, scrollable: true),
-                ),
+                SizedBox(width: 260, child: groupsWidget),
                 const SizedBox(width: NikoSpace.s6),
                 Expanded(
                   child: CustomScrollView(
@@ -167,10 +311,7 @@ class NodesScreen extends StatelessWidget {
                 children: [
                   Align(
                     alignment: AlignmentDirectional.topStart,
-                    child: SizedBox(
-                      width: groupWidth,
-                      child: _Groups(feed: feed, strings: strings, onAdd: linked ? onAdd : null, scrollable: false),
-                    ),
+                    child: SizedBox(width: groupWidth, child: groupsWidget),
                   ),
                   const SizedBox(height: NikoSpace.s6),
                   ...detailChildren(scrollable: false),
@@ -180,6 +321,213 @@ class NodesScreen extends StatelessWidget {
           ],
         );
       },
+    );
+
+    if (_editingGroup == null) return mainLayout;
+
+    final edit = _editingGroup!;
+    return Stack(
+      children: [
+        mainLayout,
+        if (edit.subscription)
+          _SubscriptionDialog(
+            group: edit,
+            strings: strings,
+            onSave: (updated) async {
+              final err = await feed.saveGroup(updated);
+              if (err == null && mounted) setState(() => _editingGroup = null);
+              return err;
+            },
+            onClose: () => setState(() => _editingGroup = null),
+          )
+        else
+          _BasicGroupDialog(
+            group: edit,
+            strings: strings,
+            onSave: (updated) async {
+              final err = await feed.saveGroup(updated);
+              if (err == null && mounted) setState(() => _editingGroup = null);
+              return err;
+            },
+            onClose: () => setState(() => _editingGroup = null),
+          ),
+      ],
+    );
+  }
+}
+
+/// Dialog for creating or renaming a basic group (D-GROUP-01).
+class _BasicGroupDialog extends StatefulWidget {
+  const _BasicGroupDialog({
+    required this.group,
+    required this.strings,
+    required this.onSave,
+    required this.onClose,
+  });
+
+  final GroupRow group;
+  final NikoStrings strings;
+  final Future<String?> Function(GroupRow) onSave;
+  final VoidCallback onClose;
+
+  @override
+  State<_BasicGroupDialog> createState() => _BasicGroupDialogState();
+}
+
+class _BasicGroupDialogState extends State<_BasicGroupDialog> {
+  late String _name = widget.group.name;
+  String _error = '';
+  bool _saving = false;
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    final err = await widget.onSave(GroupRow(id: widget.group.id, name: _name.trim()));
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _saving = false;
+        _error = err;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.strings;
+    return NikoDialog(
+      title: widget.group.id == 0 ? s.groupNew : s.groupRename,
+      cancelLabel: s.cancel,
+      saveLabel: s.save,
+      errorTitle: s.saveFailed,
+      error: _error,
+      onClose: widget.onClose,
+      onSave: _saving ? null : _save,
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          NikoField(label: s.groupNameField, value: _name, onChanged: (v) => _name = v),
+          const SizedBox(height: NikoSpace.s4),
+        ],
+      ),
+    );
+  }
+}
+
+/// Dialog for editing a subscription group's settings (D-SUB-08).
+class _SubscriptionDialog extends StatefulWidget {
+  const _SubscriptionDialog({
+    required this.group,
+    required this.strings,
+    required this.onSave,
+    required this.onClose,
+  });
+
+  final GroupRow group;
+  final NikoStrings strings;
+  final Future<String?> Function(GroupRow) onSave;
+  final VoidCallback onClose;
+
+  @override
+  State<_SubscriptionDialog> createState() => _SubscriptionDialogState();
+}
+
+class _SubscriptionDialogState extends State<_SubscriptionDialog> {
+  late String _name = widget.group.name;
+  late String _link = widget.group.info?.link ?? '';
+  late bool _autoUpdate = widget.group.info?.autoUpdate ?? false;
+  late String _delay = '${widget.group.info?.autoUpdateDelay ?? 1440}';
+  late bool _dedup = widget.group.info?.deduplication ?? false;
+  late bool _forceResolve = widget.group.info?.forceResolve ?? false;
+  late bool _whenConnected = widget.group.info?.updateWhenConnectedOnly ?? false;
+  late String _ua = widget.group.info?.customUserAgent ?? '';
+  String _error = '';
+  bool _saving = false;
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    final delay = int.tryParse(_delay.trim()) ?? 1440;
+    final info = (widget.group.info ?? const SubscriptionInfo()).copyWith(
+      link: _link.trim(),
+      autoUpdate: _autoUpdate,
+      autoUpdateDelay: delay,
+      deduplication: _dedup,
+      forceResolve: _forceResolve,
+      updateWhenConnectedOnly: _whenConnected,
+      customUserAgent: _ua.trim(),
+    );
+    final err = await widget.onSave(
+      GroupRow(id: widget.group.id, name: _name.trim(), subscription: true, info: info),
+    );
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _saving = false;
+        _error = err;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.strings;
+    return NikoDialog(
+      title: s.subscriptionSettings,
+      maxWidth: 520,
+      cancelLabel: s.cancel,
+      saveLabel: s.save,
+      errorTitle: s.saveFailed,
+      error: _error,
+      onClose: widget.onClose,
+      onSave: _saving ? null : _save,
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          NikoField(label: s.groupNameField, value: _name, onChanged: (v) => _name = v),
+          const SizedBox(height: NikoSpace.s3),
+          NikoField(label: s.subscriptionLink, value: _link, mono: true, onChanged: (v) => _link = v),
+          const SizedBox(height: NikoSpace.s3),
+          NikoField(label: s.subscriptionDelay, value: _delay, input: FieldInput.port, mono: true, onChanged: (v) => _delay = v),
+          const SizedBox(height: NikoSpace.s3),
+          NikoField(label: s.subscriptionUserAgent, value: _ua, mono: true, onChanged: (v) => _ua = v),
+          const SizedBox(height: NikoSpace.s3),
+          NikoGroup(
+            rows: [
+              NikoSwitchRow(
+                title: s.subscriptionAutoUpdate,
+                on: _autoUpdate,
+                divider: false,
+                onChanged: (v) => setState(() => _autoUpdate = v),
+              ),
+              NikoSwitchRow(
+                title: s.subscriptionDedup,
+                on: _dedup,
+                divider: true,
+                onChanged: (v) => setState(() => _dedup = v),
+              ),
+              NikoSwitchRow(
+                title: s.subscriptionForceResolve,
+                on: _forceResolve,
+                divider: true,
+                onChanged: (v) => setState(() => _forceResolve = v),
+              ),
+              NikoSwitchRow(
+                title: s.subscriptionWhenConnected,
+                on: _whenConnected,
+                divider: true,
+                onChanged: (v) => setState(() => _whenConnected = v),
+              ),
+            ],
+          ),
+          const SizedBox(height: NikoSpace.s4),
+        ],
+      ),
     );
   }
 }
@@ -224,9 +572,7 @@ String nodeUpdates(NodeRow node, NikoStrings strings) {
   ].join(' · ');
 }
 
-/// A node's card under its group's title (D-NODE-01…07): its owner's note, what its subscription said of the user,
-/// when it came and comes next, that it is signed, what keeps it from updating; its update, and its removal after a
-/// word that only a new invite brings it back.
+/// A node's card under its group's title (D-NODE-01…07).
 class NodeCard extends StatefulWidget {
   const NodeCard({super.key, required this.node, required this.strings, required this.onUpdate, required this.onDelete});
 
@@ -258,7 +604,6 @@ class _NodeCardState extends State<NodeCard> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // D-NODE-03: the owner's words, as plain text in an isolate of their own direction
         if (node.note.isNotEmpty)
           Text('\u2068${node.note}\u2069', maxLines: 3, overflow: TextOverflow.ellipsis, style: NikoType.body.style(colors.ink)),
         if (usage.isNotEmpty)
@@ -291,7 +636,6 @@ class _NodeCardState extends State<NodeCard> {
           const SizedBox(height: NikoSpace.s2),
           NikoBanner(icon: NikoIcons.alert, title: problem),
         ],
-        // D-NODE-07: removed only after the word that a new invite alone brings it back
         if (_confirming) ...[
           const SizedBox(height: NikoSpace.s3),
           NikoBanner(icon: NikoIcons.trash, title: strings.nodeDeleteConfirm(node.name), danger: true),
@@ -315,14 +659,23 @@ class _NodeCardState extends State<NodeCard> {
   }
 }
 
-/// A subscription's group under its title: what the provider said, when it was updated, its announcement, and the
-/// update on demand (disabled while one runs).
+/// A subscription's group under its title: usage, announcement, update, settings (D-SUB-08), copy link (D-SUB-06), delete (D-SUB-04).
 class _SubscriptionLine extends StatelessWidget {
-  const _SubscriptionLine({required this.info, required this.strings, required this.onUpdate});
+  const _SubscriptionLine({
+    required this.info,
+    required this.strings,
+    required this.onUpdate,
+    required this.onSettings,
+    required this.onCopyLink,
+    required this.onDelete,
+  });
 
   final SubscriptionInfo info;
   final NikoStrings strings;
   final VoidCallback? onUpdate;
+  final VoidCallback onSettings;
+  final VoidCallback? onCopyLink;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -331,24 +684,27 @@ class _SubscriptionLine extends StatelessWidget {
         ? strings.subscriptionUpdated(formatMoment(DateTime.fromMillisecondsSinceEpoch(info.lastUpdated * 1000)))
         : strings.subscriptionNever;
     final usage = subscriptionUsage(info, strings);
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(usage.isEmpty ? when : '$usage · $when',
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: NikoType.bodySm.style(colors.ink2)),
-              if (info.announce.isNotEmpty)
-                Text(info.announce, maxLines: 2, overflow: TextOverflow.ellipsis, style: NikoType.bodySm.style(colors.ink2)),
-            ],
-          ),
-        ),
-        const SizedBox(width: NikoSpace.s3),
-        NikoTonalButton(
-          label: info.updating ? strings.subscriptionUpdating : strings.subscriptionUpdate,
-          onPressed: onUpdate,
+        Text(usage.isEmpty ? when : '$usage · $when',
+            maxLines: 1, overflow: TextOverflow.ellipsis, style: NikoType.bodySm.style(colors.ink2)),
+        if (info.announce.isNotEmpty)
+          Text(info.announce, maxLines: 2, overflow: TextOverflow.ellipsis, style: NikoType.bodySm.style(colors.ink2)),
+        const SizedBox(height: NikoSpace.s2),
+        Wrap(
+          spacing: NikoSpace.s2,
+          runSpacing: NikoSpace.s2,
+          children: [
+            NikoTonalButton(
+              label: info.updating ? strings.subscriptionUpdating : strings.subscriptionUpdate,
+              onPressed: onUpdate,
+            ),
+            NikoGhostButton(label: strings.subscriptionSettings, onPressed: onSettings),
+            if (onCopyLink != null) NikoGhostButton(label: strings.subscriptionCopyLink, onPressed: onCopyLink),
+            NikoGhostButton(label: strings.subscriptionDelete, onPressed: onDelete),
+          ],
         ),
       ],
     );
@@ -357,11 +713,22 @@ class _SubscriptionLine extends StatelessWidget {
 
 /// The panel of groups (m-list with its title): the one shown on surface-2.
 class _Groups extends StatelessWidget {
-  const _Groups({required this.feed, required this.strings, required this.onAdd, required this.scrollable});
+  const _Groups({
+    required this.feed,
+    required this.strings,
+    required this.onAdd,
+    required this.onNewGroup,
+    required this.onUpdateAll,
+    required this.onChoose,
+    required this.scrollable,
+  });
 
   final ProfilesFeed feed;
   final NikoStrings strings;
   final VoidCallback? onAdd;
+  final VoidCallback? onNewGroup;
+  final VoidCallback? onUpdateAll;
+  final ValueChanged<int> onChoose;
   final bool scrollable;
 
   Widget _row(GroupRow g) => _GroupRow(
@@ -381,7 +748,7 @@ class _Groups extends StatelessWidget {
                       ].where((part) => part.isNotEmpty).join(' · ')
                     : strings.groupBasicSub(g.profiles),
         chosen: g.id == feed.groupId,
-        onPressed: () => feed.choose(g.id),
+        onPressed: () => onChoose(g.id),
       );
 
   @override
@@ -406,6 +773,18 @@ class _Groups extends StatelessWidget {
                 ],
               ),
             ),
+            if (onNewGroup != null || onUpdateAll != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(NikoSpace.s4, 0, NikoSpace.s3, NikoSpace.s2),
+                child: Wrap(
+                  spacing: NikoSpace.s2,
+                  runSpacing: NikoSpace.s1,
+                  children: [
+                    if (onNewGroup != null) NikoGhostButton(label: strings.groupNew, onPressed: onNewGroup),
+                    if (onUpdateAll != null) NikoGhostButton(label: strings.subscriptionsUpdateAll, onPressed: onUpdateAll),
+                  ],
+                ),
+              ),
             if (scrollable)
               Flexible(
                 child: ListView.builder(
@@ -481,14 +860,16 @@ String typeLabel(String type) => switch (type) {
       _ => type,
     };
 
-/// A profile as a row (m-row): the radio of the selected one, its name, its type and address under it.
+/// A profile as a row (m-row): radio, name, type/address, optional latency badge, edit, share, delete.
 class _ProfileRow extends StatelessWidget {
   const _ProfileRow({
     super.key,
     required this.profile,
     required this.selected,
     required this.divider,
+    this.latency,
     required this.onPressed,
+    this.onEdit,
     required this.onDelete,
     this.onShare,
   });
@@ -496,9 +877,10 @@ class _ProfileRow extends StatelessWidget {
   final ProfileRow profile;
   final bool selected;
   final bool divider;
+  final ProfileTestEntry? latency;
   final VoidCallback onPressed;
+  final VoidCallback? onEdit;
   final VoidCallback onDelete;
-  /// null: no link to copy (a node's profile)
   final VoidCallback? onShare;
 
   @override
@@ -558,6 +940,16 @@ class _ProfileRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: body),
+          if (latency case final lat?)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s2),
+              child: Text(
+                lat.ok ? '${lat.latencyMs} ms' : 'ERR',
+                style: NikoType.code.style(lat.ok ? colors.ink : colors.danger),
+              ),
+            ),
+          if (onEdit != null)
+            NikoGhostButton(label: strings.profileEdit, onPressed: onEdit),
           if (onShare != null)
             NikoIconButton(
               icon: NikoIcons.copy,
@@ -621,7 +1013,6 @@ class _Snackbar extends StatelessWidget {
   }
 }
 
-/// m-row + m-row::before: the hairline at the row's top, from space-4 to the end.
 class _Hairline extends CustomPainter {
   _Hairline(this.color);
 

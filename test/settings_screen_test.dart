@@ -95,6 +95,7 @@ void main() {
     await tester.tap(find.text('VPN'));
     await tester.pump();
     expect(values.text('serviceMode'), 'vpn');
+    await tester.ensureVisible(find.text('debug'));
     await tester.tap(find.text('debug'));
     await tester.pump();
     expect(values.text('logLevel'), '3');
@@ -212,7 +213,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Inbound for other programs'.toUpperCase()), findsOneWidget);
     expect(find.text('Experiments'), findsNothing, reason: 'the menu is for a wide window');
-    expect(find.byType(NikoChoiceRow<String>), findsNWidgets(6));
+    expect(find.byType(NikoChoiceRow<String>), findsNWidgets(7));
   });
 
   testWidgets('theme and language rows stay available without daemon; language dialog notifies callback', (tester) async {

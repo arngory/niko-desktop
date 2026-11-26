@@ -6,6 +6,8 @@ import 'package:flutter/widgets.dart';
 
 import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
+import '../platform/desktop_integration.dart';
+import '../platform/places.dart' as places;
 import '../platform/service_install.dart';
 import '../platform/user_store_migration.dart';
 import '../state/connection_controller.dart';
@@ -46,6 +48,7 @@ class NikoShell extends StatefulWidget {
     this.now = DateTime.now,
     this.serviceInstall,
     this.userMigration,
+    this.desktop,
   });
 
   final ConnectionController controller;
@@ -60,6 +63,7 @@ class NikoShell extends StatefulWidget {
   final DateTime Function() now;
   final ServiceController? serviceInstall;
   final UserStoreMigrationController? userMigration;
+  final DesktopIntegration? desktop;
 
   @override
   State<NikoShell> createState() => _NikoShellState();
@@ -67,6 +71,7 @@ class NikoShell extends StatefulWidget {
 
 class _NikoShellState extends State<NikoShell> {
   late AppLifecycleListener _lifecycle;
+  late DesktopIntegration _desktop;
   late LogFeed _log;
   late ConnectionsFeed _connections;
   late StunTool _stun;
@@ -78,13 +83,108 @@ class _NikoShellState extends State<NikoShell> {
   AppSection _section = AppSection.home;
   late bool _advanced = widget.settings.advanced;
   bool _localeSynced = false;
+  bool _reloadNeeded = false;
+  bool _networkRestored = false;
+  Timer? _networkRestoredTimer;
+  LinkPhase? _lastLink;
+  ServicePhase? _lastPhase;
+  bool _startupConnectTried = false;
+  String _lastTraySig = '';
 
   @override
   void initState() {
     super.initState();
+    _desktop = widget.desktop ?? DesktopIntegration();
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
+    _lastLink = widget.controller.link;
+    _lastPhase = widget.controller.service.phase;
+    widget.settings.addListener(_onWindowSettings);
+    _desktop.setTrayActionHandler(_onTrayAction);
+    unawaited(_desktop.setCloseToTray(widget.settings.closeToTray));
     _attach();
     _read();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncTray());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncTray();
+  }
+
+  void _onWindowSettings() {
+    unawaited(_desktop.setCloseToTray(widget.settings.closeToTray));
+  }
+
+  void _onTrayAction(String action) {
+    switch (action) {
+      case 'toggle':
+        if (widget.controller.link == LinkPhase.ready && !widget.controller.busy) {
+          unawaited(widget.controller.toggle(mode: _mode()));
+        }
+      case 'show':
+        unawaited(_desktop.showWindow());
+    }
+  }
+
+  Directory? _resolvedSaveDirectory() {
+    final custom = widget.settings.saveDirectory.trim();
+    if (custom.isNotEmpty) return Directory(custom);
+    return places.saveDirectory();
+  }
+
+  void _onSettingsMutated(Iterable<String> keys) {
+    if (widget.controller.service.phase != ServicePhase.started) return;
+    if (keys.every((k) => k == 'serviceMode')) return;
+    if (!_reloadNeeded && mounted) setState(() => _reloadNeeded = true);
+  }
+
+  void _onRulesMutated() {
+    if (widget.controller.service.phase != ServicePhase.started) return;
+    if (!_reloadNeeded && mounted) setState(() => _reloadNeeded = true);
+  }
+
+  Future<void> _reconnect() async {
+    await widget.controller.reconnect(mode: _mode());
+    if (mounted && widget.controller.actionError.isEmpty && _reloadNeeded) {
+      setState(() => _reloadNeeded = false);
+    }
+  }
+
+  void _maybeAutoConnect() {
+    if (_startupConnectTried || !widget.settings.connectOnStartup) return;
+    final state = widget.controller;
+    if (state.link != LinkPhase.ready || !state.connectsProfile) return;
+    if (!_profiles.loaded || !_settings.loaded) return;
+    _startupConnectTried = true;
+    if (state.service.phase == ServicePhase.idle && !state.busy && _profiles.selected != 0) {
+      unawaited(state.toggle(mode: _mode()));
+    }
+  }
+
+  void _syncTray() {
+    if (!mounted) return;
+    final strings = NikoStrings.of(Localizations.localeOf(context));
+    final state = widget.controller;
+    final connected = state.link == LinkPhase.ready && state.service.phase == ServicePhase.started;
+    final statusLabel = connected
+        ? strings.statusOn
+        : state.service.phase == ServicePhase.starting
+            ? strings.statusConnecting
+            : strings.statusOff;
+    final profileName = _profiles.selectedProfile?.name ?? '';
+    final toggleLabel = connected ? strings.disconnect : strings.connect;
+    final sig = '$connected|$statusLabel|$profileName|$toggleLabel|${strings.trayOpen}|${strings.trayQuit}';
+    if (sig == _lastTraySig) return;
+    _lastTraySig = sig;
+    unawaited(_desktop.updateTray(
+      connected: connected,
+      statusLabel: statusLabel,
+      profileName: profileName,
+      toggleLabel: toggleLabel,
+      openLabel: strings.trayOpen,
+      quitLabel: strings.trayQuit,
+    ));
   }
 
   // finish any queued settings write before closing; in user-mode also shut down the unprivileged
@@ -110,18 +210,27 @@ class _NikoShellState extends State<NikoShell> {
   }
 
   void _attach() {
-    _log = LogFeed(widget.controller, saveTo: widget.saveTo);
+    _log = LogFeed(widget.controller, saveTo: widget.saveTo ?? _resolvedSaveDirectory);
     _connections = ConnectionsFeed(widget.controller);
     _stun = StunTool(widget.controller);
     _profiles = ProfilesFeed(widget.controller);
-    _rules = RulesFeed(widget.controller);
-    _settings = SettingsFeed(widget.controller);
+    _rules = RulesFeed(widget.controller, onMutated: _onRulesMutated);
+    _settings = SettingsFeed(widget.controller, onMutated: _onSettingsMutated);
     _routeCheck = RouteCheckController(widget.controller, widget.settings);
+    _profiles.addListener(_onFeedChanged);
+    _settings.addListener(_onFeedChanged);
     widget.controller.addListener(_changed);
+  }
+
+  void _onFeedChanged() {
+    _maybeAutoConnect();
+    _syncTray();
   }
 
   void _detach(ConnectionController controller) {
     controller.removeListener(_changed);
+    _profiles.removeListener(_onFeedChanged);
+    _settings.removeListener(_onFeedChanged);
     _log.dispose();
     _connections.dispose();
     _stun.dispose();
@@ -134,6 +243,11 @@ class _NikoShellState extends State<NikoShell> {
   @override
   void didUpdateWidget(NikoShell oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != widget.settings) {
+      oldWidget.settings.removeListener(_onWindowSettings);
+      widget.settings.addListener(_onWindowSettings);
+      unawaited(_desktop.setCloseToTray(widget.settings.closeToTray));
+    }
     if (oldWidget.controller != widget.controller) {
       _detach(oldWidget.controller);
       _attach();
@@ -143,6 +257,9 @@ class _NikoShellState extends State<NikoShell> {
 
   @override
   void dispose() {
+    _networkRestoredTimer?.cancel();
+    _desktop.setTrayActionHandler(null);
+    widget.settings.removeListener(_onWindowSettings);
     _lifecycle.dispose();
     _detach(widget.controller);
     super.dispose();
@@ -150,18 +267,54 @@ class _NikoShellState extends State<NikoShell> {
 
   // the connections screen says whether the core runs; the settings, whether the daemon is there
   void _changed() {
-    if (widget.controller.link == LinkPhase.ready) {
+    final state = widget.controller;
+    final prevLink = _lastLink;
+    final prevPhase = _lastPhase;
+    _lastLink = state.link;
+    _lastPhase = state.service.phase;
+
+    if (prevLink == LinkPhase.lost && state.link == LinkPhase.ready) {
+      _networkRestoredTimer?.cancel();
+      _networkRestored = true;
+      _networkRestoredTimer = Timer(const Duration(seconds: 6), () {
+        if (mounted && _networkRestored) setState(() => _networkRestored = false);
+      });
+      if (mounted) setState(() {});
+    }
+
+    if (state.service.phase != ServicePhase.started && _reloadNeeded) {
+      _reloadNeeded = false;
+      if (mounted) setState(() {});
+    }
+
+    if (widget.settings.notifications && prevPhase != state.service.phase && mounted) {
+      final strings = NikoStrings.of(Localizations.localeOf(context));
+      if (state.link == LinkPhase.ready && state.service.phase == ServicePhase.started) {
+        final profile = _profiles.selectedProfile?.name ?? '';
+        unawaited(_desktop.notify(
+          title: 'Niko',
+          body: profile.isNotEmpty ? '${strings.statusOn} · $profile' : strings.statusOn,
+        ));
+      } else if (state.link == LinkPhase.ready && state.service.phase == ServicePhase.fatal) {
+        final err = state.service.error.isNotEmpty ? state.service.error : strings.statusError;
+        unawaited(_desktop.notify(title: 'Niko', body: err));
+      }
+    }
+
+    if (state.link == LinkPhase.ready) {
       if (!_localeSynced) {
         _localeSynced = true;
         final lang = widget.settings.language;
         if (lang != 'system') {
-          final daemon = widget.controller.daemon;
+          final daemon = state.daemon;
           if (daemon != null) unawaited(daemon.setLocale(lang).catchError((Object _) {}));
         }
       }
     } else {
       _localeSynced = false;
     }
+    _maybeAutoConnect();
+    _syncTray();
     if (_section == AppSection.connections || _section == AppSection.settings) setState(() {});
     // the daemon found, or another one: whether the main screen reads the settings
     if (_section == AppSection.home) _read();
@@ -171,8 +324,11 @@ class _NikoShellState extends State<NikoShell> {
   void _read() {
     _section == AppSection.log ? _log.open() : _log.close();
     _section == AppSection.connections ? _connections.show() : _connections.hide();
-    // main screen (D-MAIN-13) and route check (selected profile/group label) read profiles too
-    _section == AppSection.nodes || _section == AppSection.home || _section == AppSection.check
+    // main screen (D-MAIN-13), rules (profile outbound picker), and route check read profiles too
+    _section == AppSection.nodes ||
+            _section == AppSection.home ||
+            _section == AppSection.check ||
+            _section == AppSection.rules
         ? _profiles.show()
         : _profiles.hide();
     _section == AppSection.rules || _section == AppSection.check ? _rules.show() : _rules.hide();
@@ -262,6 +418,10 @@ class _NikoShellState extends State<NikoShell> {
                   onMode: _setMode,
                   serviceInstall: widget.serviceInstall,
                   userMigration: widget.userMigration,
+                  windowSettings: widget.settings,
+                  reloadNeeded: _reloadNeeded,
+                  onReconnect: () => unawaited(_reconnect()),
+                  networkRestored: _networkRestored,
                 ),
               ),
               AppSection.check => ListenableBuilder(
@@ -297,8 +457,12 @@ class _NikoShellState extends State<NikoShell> {
                       ),
               ),
               AppSection.rules => ListenableBuilder(
-                listenable: Listenable.merge([_rules, state]),
-                builder: (context, _) => RulesScreen(feed: _rules, linked: state.link == LinkPhase.ready),
+                listenable: Listenable.merge([_rules, _profiles, state]),
+                builder: (context, _) => RulesScreen(
+                  feed: _rules,
+                  linked: state.link == LinkPhase.ready,
+                  profiles: _profiles.profiles,
+                ),
               ),
               AppSection.log => LogScreen(feed: _log, stun: _stun),
               AppSection.settings => ListenableBuilder(

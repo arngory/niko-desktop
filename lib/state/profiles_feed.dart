@@ -57,6 +57,12 @@ class ProfilesFeed extends ChangeNotifier {
   bool updateFailed = false;
   Timer? _updatedTimer;
 
+  /// Latest streamed profile latency measurements (D-MAIN-08/12), keyed by profile id.
+  final Map<int, ProfileTestEntry> latencies = {};
+  bool testing = false;
+  StreamSubscription<ProfileTestEntry>? _testSub;
+  Completer<void>? _testCompleter;
+
   bool _shown = false;
   bool _disposed = false;
   StreamSubscription<StoreChange>? _subscription;
@@ -260,6 +266,162 @@ class ProfilesFeed extends ChangeNotifier {
     }
   }
 
+  /// Updates every subscription group (D-SUB-07).
+  Future<void> refreshAllSubscriptions() async {
+    final daemon = _link.daemon;
+    if (daemon == null) return;
+    try {
+      _notice(await daemon.refreshAllSubscriptions());
+      error = '';
+    } catch (e) {
+      error = '$e';
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  /// Creates or updates a basic or subscription group (D-GROUP-01, D-SUB-08).
+  Future<String?> saveGroup(GroupRow group) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return 'no link to the service';
+    try {
+      final saved = await daemon.saveGroup(group);
+      groups = await daemon.groups();
+      if (group.id == 0) await choose(saved.id);
+      error = '';
+      if (!_disposed) notifyListeners();
+      return null;
+    } catch (e) {
+      return daemonError(e);
+    }
+  }
+
+  /// Deletes a group and its profiles (D-SUB-04, D-GROUP-01).
+  Future<void> deleteGroup(int id) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return;
+    try {
+      await daemon.deleteGroup(id);
+      error = '';
+    } catch (e) {
+      error = daemonError(e);
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  /// Creates (id == 0) or updates (id > 0) a profile's bean (D-PROFILE-01..05).
+  Future<String?> saveProfile({
+    required int id,
+    required int groupId,
+    required String type,
+    required String beanJson,
+  }) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return 'no link to the service';
+    try {
+      if (id == 0) {
+        await daemon.addProfile(groupId: groupId, type: type, beanJson: beanJson);
+      } else {
+        await daemon.updateProfile(id: id, groupId: groupId, type: type, beanJson: beanJson);
+      }
+      error = '';
+      return null;
+    } catch (e) {
+      return daemonError(e);
+    }
+  }
+
+  /// Loads a profile with its bean for editing.
+  Future<SavedProfile?> loadProfile(int id) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return null;
+    try {
+      return await daemon.profile(id);
+    } catch (e) {
+      error = daemonError(e);
+      if (!_disposed) notifyListeners();
+      return null;
+    }
+  }
+
+  /// Recognizes an imported file's contents (`.json`, `.conf`, `.txt`, `.zip`, `rcdev1`, D-ADD-09).
+  Future<ImportPreview> recognizeFile(List<int> bytes, String fileName) async {
+    final daemon = _link.daemon;
+    if (daemon == null || bytes.isEmpty) return const ImportPreview();
+    return daemon.recognizeFile(bytes, fileName);
+  }
+
+  /// Imports a file's contents into [importGroup] (D-ADD-09).
+  Future<TaskResult> importFile(List<int> bytes, String fileName, {String pin = ''}) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return const TaskResult(code: 14, error: 'no link to the service');
+    final result = await daemon.importFile(bytes, fileName, groupId: importGroup, pin: pin);
+    if (result.groupId != 0) {
+      groups = await daemon.groups();
+      await choose(result.groupId);
+    }
+    if (result.ok) _notice(result);
+    return result;
+  }
+
+  /// Streams latency checks for all profiles in [groupId] (D-MAIN-08/12).
+  Future<void> testGroupProfiles(int groupId) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return;
+    await _testSub?.cancel();
+    _testSub = null;
+    if (_testCompleter != null && !_testCompleter!.isCompleted) {
+      _testCompleter!.complete();
+    }
+    _testCompleter = null;
+    testing = true;
+    for (final p in profiles) {
+      latencies.remove(p.id);
+    }
+    notifyListeners();
+    final completer = Completer<void>();
+    _testCompleter = completer;
+    _testSub = daemon.testProfiles(groupId: groupId).listen(
+      (entry) {
+        latencies[entry.profileId] = entry;
+        if (!_disposed) notifyListeners();
+      },
+      onError: (Object e) {
+        error = daemonError(e);
+        testing = false;
+        _testSub = null;
+        if (_testCompleter == completer) _testCompleter = null;
+        if (!_disposed) notifyListeners();
+        if (!completer.isCompleted) completer.complete();
+      },
+      onDone: () {
+        testing = false;
+        _testSub = null;
+        if (_testCompleter == completer) _testCompleter = null;
+        if (!_disposed) notifyListeners();
+        if (!completer.isCompleted) completer.complete();
+      },
+      cancelOnError: true,
+    );
+    return completer.future;
+  }
+
+  /// Copies arbitrary text (e.g. subscription link, D-SUB-06) and shows a brief confirmation notice.
+  Future<void> copyNotice(String value, String label, Future<void> Function(String) copy) async {
+    try {
+      await copy(value);
+      _copiedTimer?.cancel();
+      copied = label;
+      _copiedTimer = Timer(noticeFor, () {
+        copied = null;
+        if (!_disposed) notifyListeners();
+      });
+      error = '';
+    } catch (e) {
+      error = '$e';
+    }
+    if (!_disposed) notifyListeners();
+  }
+
   void _notice(TaskResult result) {
     _updatedTimer?.cancel();
     updated = result.ok ? result.line : result.error;
@@ -369,6 +531,12 @@ class ProfilesFeed extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_testSub?.cancel());
+    _testSub = null;
+    if (_testCompleter != null && !_testCompleter!.isCompleted) {
+      _testCompleter!.complete();
+    }
+    _testCompleter = null;
     _undoTimer?.cancel();
     _copiedTimer?.cancel();
     _updatedTimer?.cancel();

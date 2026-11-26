@@ -9,9 +9,10 @@ import 'connection_controller.dart';
 /// while the section is shown, and again as NikoService.Watch says RULES or RULE_SETS. Each change is the daemon's:
 /// the list follows what it says, not what the window asked.
 class RulesFeed extends ChangeNotifier {
-  RulesFeed(this._link);
+  RulesFeed(this._link, {this.onMutated});
 
   final ConnectionController _link;
+  final VoidCallback? onMutated;
 
   List<RuleRow> rules = const [];
   RuleSetStatus ruleSets = const RuleSetStatus();
@@ -108,6 +109,7 @@ class RulesFeed extends ChangeNotifier {
     try {
       await call(daemon);
       error = '';
+      onMutated?.call();
       if (!_disposed) notifyListeners();
       return true;
     } catch (e) {
@@ -124,6 +126,7 @@ class RulesFeed extends ChangeNotifier {
     if (daemon == null) return 'no daemon';
     try {
       await daemon.saveRule(rule);
+      onMutated?.call();
       return null;
     } catch (e) {
       return daemonError(e);
@@ -134,6 +137,12 @@ class RulesFeed extends ChangeNotifier {
   Future<void> setEnabled(RuleRow rule, bool on) => _ask((d) => d.saveRule(rule.copyWith(enabled: on)));
 
   Future<void> delete(RuleRow rule) => _ask((d) => d.deleteRules([rule.id]));
+
+  /// Deletes every route rule (reset to default proxy-all routing).
+  Future<void> deleteAll() async {
+    if (rules.isEmpty) return;
+    await _ask((d) => d.deleteRules([for (final r in rules) r.id]));
+  }
 
   /// Moves a rule one place up (earlier: the config takes it first) or down.
   Future<void> move(RuleRow rule, {required bool up}) {

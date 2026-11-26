@@ -329,10 +329,16 @@ class GroupRow {
   final SubscriptionInfo? info;
 }
 
-/// What a subscription's updates said, and whether one runs now (NikoService's Subscription, D-SUB-01…03).
+/// What a subscription's updates said, and whether one runs now (NikoService's Subscription, D-SUB-01…03, -08).
 class SubscriptionInfo {
   const SubscriptionInfo({
     this.link = '',
+    this.deduplication = false,
+    this.forceResolve = false,
+    this.updateWhenConnectedOnly = false,
+    this.customUserAgent = '',
+    this.autoUpdate = false,
+    this.autoUpdateDelay = 1440,
     this.used = 0,
     this.total = 0,
     this.expire = 0,
@@ -343,6 +349,12 @@ class SubscriptionInfo {
 
   /// Where the profiles come from; empty where its address was sealed on another machine.
   final String link;
+  final bool deduplication;
+  final bool forceResolve;
+  final bool updateWhenConnectedOnly;
+  final String customUserAgent;
+  final bool autoUpdate;
+  final int autoUpdateDelay;
 
   /// The traffic used and allowed, in bytes; 0: the provider did not say.
   final int used;
@@ -355,6 +367,69 @@ class SubscriptionInfo {
   /// What the provider announced.
   final String announce;
   final bool updating;
+
+  SubscriptionInfo copyWith({
+    String? link,
+    bool? deduplication,
+    bool? forceResolve,
+    bool? updateWhenConnectedOnly,
+    String? customUserAgent,
+    bool? autoUpdate,
+    int? autoUpdateDelay,
+  }) =>
+      SubscriptionInfo(
+        link: link ?? this.link,
+        deduplication: deduplication ?? this.deduplication,
+        forceResolve: forceResolve ?? this.forceResolve,
+        updateWhenConnectedOnly: updateWhenConnectedOnly ?? this.updateWhenConnectedOnly,
+        customUserAgent: customUserAgent ?? this.customUserAgent,
+        autoUpdate: autoUpdate ?? this.autoUpdate,
+        autoUpdateDelay: autoUpdateDelay ?? this.autoUpdateDelay,
+        used: used,
+        total: total,
+        expire: expire,
+        lastUpdated: lastUpdated,
+        announce: announce,
+        updating: updating,
+      );
+}
+
+/// Result of testing the active connection's HTTP round-trip latency (NikoService.TestConnection, D-MAIN-18).
+class ConnectionTestResult {
+  const ConnectionTestResult({this.latencyMs = 0, this.error = ''});
+
+  final int latencyMs;
+  final String error;
+
+  bool get ok => error.isEmpty;
+}
+
+/// Apparent exit IP and geo-location returned by an HTTPS lookup provider (NikoService.ExitAddress, D-MAIN-03/14).
+class ExitAddressInfo {
+  const ExitAddressInfo({
+    required this.provider,
+    required this.ip,
+    this.countryCode = '',
+    this.country = '',
+    this.city = '',
+  });
+
+  final String provider;
+  final String ip;
+  final String countryCode;
+  final String country;
+  final String city;
+}
+
+/// Latency result for a single stored profile streamed by NikoService.TestProfiles (D-MAIN-08/12).
+class ProfileTestEntry {
+  const ProfileTestEntry({required this.profileId, this.latencyMs = 0, this.error = ''});
+
+  final int profileId;
+  final int latencyMs;
+  final String error;
+
+  bool get ok => error.isEmpty;
 }
 
 /// The result of a task of the daemon's (NikoService's TaskProgress, done): its line for the user, or its code and
@@ -612,6 +687,7 @@ class RuleRow {
     int? outbound,
     List<String>? programs,
     bool? dpiBypass,
+    String? config,
   }) =>
       RuleRow(
         id: id,
@@ -628,7 +704,7 @@ class RuleRow {
         outbound: outbound ?? this.outbound,
         programs: programs ?? this.programs,
         dpiBypass: dpiBypass ?? this.dpiBypass,
-        config: config,
+        config: config ?? this.config,
         packages: packages,
       );
 }
@@ -859,6 +935,38 @@ abstract interface class Daemon {
 
   /// Imports a decrypted user-mode store snapshot into the system service store.
   Future<StoreImportResult> importUserStore(List<int> snapshotJson);
+
+  /// Creates or updates a basic or subscription group (NikoService.SaveGroup, D-GROUP-01, D-SUB-08).
+  Future<GroupRow> saveGroup(GroupRow group);
+
+  /// Deletes a group and its profiles (NikoService.DeleteGroup, D-SUB-04, D-GROUP-01).
+  Future<void> deleteGroup(int id);
+
+  /// Updates every subscription group (NikoService.Refresh group_id=0, D-SUB-07).
+  Future<TaskResult> refreshAllSubscriptions();
+
+  /// Updates an existing profile's bean in place (NikoService.SaveProfile, D-PROFILE-01..05).
+  Future<void> updateProfile({required int id, required int groupId, required String type, required String beanJson});
+
+  /// Recognizes an imported file's contents (`.json`, `.conf`, `.txt`, `.zip`, `rcdev1`, D-ADD-09).
+  Future<ImportPreview> recognizeFile(List<int> bytes, String fileName);
+
+  /// Imports a file's contents into [groupId] (D-ADD-09).
+  Future<TaskResult> importFile(List<int> bytes, String fileName, {int groupId = 0, String pin = ''});
+
+  /// Measures HTTP latency through the active core's default outbound (NikoService.TestConnection, D-MAIN-18).
+  Future<ConnectionTestResult> testConnection({String url = '', int timeoutMs = 0});
+
+  /// Queries an HTTPS exit-IP lookup provider through the active core (NikoService.ExitAddress, D-MAIN-03/14).
+  Future<ExitAddressInfo> exitAddress({String provider = 'cloudflare', int timeoutMs = 0});
+
+  /// Streams per-profile HTTP latency measurements (NikoService.TestProfiles, D-MAIN-08/12).
+  Stream<ProfileTestEntry> testProfiles({
+    List<int> profileIds = const [],
+    int groupId = 0,
+    String url = '',
+    int timeoutMs = 0,
+  });
 
   Future<void> close();
 }
@@ -1218,6 +1326,12 @@ class GrpcDaemon implements Daemon {
               ? null
               : SubscriptionInfo(
                   link: g.subscription.link,
+                  deduplication: g.subscription.deduplication,
+                  forceResolve: g.subscription.forceResolve,
+                  updateWhenConnectedOnly: g.subscription.updateWhenConnectedOnly,
+                  customUserAgent: g.subscription.customUserAgent,
+                  autoUpdate: g.subscription.autoUpdate,
+                  autoUpdateDelay: g.subscription.autoUpdateDelay,
                   used: g.subscription.used.toInt(),
                   total: g.subscription.total.toInt(),
                   expire: g.subscription.expire.toInt(),
@@ -1539,6 +1653,153 @@ class GrpcDaemon implements Daemon {
       nodes: res.nodes,
     );
   }
+
+  static GroupRow _group(niko.Group g) => GroupRow(
+        id: g.id.toInt(),
+        name: g.name,
+        ungrouped: g.ungrouped,
+        subscription: g.type == niko.Group_Type.SUBSCRIPTION,
+        profiles: g.profiles,
+        nodeId: g.nodeId,
+        info: g.type != niko.Group_Type.SUBSCRIPTION
+            ? null
+            : SubscriptionInfo(
+                link: g.subscription.link,
+                deduplication: g.subscription.deduplication,
+                forceResolve: g.subscription.forceResolve,
+                updateWhenConnectedOnly: g.subscription.updateWhenConnectedOnly,
+                customUserAgent: g.subscription.customUserAgent,
+                autoUpdate: g.subscription.autoUpdate,
+                autoUpdateDelay: g.subscription.autoUpdateDelay,
+                used: g.subscription.used.toInt(),
+                total: g.subscription.total.toInt(),
+                expire: g.subscription.expire.toInt(),
+                lastUpdated: g.subscription.lastUpdated.toInt(),
+                announce: g.subscription.announce,
+                updating: g.subscription.updating,
+              ),
+      );
+
+  @override
+  Future<GroupRow> saveGroup(GroupRow group) async {
+    final req = niko.Group(
+      id: Int64(group.id),
+      name: group.name,
+      type: group.subscription ? niko.Group_Type.SUBSCRIPTION : niko.Group_Type.BASIC,
+      subscription: !group.subscription || group.info == null
+          ? null
+          : niko.Subscription(
+              link: group.info!.link,
+              deduplication: group.info!.deduplication,
+              forceResolve: group.info!.forceResolve,
+              updateWhenConnectedOnly: group.info!.updateWhenConnectedOnly,
+              customUserAgent: group.info!.customUserAgent,
+              autoUpdate: group.info!.autoUpdate,
+              autoUpdateDelay: group.info!.autoUpdateDelay,
+            ),
+    );
+    return _group(await _niko.saveGroup(req, options: _short));
+  }
+
+  @override
+  Future<void> deleteGroup(int id) => _niko.deleteGroup(niko.GroupId(id: Int64(id)), options: _short);
+
+  @override
+  Future<TaskResult> refreshAllSubscriptions() =>
+      _taskResult(_niko.refresh(niko.RefreshRequest(groupId: Int64.ZERO), options: _tasks));
+
+  @override
+  Future<void> updateProfile({
+    required int id,
+    required int groupId,
+    required String type,
+    required String beanJson,
+  }) =>
+      _niko.saveProfile(
+        niko.Profile(id: Int64(id), groupId: Int64(groupId), type: type, beanJson: beanJson),
+        options: _short,
+      );
+
+  ImportPreview _previewFrom(niko.ImportPreview preview) => ImportPreview(
+        kind: switch (preview.kind) {
+          niko.ImportPreview_Kind.PROFILES => ImportKind.profiles,
+          niko.ImportPreview_Kind.SUBSCRIPTION => ImportKind.subscription,
+          niko.ImportPreview_Kind.NODE => ImportKind.node,
+          _ => ImportKind.nothing,
+        },
+        profiles: List.unmodifiable(preview.profiles.map(_row)),
+        subscription: preview.subscription,
+        node: !preview.hasNode()
+            ? null
+            : NodePreview(
+                invite: preview.node.invite,
+                host: preview.node.host,
+                dnsName: preview.node.dnsName,
+                pinRequired: preview.node.pinRequired,
+                expires: preview.node.expires.toInt(),
+                replaces: preview.node.replaces,
+                knownHost: preview.node.knownHost,
+              ),
+      );
+
+  @override
+  Future<ImportPreview> recognizeFile(List<int> bytes, String fileName) async =>
+      _previewFrom(await _niko.recognize(niko.ImportInput(file: bytes, fileName: fileName), options: _short));
+
+  @override
+  Future<TaskResult> importFile(List<int> bytes, String fileName, {int groupId = 0, String pin = ''}) => _taskResult(
+        _niko.import(
+          niko.ImportRequest(
+            input: niko.ImportInput(file: bytes, fileName: fileName),
+            groupId: Int64(groupId),
+            pin: pin,
+          ),
+          options: _tasks,
+        ),
+      );
+
+  @override
+  Future<ConnectionTestResult> testConnection({String url = '', int timeoutMs = 0}) async {
+    final res = await _niko.testConnection(
+      niko.TestConnectionRequest(url: url, timeoutMs: timeoutMs),
+      options: CallOptions(timeout: const Duration(seconds: 35)),
+    );
+    return ConnectionTestResult(latencyMs: res.latencyMs, error: res.error);
+  }
+
+  @override
+  Future<ExitAddressInfo> exitAddress({String provider = 'cloudflare', int timeoutMs = 0}) async {
+    final res = await _niko.exitAddress(
+      niko.ExitAddressRequest(provider: provider, timeoutMs: timeoutMs),
+      options: CallOptions(timeout: const Duration(seconds: 35)),
+    );
+    return ExitAddressInfo(
+      provider: res.provider,
+      ip: res.ip,
+      countryCode: res.countryCode,
+      country: res.country,
+      city: res.city,
+    );
+  }
+
+  @override
+  Stream<ProfileTestEntry> testProfiles({
+    List<int> profileIds = const [],
+    int groupId = 0,
+    String url = '',
+    int timeoutMs = 0,
+  }) =>
+      _niko
+          .testProfiles(
+            niko.TestProfilesRequest(
+              profileIds: profileIds.map(Int64.new),
+              groupId: Int64(groupId),
+              url: url,
+              timeoutMs: timeoutMs,
+            ),
+            options: CallOptions(timeout: const Duration(minutes: 5)),
+          )
+          .map((r) => ProfileTestEntry(profileId: r.profileId.toInt(), latencyMs: r.latencyMs, error: r.error));
 
   @override
   Future<void> close() async {

@@ -196,7 +196,8 @@ class Info extends $pb.GeneratedMessage {
   /// with them; 8: the programs through Niko; 9: subscriptions (Group.subscription, Refresh, their import); 10: the
   /// route rules, the Russian preset and the rule-sets (ListRules…UpdateRuleSets), their settings; 11: raycontrol
   /// nodes (their import by invite with its PIN, ListNodes, DeleteNode, Refresh of a node, their profiles in Connect);
-  /// 13: user-mode capabilities (privileged, tun) and store migration (ExportUserStore, ImportUserStore)
+  /// 13: user-mode capabilities (privileged, tun) and store migration (ExportUserStore, ImportUserStore);
+  /// 14: TestConnection, ExitAddress, TestProfiles, and zip file import
   @$pb.TagNumber(4)
   $core.int get api => $_getIZ(3);
   @$pb.TagNumber(4)
@@ -378,6 +379,498 @@ class ImportUserStoreResult extends $pb.GeneratedMessage {
   $core.bool hasNodes() => $_has(3);
   @$pb.TagNumber(4)
   void clearNodes() => $_clearField(4);
+}
+
+class TestConnectionRequest extends $pb.GeneratedMessage {
+  factory TestConnectionRequest({
+    $core.String? url,
+    $core.int? timeoutMs,
+  }) {
+    final result = TestConnectionRequest._();
+    if (url != null) result.url = url;
+    if (timeoutMs != null) result.timeoutMs = timeoutMs;
+    return result;
+  }
+
+  TestConnectionRequest._();
+
+  factory TestConnectionRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      TestConnectionRequest()..mergeFromBuffer(data, registry);
+  factory TestConnectionRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      TestConnectionRequest()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TestConnectionRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: TestConnectionRequest.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'url')
+    ..aI(2, _omitFieldNames ? '' : 'timeoutMs')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestConnectionRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestConnectionRequest copyWith(
+          void Function(TestConnectionRequest) updates) =>
+      super.copyWith((message) => updates(message as TestConnectionRequest))
+          as TestConnectionRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated(
+      'Use TestConnectionRequest() / TestConnectionRequest.new instead')
+  static TestConnectionRequest create() => TestConnectionRequest._();
+  static $pb.GeneratedMessage $_createMessage() => TestConnectionRequest._();
+  @$core.override
+  TestConnectionRequest createEmptyInstance() => TestConnectionRequest._();
+  @$core.pragma('dart2js:noInline')
+  static TestConnectionRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TestConnectionRequest>(
+          TestConnectionRequest.$_createMessage);
+  static TestConnectionRequest? _defaultInstance;
+
+  /// Optional HTTP(S) URL; empty uses the default connection test URL.
+  @$pb.TagNumber(1)
+  $core.String get url => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set url($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasUrl() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearUrl() => $_clearField(1);
+
+  /// Timeout in milliseconds; 0 uses 5000 ms (capped at 30000 ms).
+  @$pb.TagNumber(2)
+  $core.int get timeoutMs => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set timeoutMs($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTimeoutMs() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTimeoutMs() => $_clearField(2);
+}
+
+class TestConnectionResult extends $pb.GeneratedMessage {
+  factory TestConnectionResult({
+    $core.int? latencyMs,
+    $core.String? error,
+  }) {
+    final result = TestConnectionResult._();
+    if (latencyMs != null) result.latencyMs = latencyMs;
+    if (error != null) result.error = error;
+    return result;
+  }
+
+  TestConnectionResult._();
+
+  factory TestConnectionResult.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      TestConnectionResult()..mergeFromBuffer(data, registry);
+  factory TestConnectionResult.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      TestConnectionResult()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TestConnectionResult',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: TestConnectionResult.$_createMessage)
+    ..aI(1, _omitFieldNames ? '' : 'latencyMs')
+    ..aOS(2, _omitFieldNames ? '' : 'error')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestConnectionResult clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestConnectionResult copyWith(void Function(TestConnectionResult) updates) =>
+      super.copyWith((message) => updates(message as TestConnectionResult))
+          as TestConnectionResult;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated(
+      'Use TestConnectionResult() / TestConnectionResult.new instead')
+  static TestConnectionResult create() => TestConnectionResult._();
+  static $pb.GeneratedMessage $_createMessage() => TestConnectionResult._();
+  @$core.override
+  TestConnectionResult createEmptyInstance() => TestConnectionResult._();
+  @$core.pragma('dart2js:noInline')
+  static TestConnectionResult getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TestConnectionResult>(
+          TestConnectionResult.$_createMessage);
+  static TestConnectionResult? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get latencyMs => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set latencyMs($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasLatencyMs() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearLatencyMs() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get error => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set error($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasError() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearError() => $_clearField(2);
+}
+
+class ExitAddressRequest extends $pb.GeneratedMessage {
+  factory ExitAddressRequest({
+    $core.String? provider,
+    $core.int? timeoutMs,
+  }) {
+    final result = ExitAddressRequest._();
+    if (provider != null) result.provider = provider;
+    if (timeoutMs != null) result.timeoutMs = timeoutMs;
+    return result;
+  }
+
+  ExitAddressRequest._();
+
+  factory ExitAddressRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      ExitAddressRequest()..mergeFromBuffer(data, registry);
+  factory ExitAddressRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      ExitAddressRequest()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ExitAddressRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: ExitAddressRequest.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'provider')
+    ..aI(2, _omitFieldNames ? '' : 'timeoutMs')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExitAddressRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExitAddressRequest copyWith(void Function(ExitAddressRequest) updates) =>
+      super.copyWith((message) => updates(message as ExitAddressRequest))
+          as ExitAddressRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use ExitAddressRequest() / ExitAddressRequest.new instead')
+  static ExitAddressRequest create() => ExitAddressRequest._();
+  static $pb.GeneratedMessage $_createMessage() => ExitAddressRequest._();
+  @$core.override
+  ExitAddressRequest createEmptyInstance() => ExitAddressRequest._();
+  @$core.pragma('dart2js:noInline')
+  static ExitAddressRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ExitAddressRequest>(
+          ExitAddressRequest.$_createMessage);
+  static ExitAddressRequest? _defaultInstance;
+
+  /// One of: cloudflare (default), ipinfo, ipwho, ipapi-co.
+  @$pb.TagNumber(1)
+  $core.String get provider => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set provider($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProvider() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProvider() => $_clearField(1);
+
+  /// Timeout in milliseconds; 0 uses 10000 ms (capped at 30000 ms).
+  @$pb.TagNumber(2)
+  $core.int get timeoutMs => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set timeoutMs($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTimeoutMs() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTimeoutMs() => $_clearField(2);
+}
+
+class ExitAddressResult extends $pb.GeneratedMessage {
+  factory ExitAddressResult({
+    $core.String? provider,
+    $core.String? ip,
+    $core.String? countryCode,
+    $core.String? country,
+    $core.String? city,
+  }) {
+    final result = ExitAddressResult._();
+    if (provider != null) result.provider = provider;
+    if (ip != null) result.ip = ip;
+    if (countryCode != null) result.countryCode = countryCode;
+    if (country != null) result.country = country;
+    if (city != null) result.city = city;
+    return result;
+  }
+
+  ExitAddressResult._();
+
+  factory ExitAddressResult.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      ExitAddressResult()..mergeFromBuffer(data, registry);
+  factory ExitAddressResult.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      ExitAddressResult()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ExitAddressResult',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: ExitAddressResult.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'provider')
+    ..aOS(2, _omitFieldNames ? '' : 'ip')
+    ..aOS(3, _omitFieldNames ? '' : 'countryCode')
+    ..aOS(4, _omitFieldNames ? '' : 'country')
+    ..aOS(5, _omitFieldNames ? '' : 'city')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExitAddressResult clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExitAddressResult copyWith(void Function(ExitAddressResult) updates) =>
+      super.copyWith((message) => updates(message as ExitAddressResult))
+          as ExitAddressResult;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use ExitAddressResult() / ExitAddressResult.new instead')
+  static ExitAddressResult create() => ExitAddressResult._();
+  static $pb.GeneratedMessage $_createMessage() => ExitAddressResult._();
+  @$core.override
+  ExitAddressResult createEmptyInstance() => ExitAddressResult._();
+  @$core.pragma('dart2js:noInline')
+  static ExitAddressResult getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<ExitAddressResult>(
+          ExitAddressResult.$_createMessage);
+  static ExitAddressResult? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get provider => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set provider($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProvider() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProvider() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get ip => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set ip($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasIp() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearIp() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get countryCode => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set countryCode($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCountryCode() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCountryCode() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get country => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set country($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasCountry() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearCountry() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get city => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set city($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasCity() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearCity() => $_clearField(5);
+}
+
+class TestProfilesRequest extends $pb.GeneratedMessage {
+  factory TestProfilesRequest({
+    $core.Iterable<$fixnum.Int64>? profileIds,
+    $fixnum.Int64? groupId,
+    $core.String? url,
+    $core.int? timeoutMs,
+  }) {
+    final result = TestProfilesRequest._();
+    if (profileIds != null) result.profileIds.addAll(profileIds);
+    if (groupId != null) result.groupId = groupId;
+    if (url != null) result.url = url;
+    if (timeoutMs != null) result.timeoutMs = timeoutMs;
+    return result;
+  }
+
+  TestProfilesRequest._();
+
+  factory TestProfilesRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      TestProfilesRequest()..mergeFromBuffer(data, registry);
+  factory TestProfilesRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      TestProfilesRequest()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TestProfilesRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: TestProfilesRequest.$_createMessage)
+    ..p<$fixnum.Int64>(
+        1, _omitFieldNames ? '' : 'profileIds', $pb.PbFieldType.K6)
+    ..aInt64(2, _omitFieldNames ? '' : 'groupId')
+    ..aOS(3, _omitFieldNames ? '' : 'url')
+    ..aI(4, _omitFieldNames ? '' : 'timeoutMs')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestProfilesRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestProfilesRequest copyWith(void Function(TestProfilesRequest) updates) =>
+      super.copyWith((message) => updates(message as TestProfilesRequest))
+          as TestProfilesRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core
+      .Deprecated('Use TestProfilesRequest() / TestProfilesRequest.new instead')
+  static TestProfilesRequest create() => TestProfilesRequest._();
+  static $pb.GeneratedMessage $_createMessage() => TestProfilesRequest._();
+  @$core.override
+  TestProfilesRequest createEmptyInstance() => TestProfilesRequest._();
+  @$core.pragma('dart2js:noInline')
+  static TestProfilesRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TestProfilesRequest>(
+          TestProfilesRequest.$_createMessage);
+  static TestProfilesRequest? _defaultInstance;
+
+  /// Specific profile IDs to test; if empty, all profiles in group_id are tested.
+  @$pb.TagNumber(1)
+  $pb.PbList<$fixnum.Int64> get profileIds => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get groupId => $_getI64(1);
+  @$pb.TagNumber(2)
+  set groupId($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasGroupId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearGroupId() => $_clearField(2);
+
+  /// Optional HTTP(S) URL; empty uses the default connection test URL.
+  @$pb.TagNumber(3)
+  $core.String get url => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set url($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasUrl() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearUrl() => $_clearField(3);
+
+  /// Per-profile timeout in milliseconds; 0 uses 5000 ms (capped at 30000 ms).
+  @$pb.TagNumber(4)
+  $core.int get timeoutMs => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set timeoutMs($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasTimeoutMs() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearTimeoutMs() => $_clearField(4);
+}
+
+class ProfileTestResult extends $pb.GeneratedMessage {
+  factory ProfileTestResult({
+    $fixnum.Int64? profileId,
+    $core.int? latencyMs,
+    $core.String? error,
+  }) {
+    final result = ProfileTestResult._();
+    if (profileId != null) result.profileId = profileId;
+    if (latencyMs != null) result.latencyMs = latencyMs;
+    if (error != null) result.error = error;
+    return result;
+  }
+
+  ProfileTestResult._();
+
+  factory ProfileTestResult.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      ProfileTestResult()..mergeFromBuffer(data, registry);
+  factory ProfileTestResult.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      ProfileTestResult()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ProfileTestResult',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: ProfileTestResult.$_createMessage)
+    ..aInt64(1, _omitFieldNames ? '' : 'profileId')
+    ..aI(2, _omitFieldNames ? '' : 'latencyMs')
+    ..aOS(3, _omitFieldNames ? '' : 'error')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ProfileTestResult clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ProfileTestResult copyWith(void Function(ProfileTestResult) updates) =>
+      super.copyWith((message) => updates(message as ProfileTestResult))
+          as ProfileTestResult;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use ProfileTestResult() / ProfileTestResult.new instead')
+  static ProfileTestResult create() => ProfileTestResult._();
+  static $pb.GeneratedMessage $_createMessage() => ProfileTestResult._();
+  @$core.override
+  ProfileTestResult createEmptyInstance() => ProfileTestResult._();
+  @$core.pragma('dart2js:noInline')
+  static ProfileTestResult getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<ProfileTestResult>(
+          ProfileTestResult.$_createMessage);
+  static ProfileTestResult? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get profileId => $_getI64(0);
+  @$pb.TagNumber(1)
+  set profileId($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProfileId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProfileId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get latencyMs => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set latencyMs($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasLatencyMs() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearLatencyMs() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get error => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set error($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasError() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearError() => $_clearField(3);
 }
 
 class RouteTestRequest extends $pb.GeneratedMessage {

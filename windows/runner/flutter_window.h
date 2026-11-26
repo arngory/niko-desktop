@@ -7,6 +7,7 @@
 #include <flutter/method_channel.h>
 
 #include <memory>
+#include <string>
 
 #include "win32_window.h"
 
@@ -44,6 +45,21 @@ class FlutterWindow : public Win32Window {
   // UI thread when install_complete_message_ arrives.
   std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
       pending_install_result_;
+
+  // Native Windows system tray (Shell_NotifyIconW) state.
+  UINT tray_callback_message_ = 0;
+  UINT taskbar_created_message_ = 0;
+  bool tray_added_ = false;
+  bool close_to_tray_ = false;
+  bool quitting_ = false;
+  std::wstring tray_status_ = L"Niko";
+  std::wstring tray_toggle_label_ = L"Connect";
+  std::wstring tray_open_label_ = L"Open Niko";
+  std::wstring tray_quit_label_ = L"Quit";
+
+  void EnsureTrayIcon(const std::wstring& tooltip);
+  void RemoveTrayIcon();
+  void ShowTrayMenu(HWND hwnd);
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

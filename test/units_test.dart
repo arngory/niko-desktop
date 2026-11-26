@@ -485,6 +485,21 @@ class _DelayedSaveSettings extends ChangeNotifier implements WindowSettings {
   String language = 'system';
 
   @override
+  bool connectOnStartup = false;
+
+  @override
+  bool closeToTray = false;
+
+  @override
+  bool notifications = true;
+
+  @override
+  String saveDirectory = '';
+
+  @override
+  bool exitAddressConfirmed = false;
+
+  @override
   List<RecentRouteCheck> get recentChecks => const [];
 
   @override

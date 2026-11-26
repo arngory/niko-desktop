@@ -183,6 +183,34 @@ class TracedDaemon implements Daemon {
   @override
   Future<StoreImportResult> importUserStore(List<int> snapshotJson) => _inner.importUserStore(snapshotJson);
   @override
+  Future<GroupRow> saveGroup(GroupRow group) => _inner.saveGroup(group);
+  @override
+  Future<void> deleteGroup(int id) => _inner.deleteGroup(id);
+  @override
+  Future<TaskResult> refreshAllSubscriptions() => _inner.refreshAllSubscriptions();
+  @override
+  Future<void> updateProfile({required int id, required int groupId, required String type, required String beanJson}) =>
+      _inner.updateProfile(id: id, groupId: groupId, type: type, beanJson: beanJson);
+  @override
+  Future<ImportPreview> recognizeFile(List<int> bytes, String fileName) => _inner.recognizeFile(bytes, fileName);
+  @override
+  Future<TaskResult> importFile(List<int> bytes, String fileName, {int groupId = 0, String pin = ''}) =>
+      _inner.importFile(bytes, fileName, groupId: groupId, pin: pin);
+  @override
+  Future<ConnectionTestResult> testConnection({String url = '', int timeoutMs = 0}) =>
+      _inner.testConnection(url: url, timeoutMs: timeoutMs);
+  @override
+  Future<ExitAddressInfo> exitAddress({String provider = 'cloudflare', int timeoutMs = 0}) =>
+      _inner.exitAddress(provider: provider, timeoutMs: timeoutMs);
+  @override
+  Stream<ProfileTestEntry> testProfiles({
+    List<int> profileIds = const [],
+    int groupId = 0,
+    String url = '',
+    int timeoutMs = 0,
+  }) =>
+      _inner.testProfiles(profileIds: profileIds, groupId: groupId, url: url, timeoutMs: timeoutMs);
+  @override
   Future<void> close() => _inner.close();
 }
 

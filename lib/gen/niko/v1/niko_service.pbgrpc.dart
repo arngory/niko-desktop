@@ -342,6 +342,35 @@ class NikoServiceClient extends $grpc.Client {
     return $createUnaryCall(_$importUserStore, request, options: options);
   }
 
+  /// Measures HTTP round-trip latency through the running core's default outbound (D-MAIN-18).
+  /// Owner-only, outside the lifecycle lock. FAILED_PRECONDITION when no core runs.
+  $grpc.ResponseFuture<$0.TestConnectionResult> testConnection(
+    $0.TestConnectionRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$testConnection, request, options: options);
+  }
+
+  /// Queries an HTTPS lookup provider (cloudflare, ipinfo, ipwho, ipapi-co) through the running core's
+  /// default outbound to discover exit IP and country (D-MAIN-03/14). Owner-only, outside the lifecycle lock.
+  $grpc.ResponseFuture<$0.ExitAddressResult> exitAddress(
+    $0.ExitAddressRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$exitAddress, request, options: options);
+  }
+
+  /// Measures HTTP latency for a batch of stored profiles (or all profiles of a group) using isolated
+  /// in-memory test cores, streaming each result as it finishes (D-MAIN-08/12).
+  $grpc.ResponseStream<$0.ProfileTestResult> testProfiles(
+    $0.TestProfilesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createStreamingCall(
+        _$testProfiles, $async.Stream.fromIterable([request]),
+        options: options);
+  }
+
   // method descriptors
 
   static final _$getInfo = $grpc.ClientMethod<$0.GetInfoRequest, $0.Info>(
@@ -477,6 +506,21 @@ class NikoServiceClient extends $grpc.Client {
           '/niko.v1.NikoService/ImportUserStore',
           ($0.UserStoreSnapshot value) => value.writeToBuffer(),
           $0.ImportUserStoreResult.fromBuffer);
+  static final _$testConnection =
+      $grpc.ClientMethod<$0.TestConnectionRequest, $0.TestConnectionResult>(
+          '/niko.v1.NikoService/TestConnection',
+          ($0.TestConnectionRequest value) => value.writeToBuffer(),
+          $0.TestConnectionResult.fromBuffer);
+  static final _$exitAddress =
+      $grpc.ClientMethod<$0.ExitAddressRequest, $0.ExitAddressResult>(
+          '/niko.v1.NikoService/ExitAddress',
+          ($0.ExitAddressRequest value) => value.writeToBuffer(),
+          $0.ExitAddressResult.fromBuffer);
+  static final _$testProfiles =
+      $grpc.ClientMethod<$0.TestProfilesRequest, $0.ProfileTestResult>(
+          '/niko.v1.NikoService/TestProfiles',
+          ($0.TestProfilesRequest value) => value.writeToBuffer(),
+          $0.ProfileTestResult.fromBuffer);
 }
 
 @$pb.GrpcServiceName('niko.v1.NikoService')
@@ -704,6 +748,32 @@ abstract class NikoServiceBase extends $grpc.Service {
             ($core.List<$core.int> value) =>
                 $0.UserStoreSnapshot.fromBuffer(value),
             ($0.ImportUserStoreResult value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.TestConnectionRequest, $0.TestConnectionResult>(
+            'TestConnection',
+            testConnection_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.TestConnectionRequest.fromBuffer(value),
+            ($0.TestConnectionResult value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ExitAddressRequest, $0.ExitAddressResult>(
+        'ExitAddress',
+        exitAddress_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ExitAddressRequest.fromBuffer(value),
+        ($0.ExitAddressResult value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.TestProfilesRequest, $0.ProfileTestResult>(
+            'TestProfiles',
+            testProfiles_Pre,
+            false,
+            true,
+            ($core.List<$core.int> value) =>
+                $0.TestProfilesRequest.fromBuffer(value),
+            ($0.ProfileTestResult value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.Info> getInfo_Pre($grpc.ServiceCall $call,
@@ -950,4 +1020,29 @@ abstract class NikoServiceBase extends $grpc.Service {
 
   $async.Future<$0.ImportUserStoreResult> importUserStore(
       $grpc.ServiceCall call, $0.UserStoreSnapshot request);
+
+  $async.Future<$0.TestConnectionResult> testConnection_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.TestConnectionRequest> $request) async {
+    return testConnection($call, await $request);
+  }
+
+  $async.Future<$0.TestConnectionResult> testConnection(
+      $grpc.ServiceCall call, $0.TestConnectionRequest request);
+
+  $async.Future<$0.ExitAddressResult> exitAddress_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.ExitAddressRequest> $request) async {
+    return exitAddress($call, await $request);
+  }
+
+  $async.Future<$0.ExitAddressResult> exitAddress(
+      $grpc.ServiceCall call, $0.ExitAddressRequest request);
+
+  $async.Stream<$0.ProfileTestResult> testProfiles_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.TestProfilesRequest> $request) async* {
+    yield* testProfiles($call, await $request);
+  }
+
+  $async.Stream<$0.ProfileTestResult> testProfiles(
+      $grpc.ServiceCall call, $0.TestProfilesRequest request);
 }

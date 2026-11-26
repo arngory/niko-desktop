@@ -11,9 +11,10 @@ import 'connection_controller.dart';
 /// before the daemon answers; one it refuses is read back as the daemon has it, and its reason is [error]. The keys are
 /// the app's names of the settings, as the daemon names them.
 class SettingsFeed extends ChangeNotifier implements SettingValues {
-  SettingsFeed(this._link);
+  SettingsFeed(this._link, {this.onMutated});
 
   final ConnectionController _link;
+  final void Function(Iterable<String> keys)? onMutated;
 
   Map<String, Object> _values = const {};
 
@@ -150,6 +151,7 @@ class SettingsFeed extends ChangeNotifier implements SettingValues {
     if (daemon == null || _link.link != LinkPhase.ready) return 'daemon unavailable';
     try {
       _values = await daemon.updateSettings(values);
+      onMutated?.call(values.keys);
       return null;
     } catch (e) {
       return daemonError(e);

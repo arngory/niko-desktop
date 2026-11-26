@@ -17,12 +17,15 @@ import '../ui/pressable.dart';
 /// programs, where it goes, «Обход DPI» on a direct one) or deleted; a new one; the Russian preset; and the rule-sets
 /// the rules name, with when each was fetched and the update on demand.
 class RulesScreen extends StatefulWidget {
-  const RulesScreen({super.key, required this.feed, required this.linked});
+  const RulesScreen({super.key, required this.feed, required this.linked, this.profiles = const []});
 
   final RulesFeed feed;
 
   /// The window talks to the daemon: without it the store cannot be read.
   final bool linked;
+
+  /// Available profiles for routing a rule to a specific profile outbound.
+  final List<ProfileRow> profiles;
 
   @override
   State<RulesScreen> createState() => _RulesScreenState();
@@ -31,6 +34,7 @@ class RulesScreen extends StatefulWidget {
 class _RulesScreenState extends State<RulesScreen> {
   // the rule in the editor: one with id 0 is new; null: the list
   RuleRow? _editing;
+  bool _confirmReset = false;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +51,7 @@ class _RulesScreenState extends State<RulesScreen> {
         _RuleEditor(
           key: ValueKey(editing.id),
           rule: editing,
+          profiles: widget.profiles,
           strings: strings,
           onSave: (rule) async {
             final error = await feed.save(rule);
@@ -72,8 +77,31 @@ class _RulesScreenState extends State<RulesScreen> {
                         directName: strings.presetRussiaDirect,
                       ),
             ),
+            if (feed.rules.isNotEmpty)
+              NikoGhostButton(
+                label: strings.rulesReset,
+                onPressed: () => setState(() => _confirmReset = true),
+              ),
           ],
         ),
+        if (_confirmReset) ...[
+          const SizedBox(height: NikoSpace.s3),
+          NikoBanner(icon: NikoIcons.trash, title: strings.rulesResetConfirm, danger: true),
+          const SizedBox(height: NikoSpace.s2),
+          Row(
+            children: [
+              NikoPrimaryButton(
+                label: strings.rulesReset,
+                onPressed: () {
+                  setState(() => _confirmReset = false);
+                  feed.deleteAll();
+                },
+              ),
+              const SizedBox(width: NikoSpace.s3),
+              NikoGhostButton(label: strings.cancel, onPressed: () => setState(() => _confirmReset = false)),
+            ],
+          ),
+        ],
         const SizedBox(height: NikoSpace.s2),
         Text(strings.presetRussiaSub, style: NikoType.bodySm.style(colors.ink2)),
         const SizedBox(height: NikoSpace.s4),
@@ -276,9 +304,17 @@ class _RuleTile extends StatelessWidget {
 
 /// The editor of a rule: its common fields; Save sends it to the daemon, which says why where it refuses it.
 class _RuleEditor extends StatefulWidget {
-  const _RuleEditor({super.key, required this.rule, required this.strings, required this.onSave, required this.onCancel});
+  const _RuleEditor({
+    super.key,
+    required this.rule,
+    required this.profiles,
+    required this.strings,
+    required this.onSave,
+    required this.onCancel,
+  });
 
   final RuleRow rule;
+  final List<ProfileRow> profiles;
   final NikoStrings strings;
 
   /// The daemon's words for why it was not saved; null where it was.
@@ -320,8 +356,10 @@ class _RuleEditorState extends State<_RuleEditor> {
       (RuleOutbound.proxy, strings.routeProxy),
       (RuleOutbound.direct, strings.routeDirect),
       (RuleOutbound.block, strings.routeBlock),
-      // a profile the rule had: kept as it is, the editor offers no others yet
-      if (widget.rule.outbound > 0) (widget.rule.outbound, strings.routeProfile(widget.rule.outbound)),
+      if (rule.outbound > 0 && !widget.profiles.any((p) => p.id == rule.outbound))
+        (rule.outbound, strings.routeProfile(rule.outbound)),
+      if (rule.outbound > 0 && widget.profiles.any((p) => p.id == rule.outbound))
+        (rule.outbound, widget.profiles.firstWhere((p) => p.id == rule.outbound).name),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -442,6 +480,29 @@ class _RuleEditorState extends State<_RuleEditor> {
             );
           },
         ),
+        if (widget.profiles.isNotEmpty) ...[
+          const SizedBox(height: NikoSpace.s3),
+          Wrap(
+            spacing: NikoSpace.s2,
+            runSpacing: NikoSpace.s2,
+            children: [
+              for (final p in widget.profiles.take(8))
+                rule.outbound == p.id
+                    ? NikoPrimaryButton(label: p.name, onPressed: () {})
+                    : NikoTonalButton(label: p.name, onPressed: () => _set(_draft.copyWith(outbound: p.id))),
+            ],
+          ),
+        ],
+        const SizedBox(height: NikoSpace.s4),
+        NikoField(
+          label: strings.ruleConfigJson,
+          value: rule.config,
+          input: FieldInput.lines,
+          mono: true,
+          onChanged: (v) => _set(_draft.copyWith(config: v)),
+        ),
+        const SizedBox(height: NikoSpace.s1),
+        Text(strings.ruleConfigHint, style: NikoType.bodySm.style(colors.ink2)),
         if (_error case final error?) ...[
           const SizedBox(height: NikoSpace.s4),
           NikoBanner(icon: NikoIcons.alert, title: strings.ruleNotSaved, text: error, danger: true),

@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
+import '../platform/desktop_integration.dart';
 import '../state/profiles_feed.dart';
 import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
@@ -20,12 +22,15 @@ import 'nodes_screen.dart' show typeLabel;
 /// its PIN asked for where the invite needs one (before the first try, again after a wrong one), and the node's
 /// group is shown once its subscription came. QR codes come with their slice.
 class AddScreen extends StatefulWidget {
-  const AddScreen({super.key, required this.feed, required this.onDone});
+  const AddScreen({super.key, required this.feed, required this.onDone, this.pickFile});
 
   final ProfilesFeed feed;
 
   /// The screen is done: [added] profiles (a subscription's group counts as one), none for a cancel.
   final void Function(int added) onDone;
+
+  /// Optional file picker override for tests; defaults to native [DesktopIntegration.pickFile].
+  final Future<String?> Function()? pickFile;
 
   @override
   State<AddScreen> createState() => _AddScreenState();
@@ -39,6 +44,8 @@ class _AddScreenState extends State<AddScreen> {
   PinNeeded? _pinNeeded;
   ImportPreview _preview = const ImportPreview();
   String _recognized = '';
+  List<int>? _fileBytes;
+  String _fileName = '';
   String _error = '';
   bool _busy = false;
   Timer? _wait;
@@ -60,6 +67,8 @@ class _AddScreenState extends State<AddScreen> {
 
   // what the text is, asked of the daemon once typing pauses; an answer for an older text is dropped
   void _changed() {
+    _fileBytes = null;
+    _fileName = '';
     _wait?.cancel();
     _wait = Timer(const Duration(milliseconds: 250), () async {
       final text = _text.text;
@@ -83,9 +92,60 @@ class _AddScreenState extends State<AddScreen> {
     if (data?.text != null) _text.text = data!.text!.trim();
   }
 
+  Future<void> _openFile() async {
+    final picker = widget.pickFile ??
+        () => DesktopIntegration().pickFile(extensions: const ['json', 'conf', 'txt', 'zip', 'rcdev1']);
+    final path = await picker();
+    if (path == null || path.isEmpty || !mounted) return;
+    try {
+      final file = File(path);
+      const maxImportFileBytes = 4 * 1024 * 1024;
+      final length = await file.length();
+      if (length > maxImportFileBytes) {
+        if (mounted) setState(() => _error = 'file is larger than 4 MiB');
+        return;
+      }
+      final bytes = await file.readAsBytes();
+      final name = file.uri.pathSegments.isNotEmpty ? file.uri.pathSegments.last : path;
+      final preview = await widget.feed.recognizeFile(bytes, name);
+      if (!mounted) return;
+      setState(() {
+        _fileBytes = bytes;
+        _fileName = name;
+        _preview = preview;
+        _recognized = '';
+        _error = '';
+        _pinNeeded = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
+
   Future<void> _add() async {
     setState(() => _busy = true);
     try {
+      if (_fileBytes != null) {
+        final result = await widget.feed.importFile(_fileBytes!, _fileName, pin: _pin.text.trim());
+        if (!mounted) return;
+        if (result.pin != null) {
+          setState(() {
+            _busy = false;
+            _pinNeeded = result.pin;
+            _error = result.pin!.wrong ? '' : _error;
+          });
+          return;
+        }
+        if (result.ok || result.nodeId.isNotEmpty || result.groupId != 0) {
+          widget.onDone(result.ids.isEmpty ? 1 : result.ids.length);
+          return;
+        }
+        setState(() {
+          _busy = false;
+          _error = result.error;
+        });
+        return;
+      }
       if (_preview.kind == ImportKind.subscription) {
         await widget.feed.addSubscription(_text.text);
         if (mounted) widget.onDone(1);
@@ -130,7 +190,8 @@ class _AddScreenState extends State<AddScreen> {
     final colors = NikoTheme.of(context);
     final strings = NikoStrings.of(Localizations.localeOf(context));
     final rows = _preview.kind == ImportKind.profiles ? _preview.profiles : const <ProfileRow>[];
-    final current = _recognized.trim().isNotEmpty && _recognized == _text.text;
+    final hasFile = _fileBytes != null;
+    final current = hasFile || (_recognized.trim().isNotEmpty && _recognized == _text.text);
     final subscription = current && _preview.kind == ImportKind.subscription;
     final node = current && _preview.kind == ImportKind.node ? _preview.node : null;
     final askPin = node != null && node.invite && (node.pinRequired || _pinNeeded != null);
@@ -158,9 +219,16 @@ class _AddScreenState extends State<AddScreen> {
                   ),
                   const SizedBox(width: NikoSpace.s3),
                   NikoTonalButton(label: strings.addPaste, onPressed: _paste),
+                  const SizedBox(width: NikoSpace.s2),
+                  NikoTonalButton(label: strings.addOpenFile, onPressed: _openFile),
                 ],
               ),
-              const SizedBox(height: NikoSpace.s6),
+              const SizedBox(height: NikoSpace.s2),
+              Text(
+                hasFile ? _fileName : strings.addFileHint,
+                style: NikoType.bodySm.style(colors.ink2),
+              ),
+              const SizedBox(height: NikoSpace.s4),
               if (_error.isNotEmpty) ...[
                 NikoBanner(icon: NikoIcons.alert, title: strings.addFailed, text: _error, danger: true),
                 const SizedBox(height: NikoSpace.s4),
@@ -201,7 +269,7 @@ class _AddScreenState extends State<AddScreen> {
                     onPressed: (rows.isEmpty && !subscription && node == null) ||
                             (askPin && !pinOk) ||
                             _busy ||
-                            _recognized != _text.text
+                            (!hasFile && _recognized != _text.text)
                         ? null
                         : _add,
                   ),

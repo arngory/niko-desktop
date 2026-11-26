@@ -8,6 +8,7 @@ import '../l10n/strings.dart';
 import '../platform/service_install.dart';
 import '../platform/user_store_migration.dart';
 import '../state/connection_controller.dart';
+import '../state/window_settings.dart';
 import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
 import '../ui/connect_button.dart';
@@ -35,6 +36,10 @@ class MainScreen extends StatefulWidget {
     this.node,
     this.serviceInstall,
     this.userMigration,
+    this.windowSettings,
+    this.reloadNeeded = false,
+    this.onReconnect,
+    this.networkRestored = false,
   });
 
   final ConnectionController controller;
@@ -44,6 +49,16 @@ class MainScreen extends StatefulWidget {
 
   /// One-time migration controller from unprivileged user-mode store to system service store.
   final UserStoreMigrationController? userMigration;
+
+  /// Window preferences (stores exit-IP privacy acknowledgement).
+  final WindowSettings? windowSettings;
+
+  /// Settings or route rules changed while the core is running (D-STATE-RELOAD).
+  final bool reloadNeeded;
+  final VoidCallback? onReconnect;
+
+  /// Service link recovered from a drop (D-STATE-NET).
+  final bool networkRestored;
 
   /// The raycontrol node of the selected profile, for its term, traffic and last update (D-MAIN-13); null for none.
   final NodeRow? node;
@@ -66,6 +81,21 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   Timer? _clock;
+  bool _testingConnection = false;
+  ConnectionTestResult? _connectionTest;
+  bool _checkingExit = false;
+  bool _confirmExit = false;
+  bool _exitConfirmedSession = false;
+  String _exitProvider = 'cloudflare';
+  ExitAddressInfo? _exitInfo;
+  String _exitError = '';
+
+  static const _exitProviders = [
+    ('cloudflare', 'Cloudflare'),
+    ('ipinfo', 'ipinfo'),
+    ('ipwho', 'ipwho'),
+    ('ipapi-co', 'ipapi'),
+  ];
 
   @override
   void initState() {
@@ -104,7 +134,85 @@ class _MainScreenState extends State<MainScreen> {
 
   void _changed() {
     _syncClock();
+    if (widget.controller.service.phase != ServicePhase.started) {
+      _connectionTest = null;
+      _exitInfo = null;
+      _exitError = '';
+      _confirmExit = false;
+    }
     setState(() {});
+  }
+
+  Future<void> _runConnectionTest() async {
+    final daemon = widget.controller.daemon;
+    if (daemon == null || _testingConnection) return;
+    setState(() {
+      _testingConnection = true;
+    });
+    try {
+      final result = await daemon.testConnection();
+      if (!mounted) return;
+      setState(() {
+        _testingConnection = false;
+        _connectionTest = result;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _testingConnection = false;
+        _connectionTest = ConnectionTestResult(latencyMs: 0, error: daemonError(e));
+      });
+    }
+  }
+
+  bool get _exitAlreadyConfirmed =>
+      _exitConfirmedSession || (widget.windowSettings?.exitAddressConfirmed ?? false);
+
+  void _onExitIpPressed() {
+    if (_checkingExit) return;
+    if (_exitAlreadyConfirmed) {
+      unawaited(_runExitAddress());
+    } else {
+      setState(() => _confirmExit = true);
+    }
+  }
+
+  Future<void> _confirmAndRunExitAddress() async {
+    setState(() {
+      _confirmExit = false;
+      _exitConfirmedSession = true;
+    });
+    final settings = widget.windowSettings;
+    if (settings != null && !settings.exitAddressConfirmed) {
+      settings.exitAddressConfirmed = true;
+      unawaited(settings.save());
+    }
+    await _runExitAddress();
+  }
+
+  Future<void> _runExitAddress() async {
+    final daemon = widget.controller.daemon;
+    if (daemon == null || _checkingExit) return;
+    setState(() {
+      _checkingExit = true;
+      _exitError = '';
+    });
+    try {
+      final info = await daemon.exitAddress(provider: _exitProvider);
+      if (!mounted) return;
+      setState(() {
+        _checkingExit = false;
+        _exitInfo = info;
+        _exitError = '';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _checkingExit = false;
+        _exitInfo = null;
+        _exitError = daemonError(e);
+      });
+    }
   }
 
   // the time in the status ticks by itself while connected, and nothing ticks otherwise
@@ -177,6 +285,121 @@ class _MainScreenState extends State<MainScreen> {
                 const SizedBox(height: NikoSpace.s4),
                 // D-MAIN-02, D-MAIN-06
                 StatusBlock(label: status, detail: detail, tone: tone),
+                // D-MAIN-18 (TestConnection) and D-MAIN-03/14 (ExitAddress) when connected on API >= 14
+                if (ready && phase == ServicePhase.started && state.nikoApi >= 14) ...[
+                  const SizedBox(height: NikoSpace.s4),
+                  Center(
+                    child: Wrap(
+                      spacing: NikoSpace.s3,
+                      runSpacing: NikoSpace.s2,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        NikoTonalButton(
+                          label: _testingConnection ? strings.mainTesting : strings.mainTestConnection,
+                          onPressed: _testingConnection ? null : _runConnectionTest,
+                        ),
+                        NikoTonalButton(
+                          label: _checkingExit ? strings.mainTesting : strings.mainExitIp,
+                          onPressed: _checkingExit ? null : _onExitIpPressed,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_confirmExit) ...[
+                    const SizedBox(height: NikoSpace.s4),
+                    NikoBanner(
+                      icon: NikoIcons.alert,
+                      title: strings.mainExitConfirmTitle,
+                      text: strings.mainExitConfirmText,
+                      action: strings.mainExitConfirmGo,
+                      onAction: () => unawaited(_confirmAndRunExitAddress()),
+                    ),
+                    const SizedBox(height: NikoSpace.s3),
+                    Wrap(
+                      spacing: NikoSpace.s2,
+                      runSpacing: NikoSpace.s2,
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        for (final (id, title) in _exitProviders)
+                          id == _exitProvider
+                              ? NikoTonalButton(label: title, onPressed: () {})
+                              : NikoGhostButton(label: title, onPressed: () => setState(() => _exitProvider = id)),
+                        NikoTonalButton(
+                          label: strings.ruleCancel,
+                          onPressed: () => setState(() => _confirmExit = false),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (_connectionTest != null || _exitInfo != null || _exitError.isNotEmpty) ...[
+                    const SizedBox(height: NikoSpace.s4),
+                    NikoSection(
+                      overline: strings.checkResult,
+                      rows: [
+                        if (_connectionTest case final res?)
+                          NikoInfoRow(
+                            title: strings.mainTestConnection,
+                            value: res.ok ? '${res.latencyMs} ms' : res.error,
+                          ),
+                        if (_exitInfo case final ex?)
+                          NikoInfoRow(
+                            title: strings.mainExitIp,
+                            value: [
+                              ex.ip,
+                              if (ex.countryCode.isNotEmpty) ex.countryCode,
+                              if (ex.city.isNotEmpty) ex.city,
+                            ].join(' · '),
+                          )
+                        else if (_exitError.isNotEmpty)
+                          NikoInfoRow(title: strings.mainExitIp, value: _exitError),
+                      ],
+                    ),
+                    if (_exitInfo != null || _exitError.isNotEmpty) ...[
+                      const SizedBox(height: NikoSpace.s2),
+                      Center(
+                        child: Wrap(
+                          spacing: NikoSpace.s2,
+                          runSpacing: NikoSpace.s2,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            for (final (id, title) in _exitProviders)
+                              id == _exitProvider
+                                  ? NikoTonalButton(
+                                      label: title,
+                                      onPressed: _checkingExit ? null : _runExitAddress,
+                                    )
+                                  : NikoGhostButton(
+                                      label: title,
+                                      onPressed: _checkingExit
+                                          ? null
+                                          : () {
+                                              setState(() => _exitProvider = id);
+                                              unawaited(_runExitAddress());
+                                            },
+                                    ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+                // D-STATE-RELOAD: settings or rules changed while running
+                if (ready && phase == ServicePhase.started && widget.reloadNeeded) ...[
+                  const SizedBox(height: NikoSpace.s6),
+                  NikoBanner(
+                    icon: NikoIcons.alert,
+                    title: strings.reloadBannerTitle,
+                    text: strings.reloadBannerText,
+                    action: strings.reloadBannerAction,
+                    onAction: state.busy ? null : widget.onReconnect,
+                  ),
+                ],
+                // D-STATE-NET: service link recovered after a drop
+                if (ready && widget.networkRestored) ...[
+                  const SizedBox(height: NikoSpace.s6),
+                  NikoBanner(icon: NikoIcons.rotateCw, title: strings.networkRestoredTitle),
+                ],
                 // D-NAV-02: the mode, chosen here as in the settings; a running core is started again in it
                 if (state.connectsProfile && mode != null) ...[
                   const SizedBox(height: NikoSpace.s6),

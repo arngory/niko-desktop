@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -290,7 +291,14 @@ class MemoryDaemon implements Daemon {
     'logLevel': 0,
     'programsMode': 0,
     'programs': '',
+    'enableDnsRouting': true,
+    'ruleSetUpdateHours': 24,
+    'dpiDirect': 'off',
+    'dpiDirectPreset': 'auto',
+    'dpiDirectCustom': '',
   };
+
+  final profileBeans = <int, String>{};
 
   @override
   Future<Map<String, Object>> settings() async => {...settingValues};
@@ -307,7 +315,7 @@ class MemoryDaemon implements Daemon {
 
   @override
   Future<SavedProfile> profile(int id) async =>
-      SavedProfile(row: profileRows.firstWhere((p) => p.id == id), beanJson: '{"id":$id}');
+      SavedProfile(row: profileRows.firstWhere((p) => p.id == id), beanJson: profileBeans[id] ?? '{"id":$id}');
 
   @override
   Future<int> addProfile({required int groupId, required String type, required String beanJson}) async {
@@ -401,6 +409,7 @@ class MemoryDaemon implements Daemon {
         outbound: rule.outbound,
         programs: rule.programs,
         dpiBypass: rule.dpiBypass,
+        config: rule.config,
       );
       ruleRows.add(saved);
     } else {
@@ -474,6 +483,142 @@ class MemoryDaemon implements Daemon {
 
   @override
   Future<StoreImportResult> importUserStore(List<int> snapshotJson) async => const StoreImportResult();
+
+  @override
+  Future<GroupRow> saveGroup(GroupRow group) async {
+    if (group.id == 0) {
+      final created = GroupRow(
+        id: ++_nextId,
+        name: group.name,
+        subscription: group.subscription,
+        info: group.info,
+      );
+      groupRows = [...groupRows, created];
+      _changed(StoreKind.groups, [created.id]);
+      return created;
+    }
+    groupRows = [
+      for (final g in groupRows)
+        if (g.id == group.id)
+          GroupRow(
+            id: g.id,
+            name: group.name,
+            ungrouped: g.ungrouped,
+            subscription: g.subscription,
+            profiles: g.profiles,
+            info: group.info ?? g.info,
+            nodeId: g.nodeId,
+          )
+        else
+          g,
+    ];
+    _changed(StoreKind.groups, [group.id]);
+    return groupRows.firstWhere((g) => g.id == group.id);
+  }
+
+  @override
+  Future<void> deleteGroup(int id) async {
+    groupRows = groupRows.where((g) => g.id != id).toList();
+    profileRows.removeWhere((p) => p.groupId == id);
+    _changed(StoreKind.groups, [id]);
+  }
+
+  @override
+  Future<TaskResult> refreshAllSubscriptions() async {
+    refreshed.add(0);
+    return const TaskResult(line: 'subscriptions updated');
+  }
+
+  @override
+  Future<void> updateProfile({
+    required int id,
+    required int groupId,
+    required String type,
+    required String beanJson,
+  }) async {
+    var name = type;
+    var addr = '';
+    try {
+      final decoded = jsonDecode(beanJson);
+      if (decoded is Map) {
+        if (decoded['name'] is String && (decoded['name'] as String).isNotEmpty) name = decoded['name'] as String;
+        if (decoded['serverAddress'] is String && decoded['serverPort'] != null) {
+          addr = '${decoded['serverAddress']}:${decoded['serverPort']}';
+        }
+      }
+    } catch (_) {}
+    if (id == 0) {
+      final createdId = ++_nextId;
+      final effectiveGroup = groupId == 0 ? groupRows.firstWhere((g) => g.ungrouped).id : groupId;
+      profileBeans[createdId] = beanJson;
+      profileRows.add(ProfileRow(id: createdId, groupId: effectiveGroup, order: createdId, type: type, name: name, address: addr));
+      _changed(StoreKind.profiles, [createdId]);
+      return;
+    }
+    profileBeans[id] = beanJson;
+    final i = profileRows.indexWhere((p) => p.id == id);
+    if (i >= 0) {
+      final old = profileRows[i];
+      profileRows[i] = ProfileRow(
+        id: old.id,
+        groupId: old.groupId,
+        order: old.order,
+        type: type,
+        name: name.isEmpty ? old.name : name,
+        address: addr.isEmpty ? old.address : addr,
+      );
+      _changed(StoreKind.profiles, [id]);
+    }
+  }
+
+  @override
+  Future<ImportPreview> recognizeFile(List<int> bytes, String fileName) => recognize(utf8.decode(bytes, allowMalformed: true));
+
+  @override
+  Future<TaskResult> importFile(List<int> bytes, String fileName, {int groupId = 0, String pin = ''}) async {
+    final ids = await importLinks(utf8.decode(bytes, allowMalformed: true), groupId: groupId);
+    return TaskResult(line: 'profiles added: ${ids.length}', ids: ids);
+  }
+
+  ConnectionTestResult nextConnectionTest = const ConnectionTestResult(latencyMs: 42);
+  ExitAddressInfo nextExitAddress = const ExitAddressInfo(
+    provider: 'cloudflare',
+    ip: '198.51.100.42',
+    countryCode: 'DE',
+    country: 'Germany',
+    city: 'Frankfurt',
+  );
+  final exitProvidersCalled = <String>[];
+
+  @override
+  Future<ConnectionTestResult> testConnection({String url = '', int timeoutMs = 0}) async => nextConnectionTest;
+
+  @override
+  Future<ExitAddressInfo> exitAddress({String provider = 'cloudflare', int timeoutMs = 0}) async {
+    exitProvidersCalled.add(provider);
+    return ExitAddressInfo(
+      provider: provider,
+      ip: nextExitAddress.ip,
+      countryCode: nextExitAddress.countryCode,
+      country: nextExitAddress.country,
+      city: nextExitAddress.city,
+    );
+  }
+
+  @override
+  Stream<ProfileTestEntry> testProfiles({
+    List<int> profileIds = const [],
+    int groupId = 0,
+    String url = '',
+    int timeoutMs = 0,
+  }) async* {
+    final targets = profileIds.isNotEmpty
+        ? profileIds
+        : [for (final p in profileRows) if (groupId == 0 || p.groupId == groupId) p.id];
+    for (final id in targets) {
+      yield ProfileTestEntry(profileId: id, latencyMs: 30 + id * 10);
+    }
+  }
 
   @override
   Future<void> close() async {}
@@ -1486,22 +1631,27 @@ void main() {
     expect(find.text('Прокси'), findsOneWidget);
 
     // a switch: written at once, by its name alone
+    await tester.ensureVisible(find.text('Пускать из локальной сети'));
     await tester.tap(find.text('Пускать из локальной сети'));
     await settle();
     expect(daemon.settingsChanged.last, {'allowAccess': true});
     // a setting the app keeps as a number, shown as a switch
+    await tester.ensureVisible(find.text('Сниффинг'));
     await tester.tap(find.text('Сниффинг'));
     await settle();
     expect(daemon.settingsChanged.last, {'trafficSniffing': 0});
     // a choice, as its number
+    await tester.ensureVisible(find.text('VPN'));
     await tester.tap(find.text('VPN'));
     await settle();
     expect(daemon.settingsChanged.last, {'serviceMode': 'vpn'});
+    await tester.ensureVisible(find.text('Сначала'));
     await tester.tap(find.text('Сначала'));
     await settle();
     expect(daemon.settingsChanged.last, {'ipv6Mode': 2});
 
     // a value row's dialog: the port as a number; refused, said and left open
+    await tester.ensureVisible(find.text('Порт'));
     await tester.tap(find.text('Порт'));
     await tester.pump();
     await tester.enterText(find.byType(EditableText), '3000');
@@ -1510,6 +1660,7 @@ void main() {
     expect(daemon.settingsChanged.last, {'mixedPort': 3000});
     expect(find.text('3000'), findsOneWidget);
     daemon.refused.add('mtu');
+    await tester.ensureVisible(find.text('MTU'));
     await tester.tap(find.text('MTU'));
     await tester.pump();
     await tester.enterText(find.byType(EditableText), '100');
@@ -1522,6 +1673,7 @@ void main() {
 
     // a refused switch: put back as the daemon has it, and said
     daemon.refused.add('bypassLanInCore');
+    await tester.ensureVisible(find.text('Локальная сеть напрямую'));
     await tester.tap(find.text('Локальная сеть напрямую'));
     await settle();
     expect(find.text('Не сохранено'), findsOneWidget);

@@ -430,4 +430,82 @@ class NikoStrings {
   String get checkClearRecent => _ru ? 'Очистить недавние' : 'Clear recent';
   String get checkSteps => _ru ? 'Шаги' : 'Steps';
   String get checkNotes => _ru ? 'Заметки ядра' : 'Core notes';
+
+  // Phase P5: Daily-driver UX
+  String get groupNew => _ru ? 'Новая группа' : 'New group';
+  String get groupNameField => _ru ? 'Название группы' : 'Group name';
+  String get groupRename => _ru ? 'Переименовать' : 'Rename';
+  String get groupDelete => _ru ? 'Удалить группу' : 'Delete group';
+  String groupDeleteConfirm(String name) => _ru
+      ? 'Удалить группу «$name» и все её профили?'
+      : 'Delete group “$name” and all its profiles?';
+  String get subscriptionsUpdateAll => _ru ? 'Обновить все' : 'Update all';
+  String get subscriptionSettings => _ru ? 'Настройки' : 'Settings';
+  String get subscriptionCopyLink => _ru ? 'Копировать ссылку' : 'Copy link';
+  String get subscriptionLinkCopied => _ru ? 'Ссылка подписки скопирована' : 'Subscription link copied';
+  String get subscriptionDelete => _ru ? 'Удалить подписку' : 'Delete subscription';
+  String get subscriptionLink => _ru ? 'Ссылка подписки' : 'Subscription URL';
+  String get subscriptionAutoUpdate => _ru ? 'Автообновление' : 'Auto-update';
+  String get subscriptionDelay => _ru ? 'Интервал (мин)' : 'Interval (min)';
+  String get subscriptionDedup => _ru ? 'Удалять дубликаты' : 'Deduplication';
+  String get subscriptionForceResolve => _ru ? 'Резолвить адреса серверов' : 'Force resolve server addresses';
+  String get subscriptionWhenConnected => _ru ? 'Обновлять только при подключении' : 'Update when connected only';
+  String get subscriptionUserAgent => 'User-Agent';
+
+  String get profileNew => _ru ? 'Новый профиль' : 'New profile';
+  String get profileEdit => _ru ? 'Изменить профиль' : 'Edit profile';
+  String get profileType => _ru ? 'Протокол' : 'Protocol';
+  String get profileName => _ru ? 'Название' : 'Name';
+  String get profileServer => _ru ? 'Сервер' : 'Server';
+  String get profilePort => _ru ? 'Порт' : 'Port';
+  String get profileUsername => _ru ? 'Пользователь' : 'Username';
+  String get profilePassword => _ru ? 'Пароль / ключ / UUID' : 'Password / Key / UUID';
+  String get profileSni => 'SNI';
+  String get profileRawJson => _ru ? 'Сырой JSON (bean)' : 'Raw JSON (bean)';
+  String get profileTestAll => _ru ? 'Проверить задержку' : 'Test latency';
+  String get profileTesting => _ru ? 'Проверка…' : 'Testing…';
+
+  String get addOpenFile => _ru ? 'Открыть файл' : 'Open file';
+  String get addFileHint => _ru ? 'Поддерживаются .json, .conf, .txt, .zip и пакеты rcdev1' : 'Supports .json, .conf, .txt, .zip, and rcdev1 files';
+
+  String get ruleConfigJson => _ru ? 'Свой JSON правила' : 'Custom rule JSON';
+  String get ruleConfigHint => _ru ? 'Необязательный JSON-объект, объединяемый поверх правила' : 'Optional JSON object merged onto the rule';
+  String get rulesReset => _ru ? 'Сбросить правила' : 'Reset rules';
+  String get rulesResetConfirm => _ru ? 'Удалить все правила маршрутизации?' : 'Delete all route rules?';
+
+  String get setEnableDnsRouting => _ru ? 'DNS-маршрутизация по правилам' : 'Rule-based DNS routing';
+  String get setRuleSetHours => _ru ? 'Обновление наборов правил (ч)' : 'Rule-set update interval (h)';
+  String get setDpiDirect => _ru ? 'Обход DPI для прямых правил' : 'DPI bypass for direct rules';
+  String get setDpiOff => _ru ? 'Выкл' : 'Off';
+  String get setDpiPreset => _ru ? 'Пресет' : 'Preset';
+  String get setDpiCustom => _ru ? 'Своя строка' : 'Custom';
+  String get setDpiPresetName => _ru ? 'Стратегия DPI' : 'DPI strategy';
+  String get setDpiCustomArgs => _ru ? 'Аргументы ByeDPI' : 'ByeDPI arguments';
+
+  String get setAutostart => _ru ? 'Запускать при входе в систему' : 'Launch on login';
+  String get setConnectOnStartup => _ru ? 'Подключаться при запуске' : 'Connect on startup';
+  String get setCloseToTray => _ru ? 'Сворачивать в трей при закрытии' : 'Minimize to tray on close';
+  String get setNotifications => _ru ? 'Уведомления о подключении' : 'Connection notifications';
+  String get setSaveFolder => _ru ? 'Папка для сохранения' : 'Save folder';
+  String get setSaveFolderDefault => _ru ? 'Загрузки (по умолчанию)' : 'Downloads (default)';
+  String get setSaveFolderReset => _ru ? 'Сбросить' : 'Reset';
+  String get setSaveFolderChoose => _ru ? 'Выбрать…' : 'Choose…';
+
+  String get mainTestConnection => _ru ? 'Проверить связь' : 'Test connection';
+  String get mainTesting => _ru ? 'Проверка…' : 'Testing…';
+  String get mainExitIp => _ru ? 'IP выхода' : 'Exit IP';
+  String get mainExitConfirmTitle => _ru ? 'Проверить внешний IP?' : 'Check external exit IP?';
+  String get mainExitConfirmText => _ru
+      ? 'Выбранный HTTPS-сервис увидит IP-адрес выходного узла и время запроса. Продолжить?'
+      : 'The chosen HTTPS lookup service will see the exit node IP address and request time. Continue?';
+  String get mainExitConfirmGo => _ru ? 'Проверить' : 'Check';
+  String get reloadBannerTitle => _ru ? 'Настройки изменены' : 'Settings changed';
+  String get reloadBannerText => _ru
+      ? 'Переподключитесь, чтобы применить изменения к работающему ядру'
+      : 'Reconnect to apply changes to the running core';
+  String get reloadBannerAction => _ru ? 'Переподключить' : 'Reconnect';
+  String get networkRestoredTitle => _ru ? 'Связь со службой восстановлена' : 'Connection to service restored';
+
+  String get trayOpen => _ru ? 'Открыть Niko' : 'Open Niko';
+  String get trayQuit => _ru ? 'Выйти' : 'Quit';
 }

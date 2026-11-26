@@ -90,6 +90,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     }
     HWND existing = ::FindWindowW(Win32Window::kWindowClassName, nullptr);
     if (existing != nullptr) {
+      if (!::IsWindowVisible(existing)) {
+        ::ShowWindow(existing, SW_SHOW);
+      }
       if (::IsIconic(existing)) {
         ::ShowWindow(existing, SW_RESTORE);
       }

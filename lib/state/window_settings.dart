@@ -47,10 +47,25 @@ class WindowSettings extends ChangeNotifier {
     this._advanced, {
     String theme = 'system',
     String language = 'system',
+    bool connectOnStartup = false,
+    bool closeToTray = false,
+    bool notifications = true,
+    String saveDirectory = '',
+    bool exitAddressConfirmed = false,
     List<RecentRouteCheck> recentChecks = const [],
     Map<String, Object?> extra = const {},
   })  : _theme = normalizeTheme(theme),
         _language = normalizeLanguage(language),
+        // ignore: prefer_initializing_formals
+        _connectOnStartup = connectOnStartup,
+        // ignore: prefer_initializing_formals
+        _closeToTray = closeToTray,
+        // ignore: prefer_initializing_formals
+        _notifications = notifications,
+        // ignore: prefer_initializing_formals
+        _saveDirectory = saveDirectory,
+        // ignore: prefer_initializing_formals
+        _exitAddressConfirmed = exitAddressConfirmed,
         _recentChecks = List<RecentRouteCheck>.of(recentChecks.take(maxRecentChecks)),
         _extra = Map<String, Object?>.of(extra);
 
@@ -62,6 +77,11 @@ class WindowSettings extends ChangeNotifier {
   bool _advanced;
   String _theme;
   String _language;
+  bool _connectOnStartup;
+  bool _closeToTray;
+  bool _notifications;
+  String _saveDirectory;
+  bool _exitAddressConfirmed;
   final List<RecentRouteCheck> _recentChecks;
 
   /// The view Расширенный.
@@ -87,6 +107,46 @@ class WindowSettings extends ChangeNotifier {
     final normalized = normalizeLanguage(value);
     if (_language == normalized) return;
     _language = normalized;
+    notifyListeners();
+  }
+
+  /// Automatically connect the selected profile when the window launches (D-SET-05).
+  bool get connectOnStartup => _connectOnStartup;
+  set connectOnStartup(bool value) {
+    if (_connectOnStartup == value) return;
+    _connectOnStartup = value;
+    notifyListeners();
+  }
+
+  /// Keep the app running in the system tray when closing the window (D-TRAY).
+  bool get closeToTray => _closeToTray;
+  set closeToTray(bool value) {
+    if (_closeToTray == value) return;
+    _closeToTray = value;
+    notifyListeners();
+  }
+
+  /// Show desktop notifications on connection state changes (D-TRAY).
+  bool get notifications => _notifications;
+  set notifications(bool value) {
+    if (_notifications == value) return;
+    _notifications = value;
+    notifyListeners();
+  }
+
+  /// Custom folder for saved logs and crash reports; empty uses the user's Downloads.
+  String get saveDirectory => _saveDirectory;
+  set saveDirectory(String value) {
+    if (_saveDirectory == value) return;
+    _saveDirectory = value;
+    notifyListeners();
+  }
+
+  /// Whether the user has already acknowledged the privacy notice for exit-IP lookups (D-MAIN-03/14).
+  bool get exitAddressConfirmed => _exitAddressConfirmed;
+  set exitAddressConfirmed(bool value) {
+    if (_exitAddressConfirmed == value) return;
+    _exitAddressConfirmed = value;
     notifyListeners();
   }
 
@@ -135,9 +195,25 @@ class WindowSettings extends ChangeNotifier {
     bool advanced = false,
     String theme = 'system',
     String language = 'system',
+    bool connectOnStartup = false,
+    bool closeToTray = false,
+    bool notifications = true,
+    String saveDirectory = '',
+    bool exitAddressConfirmed = false,
     List<RecentRouteCheck> recentChecks = const [],
   }) =>
-      WindowSettings._(null, advanced, theme: theme, language: language, recentChecks: recentChecks);
+      WindowSettings._(
+        null,
+        advanced,
+        theme: theme,
+        language: language,
+        connectOnStartup: connectOnStartup,
+        closeToTray: closeToTray,
+        notifications: notifications,
+        saveDirectory: saveDirectory,
+        exitAddressConfirmed: exitAddressConfirmed,
+        recentChecks: recentChecks,
+      );
 
   static Future<WindowSettings> load(File? file) async {
     if (file == null) return WindowSettings._(null, false);
@@ -153,6 +229,11 @@ class WindowSettings extends ChangeNotifier {
           extra['view'] == 'advanced',
           theme: normalizeTheme(extra['theme']),
           language: normalizeLanguage(extra['language']),
+          connectOnStartup: extra['connectOnStartup'] == true,
+          closeToTray: extra['closeToTray'] == true,
+          notifications: extra['notifications'] != false,
+          saveDirectory: extra['saveDirectory'] is String ? extra['saveDirectory'] as String : '',
+          exitAddressConfirmed: extra['exitAddressConfirmed'] == true,
           recentChecks: _parseRecentChecks(extra['recentChecks']),
           extra: extra,
         );
@@ -184,6 +265,11 @@ class WindowSettings extends ChangeNotifier {
         'view': _advanced ? 'advanced' : 'simple',
         'theme': _theme,
         'language': _language,
+        'connectOnStartup': _connectOnStartup,
+        'closeToTray': _closeToTray,
+        'notifications': _notifications,
+        'saveDirectory': _saveDirectory,
+        'exitAddressConfirmed': _exitAddressConfirmed,
         if (_recentChecks.isNotEmpty)
           'recentChecks': [for (final item in _recentChecks) item.toJson()]
         else
