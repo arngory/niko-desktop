@@ -1,0 +1,95 @@
+# Release workflow (not executed locally; thin wrapper over tool/build_daemon.sh and tool/package_windows.sh).
+# Produces signed portable archives, SHA256SUMS, and optional minisign signatures following doc/release-layout.md.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version override (defaults to pubspec.yaml version)"
+        required: false
+        default: ""
+      allow_self_signed:
+        description: "Allow ephemeral self-signed Authenticode signing when signing secrets are unset"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.50.0"
+  FLUTTER_COMMIT: ab2912035e160d9cad6306df307576da6128ebdb
+
+jobs:
+  windows:
+    name: Windows portable ZIP (amd64)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout niko-desktop
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: niko-desktop
+          persist-credentials: false
+
+      - name: Checkout pinned niko and sing-box
+        run: niko-desktop/.github/scripts/niko.sh . --core
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: niko/libcore/go.mod
+          cache-dependency-path: niko/libcore/go.sum
+
+      - name: Setup Flutter
+        run: |
+          git clone -q --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          have="$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)"
+          [ "$have" = "$FLUTTER_COMMIT" ] || { echo "::error::Flutter commit mismatch: $have"; exit 1; }
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/flutter/bin:$PATH"
+          flutter --disable-analytics > /dev/null
+
+      - name: Build Windows Flutter release
+        working-directory: niko-desktop
+        run: |
+          version="${{ inputs.version }}"
+          if [ -z "$version" ]; then
+            version="$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)"
+          fi
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          flutter pub get --enforce-lockfile
+          flutter build windows --release --dart-define="NIKO_WINDOW_VERSION=$version"
+
+      - name: Package and sign Windows portable ZIP
+        working-directory: niko-desktop
+        env:
+          WINDOWS_PFX_B64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
+          WINDOWS_PFX_PASS: ${{ secrets.WINDOWS_CODESIGN_PFX_PASSWORD }}
+        run: |
+          args=(--window-dir build/windows/x64/runner/Release --arch amd64 --version "$RELEASE_VERSION" --out "$RUNNER_TEMP/dist")
+          if [ -n "$WINDOWS_PFX_B64" ]; then
+            printf '%s' "$WINDOWS_PFX_B64" | base64 -d > "$RUNNER_TEMP/codesign.pfx"
+            args+=(--pfx "$RUNNER_TEMP/codesign.pfx" --pfx-pass "$WINDOWS_PFX_PASS")
+          elif [ "${{ inputs.allow_self_signed }}" = "true" ]; then
+            args+=(--self-signed)
+          else
+            echo "::error::WINDOWS_CODESIGN_PFX_BASE64 secret is not configured (set allow_self_signed for test builds)"
+            exit 1
+          fi
+          ./tool/package_windows.sh "${args[@]}"
+
+      - name: Upload Windows release artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-windows-amd64
+          path: ${{ runner.temp }}/dist
+          retention-days: 14
