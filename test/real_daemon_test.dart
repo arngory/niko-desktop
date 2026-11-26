@@ -472,6 +472,30 @@ void main() {
       expect(reports.where((r) => !r.read), isEmpty);
       await until(() => logFeed.lines.length < before, 'the cleared log');
 
+      step = 'log redaction (BG-10)';
+      // Trigger a core log line carrying a 32-hex key-like token in the destination host:
+      // boxdd's Options.LogRedactor (wired to libcore/redact.Log in nikod) must scrub it to <key>.
+      const leakedHex = '0123456789abcdef0123456789abcdef';
+      final redactClient = HttpClient()..findProxy = (_) => 'PROXY 127.0.0.1:$proxyPort';
+      try {
+        final req = await redactClient.getUrl(Uri.parse('http://$leakedHex.invalid/'));
+        final resp = await req.close().timeout(const Duration(seconds: 3));
+        await resp.drain<void>();
+      } catch (_) {
+        // Expected DNS/dial failure for .invalid; we only need the core's connection log line.
+      } finally {
+        redactClient.close(force: true);
+      }
+      await until(
+        () => logFeed.lines.any((line) => line.text.contains('<key>.invalid')),
+        'redacted hex key in core log',
+      );
+      expect(
+        logFeed.lines.any((line) => line.text.contains(leakedHex)),
+        isFalse,
+        reason: 'raw hex key leaked into core log: ${logFeed.lines.map((l) => l.text).join('\n')}',
+      );
+
       step = 'the connections';
       // the connections: one held open is listed with where it goes, and closing it from here ends it
       connections.show();
