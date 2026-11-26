@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'platform/service_install.dart';
 import 'screens/shell.dart';
 import 'state/connection_controller.dart';
 import 'state/window_settings.dart';
@@ -23,6 +24,7 @@ class NikoApp extends StatefulWidget {
     this.locale,
     this.brightness,
     this.now = DateTime.now,
+    this.serviceInstall,
   });
 
   final ConnectionController controller;
@@ -39,6 +41,7 @@ class NikoApp extends StatefulWidget {
   final Locale? locale;
   final Brightness? brightness;
   final DateTime Function() now;
+  final ServiceController? serviceInstall;
 
   @override
   State<NikoApp> createState() => _NikoAppState();
@@ -111,6 +114,7 @@ class _NikoAppState extends State<NikoApp> {
                     daemonAddress: widget.daemonAddress,
                     configName: widget.configName,
                     now: widget.now,
+                    serviceInstall: widget.serviceInstall,
                   ),
                 ),
               );

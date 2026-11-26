@@ -23,10 +23,71 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  std::vector<std::string> command_line_arguments =
+      GetCommandLineArguments();
+  bool after_install = false;
+  DWORD parent_pid = 0;
+  constexpr const char kAfterInstallPrefix[] = "--after-install=";
+  for (const auto& arg : command_line_arguments) {
+    if (arg == "--after-install") {
+      after_install = true;
+      break;
+    }
+    if (arg.rfind(kAfterInstallPrefix, 0) == 0) {
+      after_install = true;
+      const std::string pid_str = arg.substr(sizeof(kAfterInstallPrefix) - 1);
+      if (!pid_str.empty()) {
+        unsigned long parsed = 0;
+        bool valid = true;
+        for (char c : pid_str) {
+          if (c < '0' || c > '9') {
+            valid = false;
+            break;
+          }
+          parsed = parsed * 10 + static_cast<unsigned long>(c - '0');
+          if (parsed > 0xFFFFFFFFUL) {
+            valid = false;
+            break;
+          }
+        }
+        if (valid && parsed > 0) {
+          parent_pid = static_cast<DWORD>(parsed);
+        }
+      }
+      break;
+    }
+  }
+
+  // When launched with --after-install=<pid> from a portable copy right after
+  // UAC service installation, wait directly on the portable process handle
+  // before acquiring the single-instance mutex so we neither race nor focus a
+  // dying portable window.
+  if (parent_pid != 0 && parent_pid != ::GetCurrentProcessId()) {
+    HANDLE parent = ::OpenProcess(SYNCHRONIZE, FALSE, parent_pid);
+    if (parent != nullptr) {
+      ::WaitForSingleObject(parent, 15000);
+      ::CloseHandle(parent);
+    }
+  }
+
   // Keep a single window per user session; a second launch raises the first.
-  HANDLE instance_mutex =
-      ::CreateMutexW(nullptr, FALSE, kSingleInstanceMutex);
-  if (instance_mutex != nullptr && ::GetLastError() == ERROR_ALREADY_EXISTS) {
+  HANDLE instance_mutex = nullptr;
+  for (int attempt = 0;; ++attempt) {
+    instance_mutex = ::CreateMutexW(nullptr, FALSE, kSingleInstanceMutex);
+    if (instance_mutex == nullptr || ::GetLastError() != ERROR_ALREADY_EXISTS) {
+      break;
+    }
+    if (after_install) {
+      ::CloseHandle(instance_mutex);
+      instance_mutex = nullptr;
+      if (attempt < 30) {
+        ::Sleep(100);
+        continue;
+      }
+      // Portable copy did not release the mutex in time: still open the
+      // installed window rather than focusing a dying portable copy and exiting.
+      break;
+    }
     HWND existing = ::FindWindowW(Win32Window::kWindowClassName, nullptr);
     if (existing != nullptr) {
       if (::IsIconic(existing)) {
@@ -43,9 +104,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
   flutter::DartProject project(L"data");
-
-  std::vector<std::string> command_line_arguments =
-      GetCommandLineArguments();
 
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 

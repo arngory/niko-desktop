@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
+import '../platform/service_install.dart';
 import '../state/connection_controller.dart';
 import '../state/connections_feed.dart';
 import '../state/log_feed.dart';
@@ -42,6 +43,7 @@ class NikoShell extends StatefulWidget {
     this.daemonAddress = '',
     this.configName = '',
     this.now = DateTime.now,
+    this.serviceInstall,
   });
 
   final ConnectionController controller;
@@ -54,6 +56,7 @@ class NikoShell extends StatefulWidget {
   final String daemonAddress;
   final String configName;
   final DateTime Function() now;
+  final ServiceController? serviceInstall;
 
   @override
   State<NikoShell> createState() => _NikoShellState();
@@ -242,6 +245,7 @@ class _NikoShellState extends State<NikoShell> {
                   now: widget.now,
                   mode: _mode(),
                   onMode: _setMode,
+                  serviceInstall: widget.serviceInstall,
                 ),
               ),
               AppSection.check => ListenableBuilder(

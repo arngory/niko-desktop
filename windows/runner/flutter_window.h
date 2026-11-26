@@ -31,9 +31,19 @@ class FlutterWindow : public Win32Window {
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
 
-  // Channel for window-level requests from Dart (such as dark titlebar mode).
+  // Channel for window-level requests from Dart (such as dark titlebar mode
+  // and elevated service installation).
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       window_channel_;
+
+  // Registered Win32 message posted from the waiter thread when elevated
+  // `niko-daemon.exe service install` finishes.
+  UINT install_complete_message_ = 0;
+
+  // Pending MethodResult for an in-flight UAC service install; completed on the
+  // UI thread when install_complete_message_ arrives.
+  std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+      pending_install_result_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

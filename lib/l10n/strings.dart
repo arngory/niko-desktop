@@ -23,6 +23,34 @@ class NikoStrings {
 
   String get errorTitle => _ru ? 'Ошибка подключения' : 'Connection error';
   String get noServiceTitle => _ru ? 'Служба не установлена' : 'The service is not installed';
+  String get noServiceInstallText => _ru
+      ? 'Установите службу Niko в Program Files (потребуются права администратора)'
+      : 'Install the Niko service into Program Files (administrator privileges required)';
+  String get installService => _ru ? 'Установить службу' : 'Install service';
+  String get installingService => _ru ? 'Установка…' : 'Installing…';
+  String get portableInstalledTitle =>
+      _ru ? 'Служба Niko уже установлена' : 'The Niko service is already installed';
+  String get portableInstalledText => _ru
+      ? 'Запущена переносная копия. Откройте установленный Niko из Program Files или обновите службу'
+      : 'Running from a portable folder. Open the installed Niko from Program Files or update the service';
+  String get openInstalled => _ru ? 'Открыть установленный Niko' : 'Open installed Niko';
+  String get updateService => _ru ? 'Обновить службу' : 'Update service';
+  String get installCancelled => _ru ? 'Установка отменена пользователем' : 'Installation cancelled';
+  String get installNotElevated => _ru ? 'Нужны права администратора' : 'Administrator privileges are required';
+  String get installInvalidLayout =>
+      _ru ? 'Неверная структура папки: отсутствует resources\\daemon\\niko-daemon.exe' : 'Invalid folder layout: missing resources\\daemon\\niko-daemon.exe';
+  String get installSignatureFailed =>
+      _ru ? 'Подпись исполняемых файлов не прошла проверку' : 'Executable signature verification failed';
+  String get installManifestFailed =>
+      _ru ? 'Целостность файлов установки нарушена' : 'Installation file integrity check failed';
+  String get installTargetBusy =>
+      _ru ? 'Закройте работающий Niko и повторите установку' : 'Close the running Niko window and retry';
+  String get installInvalidSource =>
+      _ru ? 'Небезопасная исходная папка установки' : 'Unsafe source installation folder';
+  String get installLaunchFailed => _ru
+      ? 'Служба установлена, но не удалось открыть установленный Niko'
+      : 'Service installed, but failed to open the installed Niko';
+  String get installFailed => _ru ? 'Не удалось установить службу' : 'Failed to install the service';
   String get serviceSilentTitle => _ru ? 'Служба не отвечает' : 'The service does not answer';
   String get noConfigTitle => _ru ? 'Нет конфига' : 'No config';
   String get oldServiceTitle => _ru ? 'Служба Niko старее окна' : 'The Niko service is older than the window';

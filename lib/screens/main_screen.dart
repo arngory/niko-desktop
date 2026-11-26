@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
+import '../platform/service_install.dart';
 import '../state/connection_controller.dart';
 import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
@@ -30,9 +31,13 @@ class MainScreen extends StatefulWidget {
     this.mode,
     this.onMode,
     this.node,
+    this.serviceInstall,
   });
 
   final ConnectionController controller;
+
+  /// Windows release service installer controller when running without an installed service link.
+  final ServiceController? serviceInstall;
 
   /// The raycontrol node of the selected profile, for its term, traffic and last update (D-MAIN-13); null for none.
   final NodeRow? node;
@@ -60,6 +65,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     widget.controller.addListener(_changed);
+    widget.serviceInstall?.addListener(_changed);
     _syncClock();
   }
 
@@ -70,11 +76,16 @@ class _MainScreenState extends State<MainScreen> {
       oldWidget.controller.removeListener(_changed);
       widget.controller.addListener(_changed);
     }
+    if (oldWidget.serviceInstall != widget.serviceInstall) {
+      oldWidget.serviceInstall?.removeListener(_changed);
+      widget.serviceInstall?.addListener(_changed);
+    }
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_changed);
+    widget.serviceInstall?.removeListener(_changed);
     _clock?.cancel();
     super.dispose();
   }
@@ -186,7 +197,7 @@ class _MainScreenState extends State<MainScreen> {
                 ],
                 if (state.link == LinkPhase.none) ...[
                   const SizedBox(height: NikoSpace.s6),
-                  NikoBanner(icon: NikoIcons.alert, title: strings.noServiceTitle),
+                  ..._buildNoServiceBanner(strings),
                 ],
                 if (state.link == LinkPhase.lost) ...[
                   const SizedBox(height: NikoSpace.s6),
@@ -234,5 +245,65 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildNoServiceBanner(NikoStrings strings) {
+    final installer = widget.serviceInstall;
+    if (installer == null) {
+      return [NikoBanner(icon: NikoIcons.alert, title: strings.noServiceTitle)];
+    }
+    final outcomeText = _installOutcomeMessage(installer, strings);
+    final isDanger = installer.lastOutcome != null &&
+        installer.lastOutcome != InstallOutcome.ok &&
+        installer.lastOutcome != InstallOutcome.cancelled;
+    if (installer.mode == InstallMode.portableServiceReady) {
+      return [
+        NikoBanner(
+          icon: NikoIcons.alert,
+          title: strings.portableInstalledTitle,
+          text: outcomeText.isNotEmpty ? outcomeText : strings.portableInstalledText,
+          danger: isDanger,
+          action: installer.installing ? strings.installingService : strings.openInstalled,
+          onAction: installer.installing ? null : () => unawaited(installer.openInstalled()),
+        ),
+        const SizedBox(height: NikoSpace.s3),
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: NikoTonalButton(
+            label: installer.installing ? strings.installingService : strings.updateService,
+            onPressed: installer.installing ? null : () => unawaited(installer.installService()),
+          ),
+        ),
+      ];
+    }
+    return [
+      NikoBanner(
+        icon: NikoIcons.alert,
+        title: strings.noServiceTitle,
+        text: outcomeText.isNotEmpty ? outcomeText : strings.noServiceInstallText,
+        danger: isDanger,
+        action: installer.installing ? strings.installingService : strings.installService,
+        onAction: installer.installing ? null : () => unawaited(installer.installService()),
+      ),
+    ];
+  }
+
+  String _installOutcomeMessage(ServiceController installer, NikoStrings strings) {
+    final outcome = installer.lastOutcome;
+    if (outcome == null || outcome == InstallOutcome.ok) return '';
+    return switch (outcome) {
+      InstallOutcome.ok => '',
+      InstallOutcome.cancelled => strings.installCancelled,
+      InstallOutcome.notElevated => strings.installNotElevated,
+      InstallOutcome.invalidLayout => strings.installInvalidLayout,
+      InstallOutcome.signatureFailed => strings.installSignatureFailed,
+      InstallOutcome.manifestFailed => strings.installManifestFailed,
+      InstallOutcome.targetBusy => strings.installTargetBusy,
+      InstallOutcome.invalidSource => strings.installInvalidSource,
+      InstallOutcome.installedButLaunchFailed =>
+        installer.lastError.isNotEmpty ? '${strings.installLaunchFailed}: ${installer.lastError}' : strings.installLaunchFailed,
+      InstallOutcome.failed =>
+        installer.lastError.isNotEmpty ? '${strings.installFailed}: ${installer.lastError}' : strings.installFailed,
+    };
   }
 }
