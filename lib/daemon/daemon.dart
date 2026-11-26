@@ -520,6 +520,14 @@ class NodeRow {
     this.clockSkew = 0,
     this.updating = false,
     this.unreadable = false,
+    this.admin = false,
+    this.hasProbe = false,
+    this.hasLan = false,
+    this.lanShow = false,
+    this.relays = 0,
+    this.switchedFrom = '',
+    this.switchedTo = '',
+    this.switchedAt = 0,
   });
 
   final String id;
@@ -558,6 +566,89 @@ class NodeRow {
 
   /// Its keys were sealed elsewhere: to be imported again.
   final bool unreadable;
+
+  /// Phase P6 dynamic capabilities and watchdog failover notice (D-STATE-SWITCHED).
+  final bool admin;
+  final bool hasProbe;
+  final bool hasLan;
+  final bool lanShow;
+  final int relays;
+  final String switchedFrom;
+  final String switchedTo;
+  final int switchedAt;
+}
+
+/// One profile result from a diagnostic node test run (D-WHY).
+class NodeTestProfile {
+  const NodeTestProfile({
+    required this.key,
+    required this.name,
+    this.type = '',
+    this.carrier = 'tcp',
+    this.relay = '',
+    this.works = false,
+    this.kbps = 0,
+    this.firstByteMs = 0,
+    this.cause = '',
+    this.error = '',
+    this.stalledAtKb = -1,
+    this.udpOk,
+    this.udpLossPct = 0,
+  });
+
+  final String key;
+  final String name;
+  final String type;
+  final String carrier;
+  final String relay;
+  final bool works;
+  final int kbps;
+  final int firstByteMs;
+  final String cause;
+  final String error;
+  final int stalledAtKb;
+  final bool? udpOk;
+  final double udpLossPct;
+}
+
+/// Network or node-level diagnostic finding note (D-WHY).
+class NodeTestNote {
+  const NodeTestNote({required this.note, this.number = 0, this.detail = ''});
+
+  final String note;
+  final int number;
+  final String detail;
+}
+
+/// Structured findings of a diagnostic node test run (D-WHY).
+class NodeTestFindings {
+  const NodeTestFindings({this.profiles = const [], this.notes = const []});
+
+  final List<NodeTestProfile> profiles;
+  final List<NodeTestNote> notes;
+}
+
+/// Streamed event from NikoService.RunNodeTest (D-WHY).
+class NodeTestEvent {
+  const NodeTestEvent({
+    required this.runId,
+    required this.step,
+    this.line = '',
+    this.done = false,
+    this.error = '',
+    this.findings,
+    this.reportName = '',
+    this.reportText = '',
+  });
+
+  final String runId;
+  final String step;
+  final String line;
+  final bool done;
+  final String error;
+  final NodeTestFindings? findings;
+  final String reportName;
+  final String reportText;
 }
 
 /// A node's traffic: used of the limit, since and until the reset (unix seconds, 0: none); used up, or near it.
@@ -967,6 +1058,18 @@ abstract interface class Daemon {
     String url = '',
     int timeoutMs = 0,
   });
+
+  /// Streams a diagnostic test run ("Why isn't it working", D-WHY) against a raycontrol node.
+  Stream<NodeTestEvent> runNodeTest(String nodeId, {String runId = ''});
+
+  /// Proxies an allowlisted admin API call to a raycontrol node (D-ADMIN).
+  Future<String> nodeAdminCall(String nodeId, String method, {String bodyJson = '{}'});
+
+  /// Dismisses the D-STATE-SWITCHED notice banner on a node.
+  Future<void> clearNodeSwitched(String nodeId);
+
+  /// Toggles lan-v1 visibility for this device on a raycontrol node.
+  Future<void> setNodeLan(String nodeId, bool show);
 
   Future<void> close();
 }
@@ -1526,6 +1629,14 @@ class GrpcDaemon implements Daemon {
           clockSkew: n.clockSkew.toInt(),
           updating: n.updating,
           unreadable: n.unreadable,
+          admin: n.admin,
+          hasProbe: n.hasProbe,
+          hasLan: n.hasLan,
+          lanShow: n.lanShow,
+          relays: n.relays,
+          switchedFrom: n.switchedFrom,
+          switchedTo: n.switchedTo,
+          switchedAt: n.switchedAt.toInt(),
         ),
       ),
     );
@@ -1800,6 +1911,68 @@ class GrpcDaemon implements Daemon {
             options: CallOptions(timeout: const Duration(minutes: 5)),
           )
           .map((r) => ProfileTestEntry(profileId: r.profileId.toInt(), latencyMs: r.latencyMs, error: r.error));
+
+  @override
+  Stream<NodeTestEvent> runNodeTest(String nodeId, {String runId = ''}) => _niko
+      .runNodeTest(
+        niko.NodeTestRequest(nodeId: nodeId, runId: runId),
+        options: CallOptions(timeout: const Duration(minutes: 5)),
+      )
+      .map(
+        (ev) => NodeTestEvent(
+          runId: ev.runId,
+          step: ev.step,
+          line: ev.line,
+          done: ev.done,
+          error: ev.error,
+          reportName: ev.reportName,
+          reportText: ev.reportText,
+          findings: !ev.hasFindings()
+              ? null
+              : NodeTestFindings(
+                  profiles: List.unmodifiable(
+                    ev.findings.profiles.map(
+                      (p) => NodeTestProfile(
+                        key: p.key,
+                        name: p.name,
+                        type: p.type,
+                        carrier: p.carrier,
+                        relay: p.relay,
+                        works: p.works,
+                        kbps: p.kbps.toInt(),
+                        firstByteMs: p.firstByteMs.toInt(),
+                        cause: p.cause,
+                        error: p.error,
+                        stalledAtKb: p.stalledAtKb.toInt(),
+                        udpOk: p.hasUdpOk() ? p.udpOk : null,
+                        udpLossPct: p.udpLossPct,
+                      ),
+                    ),
+                  ),
+                  notes: List.unmodifiable(
+                    ev.findings.notes.map(
+                      (n) => NodeTestNote(note: n.note, number: n.number.toInt(), detail: n.detail),
+                    ),
+                  ),
+                ),
+        ),
+      );
+
+  @override
+  Future<String> nodeAdminCall(String nodeId, String method, {String bodyJson = '{}'}) async {
+    final res = await _niko.nodeAdminCall(
+      niko.NodeAdminRequest(nodeId: nodeId, method: method, bodyJson: bodyJson),
+      options: CallOptions(timeout: const Duration(seconds: 35)),
+    );
+    return res.bodyJson;
+  }
+
+  @override
+  Future<void> clearNodeSwitched(String nodeId) => _niko.clearNodeSwitched(niko.NodeId(id: nodeId), options: _short);
+
+  @override
+  Future<void> setNodeLan(String nodeId, bool show) =>
+      _niko.setNodeLan(niko.SetNodeLanRequest(nodeId: nodeId, show: show), options: _short);
 
   @override
   Future<void> close() async {

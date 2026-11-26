@@ -2636,6 +2636,9 @@ class Settings extends $pb.GeneratedMessage {
     $core.int? dpiDirect,
     $core.String? dpiDirectPreset,
     $core.String? dpiDirectCustom,
+    $core.bool? raycontrolAutoSwitch,
+    $core.bool? raycontrolBrutal,
+    $core.bool? raycontrolReports,
   }) {
     final result = Settings._();
     if (serviceMode != null) result.serviceMode = serviceMode;
@@ -2676,6 +2679,10 @@ class Settings extends $pb.GeneratedMessage {
     if (dpiDirect != null) result.dpiDirect = dpiDirect;
     if (dpiDirectPreset != null) result.dpiDirectPreset = dpiDirectPreset;
     if (dpiDirectCustom != null) result.dpiDirectCustom = dpiDirectCustom;
+    if (raycontrolAutoSwitch != null)
+      result.raycontrolAutoSwitch = raycontrolAutoSwitch;
+    if (raycontrolBrutal != null) result.raycontrolBrutal = raycontrolBrutal;
+    if (raycontrolReports != null) result.raycontrolReports = raycontrolReports;
     return result;
   }
 
@@ -2722,6 +2729,9 @@ class Settings extends $pb.GeneratedMessage {
     ..aI(28, _omitFieldNames ? '' : 'dpiDirect')
     ..aOS(29, _omitFieldNames ? '' : 'dpiDirectPreset')
     ..aOS(30, _omitFieldNames ? '' : 'dpiDirectCustom')
+    ..aOB(31, _omitFieldNames ? '' : 'raycontrolAutoSwitch')
+    ..aOB(32, _omitFieldNames ? '' : 'raycontrolBrutal')
+    ..aOB(33, _omitFieldNames ? '' : 'raycontrolReports')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3043,6 +3053,35 @@ class Settings extends $pb.GeneratedMessage {
   $core.bool hasDpiDirectCustom() => $_has(29);
   @$pb.TagNumber(30)
   void clearDpiDirectCustom() => $_clearField(30);
+
+  /// Phase P6 raycontrol dynamic settings: automatic failover on failure, measured Brutal for Hysteria2,
+  /// and opt-in anonymous daily network summaries to the node.
+  @$pb.TagNumber(31)
+  $core.bool get raycontrolAutoSwitch => $_getBF(30);
+  @$pb.TagNumber(31)
+  set raycontrolAutoSwitch($core.bool value) => $_setBool(30, value);
+  @$pb.TagNumber(31)
+  $core.bool hasRaycontrolAutoSwitch() => $_has(30);
+  @$pb.TagNumber(31)
+  void clearRaycontrolAutoSwitch() => $_clearField(31);
+
+  @$pb.TagNumber(32)
+  $core.bool get raycontrolBrutal => $_getBF(31);
+  @$pb.TagNumber(32)
+  set raycontrolBrutal($core.bool value) => $_setBool(31, value);
+  @$pb.TagNumber(32)
+  $core.bool hasRaycontrolBrutal() => $_has(31);
+  @$pb.TagNumber(32)
+  void clearRaycontrolBrutal() => $_clearField(32);
+
+  @$pb.TagNumber(33)
+  $core.bool get raycontrolReports => $_getBF(32);
+  @$pb.TagNumber(33)
+  set raycontrolReports($core.bool value) => $_setBool(32, value);
+  @$pb.TagNumber(33)
+  $core.bool hasRaycontrolReports() => $_has(32);
+  @$pb.TagNumber(33)
+  void clearRaycontrolReports() => $_clearField(33);
 }
 
 class SettingsUpdate extends $pb.GeneratedMessage {
@@ -3683,6 +3722,13 @@ class Node extends $pb.GeneratedMessage {
     $fixnum.Int64? clockSkew,
     $core.bool? updating,
     $core.bool? unreadable,
+    $core.bool? hasProbe,
+    $core.bool? hasLan,
+    $core.bool? lanShow,
+    $core.int? relays,
+    $core.String? switchedFrom,
+    $core.String? switchedTo,
+    $fixnum.Int64? switchedAt,
   }) {
     final result = Node._();
     if (id != null) result.id = id;
@@ -3706,6 +3752,13 @@ class Node extends $pb.GeneratedMessage {
     if (clockSkew != null) result.clockSkew = clockSkew;
     if (updating != null) result.updating = updating;
     if (unreadable != null) result.unreadable = unreadable;
+    if (hasProbe != null) result.hasProbe = hasProbe;
+    if (hasLan != null) result.hasLan = hasLan;
+    if (lanShow != null) result.lanShow = lanShow;
+    if (relays != null) result.relays = relays;
+    if (switchedFrom != null) result.switchedFrom = switchedFrom;
+    if (switchedTo != null) result.switchedTo = switchedTo;
+    if (switchedAt != null) result.switchedAt = switchedAt;
     return result;
   }
 
@@ -3744,6 +3797,13 @@ class Node extends $pb.GeneratedMessage {
     ..aInt64(19, _omitFieldNames ? '' : 'clockSkew')
     ..aOB(20, _omitFieldNames ? '' : 'updating')
     ..aOB(21, _omitFieldNames ? '' : 'unreadable')
+    ..aOB(22, _omitFieldNames ? '' : 'hasProbe')
+    ..aOB(23, _omitFieldNames ? '' : 'hasLan')
+    ..aOB(24, _omitFieldNames ? '' : 'lanShow')
+    ..aI(25, _omitFieldNames ? '' : 'relays')
+    ..aOS(26, _omitFieldNames ? '' : 'switchedFrom')
+    ..aOS(27, _omitFieldNames ? '' : 'switchedTo')
+    ..aInt64(28, _omitFieldNames ? '' : 'switchedAt')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3972,6 +4032,70 @@ class Node extends $pb.GeneratedMessage {
   $core.bool hasUnreadable() => $_has(20);
   @$pb.TagNumber(21)
   void clearUnreadable() => $_clearField(21);
+
+  /// Phase P6 dynamic capabilities and watchdog switch notice (D-STATE-SWITCHED).
+  @$pb.TagNumber(22)
+  $core.bool get hasProbe => $_getBF(21);
+  @$pb.TagNumber(22)
+  set hasProbe($core.bool value) => $_setBool(21, value);
+  @$pb.TagNumber(22)
+  $core.bool hasHasProbe() => $_has(21);
+  @$pb.TagNumber(22)
+  void clearHasProbe() => $_clearField(22);
+
+  @$pb.TagNumber(23)
+  $core.bool get hasLan => $_getBF(22);
+  @$pb.TagNumber(23)
+  set hasLan($core.bool value) => $_setBool(22, value);
+  @$pb.TagNumber(23)
+  $core.bool hasHasLan() => $_has(22);
+  @$pb.TagNumber(23)
+  void clearHasLan() => $_clearField(23);
+
+  @$pb.TagNumber(24)
+  $core.bool get lanShow => $_getBF(23);
+  @$pb.TagNumber(24)
+  set lanShow($core.bool value) => $_setBool(23, value);
+  @$pb.TagNumber(24)
+  $core.bool hasLanShow() => $_has(23);
+  @$pb.TagNumber(24)
+  void clearLanShow() => $_clearField(24);
+
+  @$pb.TagNumber(25)
+  $core.int get relays => $_getIZ(24);
+  @$pb.TagNumber(25)
+  set relays($core.int value) => $_setSignedInt32(24, value);
+  @$pb.TagNumber(25)
+  $core.bool hasRelays() => $_has(24);
+  @$pb.TagNumber(25)
+  void clearRelays() => $_clearField(25);
+
+  @$pb.TagNumber(26)
+  $core.String get switchedFrom => $_getSZ(25);
+  @$pb.TagNumber(26)
+  set switchedFrom($core.String value) => $_setString(25, value);
+  @$pb.TagNumber(26)
+  $core.bool hasSwitchedFrom() => $_has(25);
+  @$pb.TagNumber(26)
+  void clearSwitchedFrom() => $_clearField(26);
+
+  @$pb.TagNumber(27)
+  $core.String get switchedTo => $_getSZ(26);
+  @$pb.TagNumber(27)
+  set switchedTo($core.String value) => $_setString(26, value);
+  @$pb.TagNumber(27)
+  $core.bool hasSwitchedTo() => $_has(26);
+  @$pb.TagNumber(27)
+  void clearSwitchedTo() => $_clearField(27);
+
+  @$pb.TagNumber(28)
+  $fixnum.Int64 get switchedAt => $_getI64(27);
+  @$pb.TagNumber(28)
+  set switchedAt($fixnum.Int64 value) => $_setInt64(27, value);
+  @$pb.TagNumber(28)
+  $core.bool hasSwitchedAt() => $_has(27);
+  @$pb.TagNumber(28)
+  void clearSwitchedAt() => $_clearField(28);
 }
 
 class NodeTraffic extends $pb.GeneratedMessage {
@@ -5029,6 +5153,770 @@ class RuleSetRequest extends $pb.GeneratedMessage {
   $core.bool hasForce() => $_has(1);
   @$pb.TagNumber(2)
   void clearForce() => $_clearField(2);
+}
+
+class NodeTestRequest extends $pb.GeneratedMessage {
+  factory NodeTestRequest({
+    $core.String? nodeId,
+    $core.String? runId,
+  }) {
+    final result = NodeTestRequest._();
+    if (nodeId != null) result.nodeId = nodeId;
+    if (runId != null) result.runId = runId;
+    return result;
+  }
+
+  NodeTestRequest._();
+
+  factory NodeTestRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestRequest()..mergeFromBuffer(data, registry);
+  factory NodeTestRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestRequest()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeTestRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: NodeTestRequest.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(2, _omitFieldNames ? '' : 'runId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestRequest copyWith(void Function(NodeTestRequest) updates) =>
+      super.copyWith((message) => updates(message as NodeTestRequest))
+          as NodeTestRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use NodeTestRequest() / NodeTestRequest.new instead')
+  static NodeTestRequest create() => NodeTestRequest._();
+  static $pb.GeneratedMessage $_createMessage() => NodeTestRequest._();
+  @$core.override
+  NodeTestRequest createEmptyInstance() => NodeTestRequest._();
+  @$core.pragma('dart2js:noInline')
+  static NodeTestRequest getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<NodeTestRequest>(
+          NodeTestRequest.$_createMessage);
+  static NodeTestRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get nodeId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set nodeId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNodeId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNodeId() => $_clearField(1);
+
+  /// Optional run id (r-YYYYMMDD-HHMM by default); letters, digits, '.', '-', '_' only (1..64 chars).
+  @$pb.TagNumber(2)
+  $core.String get runId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set runId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasRunId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearRunId() => $_clearField(2);
+}
+
+class NodeTestProfile extends $pb.GeneratedMessage {
+  factory NodeTestProfile({
+    $core.String? key,
+    $core.String? name,
+    $core.String? type,
+    $core.String? carrier,
+    $core.String? relay,
+    $core.bool? works,
+    $fixnum.Int64? kbps,
+    $fixnum.Int64? firstByteMs,
+    $core.String? cause,
+    $core.String? error,
+    $fixnum.Int64? stalledAtKb,
+    $core.bool? udpOk,
+    $core.double? udpLossPct,
+  }) {
+    final result = NodeTestProfile._();
+    if (key != null) result.key = key;
+    if (name != null) result.name = name;
+    if (type != null) result.type = type;
+    if (carrier != null) result.carrier = carrier;
+    if (relay != null) result.relay = relay;
+    if (works != null) result.works = works;
+    if (kbps != null) result.kbps = kbps;
+    if (firstByteMs != null) result.firstByteMs = firstByteMs;
+    if (cause != null) result.cause = cause;
+    if (error != null) result.error = error;
+    if (stalledAtKb != null) result.stalledAtKb = stalledAtKb;
+    if (udpOk != null) result.udpOk = udpOk;
+    if (udpLossPct != null) result.udpLossPct = udpLossPct;
+    return result;
+  }
+
+  NodeTestProfile._();
+
+  factory NodeTestProfile.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestProfile()..mergeFromBuffer(data, registry);
+  factory NodeTestProfile.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestProfile()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeTestProfile',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: NodeTestProfile.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'key')
+    ..aOS(2, _omitFieldNames ? '' : 'name')
+    ..aOS(3, _omitFieldNames ? '' : 'type')
+    ..aOS(4, _omitFieldNames ? '' : 'carrier')
+    ..aOS(5, _omitFieldNames ? '' : 'relay')
+    ..aOB(6, _omitFieldNames ? '' : 'works')
+    ..aInt64(7, _omitFieldNames ? '' : 'kbps')
+    ..aInt64(8, _omitFieldNames ? '' : 'firstByteMs')
+    ..aOS(9, _omitFieldNames ? '' : 'cause')
+    ..aOS(10, _omitFieldNames ? '' : 'error')
+    ..aInt64(11, _omitFieldNames ? '' : 'stalledAtKb')
+    ..aOB(12, _omitFieldNames ? '' : 'udpOk')
+    ..aD(13, _omitFieldNames ? '' : 'udpLossPct')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestProfile clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestProfile copyWith(void Function(NodeTestProfile) updates) =>
+      super.copyWith((message) => updates(message as NodeTestProfile))
+          as NodeTestProfile;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use NodeTestProfile() / NodeTestProfile.new instead')
+  static NodeTestProfile create() => NodeTestProfile._();
+  static $pb.GeneratedMessage $_createMessage() => NodeTestProfile._();
+  @$core.override
+  NodeTestProfile createEmptyInstance() => NodeTestProfile._();
+  @$core.pragma('dart2js:noInline')
+  static NodeTestProfile getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<NodeTestProfile>(
+          NodeTestProfile.$_createMessage);
+  static NodeTestProfile? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get key => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set key($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasKey() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearKey() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get name => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set name($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearName() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get type => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set type($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasType() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearType() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get carrier => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set carrier($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasCarrier() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearCarrier() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get relay => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set relay($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasRelay() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearRelay() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.bool get works => $_getBF(5);
+  @$pb.TagNumber(6)
+  set works($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasWorks() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearWorks() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get kbps => $_getI64(6);
+  @$pb.TagNumber(7)
+  set kbps($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasKbps() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearKbps() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $fixnum.Int64 get firstByteMs => $_getI64(7);
+  @$pb.TagNumber(8)
+  set firstByteMs($fixnum.Int64 value) => $_setInt64(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasFirstByteMs() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearFirstByteMs() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.String get cause => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set cause($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasCause() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearCause() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.String get error => $_getSZ(9);
+  @$pb.TagNumber(10)
+  set error($core.String value) => $_setString(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasError() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearError() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $fixnum.Int64 get stalledAtKb => $_getI64(10);
+  @$pb.TagNumber(11)
+  set stalledAtKb($fixnum.Int64 value) => $_setInt64(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasStalledAtKb() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearStalledAtKb() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.bool get udpOk => $_getBF(11);
+  @$pb.TagNumber(12)
+  set udpOk($core.bool value) => $_setBool(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasUdpOk() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearUdpOk() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $core.double get udpLossPct => $_getN(12);
+  @$pb.TagNumber(13)
+  set udpLossPct($core.double value) => $_setDouble(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasUdpLossPct() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearUdpLossPct() => $_clearField(13);
+}
+
+class NodeTestNote extends $pb.GeneratedMessage {
+  factory NodeTestNote({
+    $core.String? note,
+    $fixnum.Int64? number,
+    $core.String? detail,
+  }) {
+    final result = NodeTestNote._();
+    if (note != null) result.note = note;
+    if (number != null) result.number = number;
+    if (detail != null) result.detail = detail;
+    return result;
+  }
+
+  NodeTestNote._();
+
+  factory NodeTestNote.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestNote()..mergeFromBuffer(data, registry);
+  factory NodeTestNote.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestNote()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeTestNote',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: NodeTestNote.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'note')
+    ..aInt64(2, _omitFieldNames ? '' : 'number')
+    ..aOS(3, _omitFieldNames ? '' : 'detail')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestNote clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestNote copyWith(void Function(NodeTestNote) updates) =>
+      super.copyWith((message) => updates(message as NodeTestNote))
+          as NodeTestNote;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use NodeTestNote() / NodeTestNote.new instead')
+  static NodeTestNote create() => NodeTestNote._();
+  static $pb.GeneratedMessage $_createMessage() => NodeTestNote._();
+  @$core.override
+  NodeTestNote createEmptyInstance() => NodeTestNote._();
+  @$core.pragma('dart2js:noInline')
+  static NodeTestNote getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<NodeTestNote>(
+          NodeTestNote.$_createMessage);
+  static NodeTestNote? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get note => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set note($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNote() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNote() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get number => $_getI64(1);
+  @$pb.TagNumber(2)
+  set number($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNumber() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNumber() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get detail => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set detail($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDetail() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDetail() => $_clearField(3);
+}
+
+class NodeTestFindings extends $pb.GeneratedMessage {
+  factory NodeTestFindings({
+    $core.Iterable<NodeTestProfile>? profiles,
+    $core.Iterable<NodeTestNote>? notes,
+  }) {
+    final result = NodeTestFindings._();
+    if (profiles != null) result.profiles.addAll(profiles);
+    if (notes != null) result.notes.addAll(notes);
+    return result;
+  }
+
+  NodeTestFindings._();
+
+  factory NodeTestFindings.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestFindings()..mergeFromBuffer(data, registry);
+  factory NodeTestFindings.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestFindings()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeTestFindings',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: NodeTestFindings.$_createMessage)
+    ..pPM<NodeTestProfile>(1, _omitFieldNames ? '' : 'profiles',
+        subBuilder: NodeTestProfile.$_createMessage)
+    ..pPM<NodeTestNote>(2, _omitFieldNames ? '' : 'notes',
+        subBuilder: NodeTestNote.$_createMessage)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestFindings clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestFindings copyWith(void Function(NodeTestFindings) updates) =>
+      super.copyWith((message) => updates(message as NodeTestFindings))
+          as NodeTestFindings;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use NodeTestFindings() / NodeTestFindings.new instead')
+  static NodeTestFindings create() => NodeTestFindings._();
+  static $pb.GeneratedMessage $_createMessage() => NodeTestFindings._();
+  @$core.override
+  NodeTestFindings createEmptyInstance() => NodeTestFindings._();
+  @$core.pragma('dart2js:noInline')
+  static NodeTestFindings getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<NodeTestFindings>(
+          NodeTestFindings.$_createMessage);
+  static NodeTestFindings? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<NodeTestProfile> get profiles => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $pb.PbList<NodeTestNote> get notes => $_getList(1);
+}
+
+class NodeTestEvent extends $pb.GeneratedMessage {
+  factory NodeTestEvent({
+    $core.String? runId,
+    $core.String? step,
+    $core.String? line,
+    $core.bool? done,
+    $core.String? error,
+    NodeTestFindings? findings,
+    $core.String? reportName,
+    $core.String? reportText,
+  }) {
+    final result = NodeTestEvent._();
+    if (runId != null) result.runId = runId;
+    if (step != null) result.step = step;
+    if (line != null) result.line = line;
+    if (done != null) result.done = done;
+    if (error != null) result.error = error;
+    if (findings != null) result.findings = findings;
+    if (reportName != null) result.reportName = reportName;
+    if (reportText != null) result.reportText = reportText;
+    return result;
+  }
+
+  NodeTestEvent._();
+
+  factory NodeTestEvent.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestEvent()..mergeFromBuffer(data, registry);
+  factory NodeTestEvent.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeTestEvent()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeTestEvent',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: NodeTestEvent.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'runId')
+    ..aOS(2, _omitFieldNames ? '' : 'step')
+    ..aOS(3, _omitFieldNames ? '' : 'line')
+    ..aOB(4, _omitFieldNames ? '' : 'done')
+    ..aOS(5, _omitFieldNames ? '' : 'error')
+    ..aOM<NodeTestFindings>(6, _omitFieldNames ? '' : 'findings',
+        subBuilder: NodeTestFindings.$_createMessage)
+    ..aOS(7, _omitFieldNames ? '' : 'reportName')
+    ..aOS(8, _omitFieldNames ? '' : 'reportText')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestEvent clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeTestEvent copyWith(void Function(NodeTestEvent) updates) =>
+      super.copyWith((message) => updates(message as NodeTestEvent))
+          as NodeTestEvent;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use NodeTestEvent() / NodeTestEvent.new instead')
+  static NodeTestEvent create() => NodeTestEvent._();
+  static $pb.GeneratedMessage $_createMessage() => NodeTestEvent._();
+  @$core.override
+  NodeTestEvent createEmptyInstance() => NodeTestEvent._();
+  @$core.pragma('dart2js:noInline')
+  static NodeTestEvent getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<NodeTestEvent>(
+          NodeTestEvent.$_createMessage);
+  static NodeTestEvent? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get runId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set runId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasRunId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearRunId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get step => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set step($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasStep() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearStep() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get line => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set line($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasLine() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearLine() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get done => $_getBF(3);
+  @$pb.TagNumber(4)
+  set done($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDone() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDone() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get error => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set error($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasError() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearError() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  NodeTestFindings get findings => $_getN(5);
+  @$pb.TagNumber(6)
+  set findings(NodeTestFindings value) => $_setField(6, value);
+  @$pb.TagNumber(6)
+  $core.bool hasFindings() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearFindings() => $_clearField(6);
+  @$pb.TagNumber(6)
+  NodeTestFindings ensureFindings() => $_ensure(5);
+
+  @$pb.TagNumber(7)
+  $core.String get reportName => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set reportName($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasReportName() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearReportName() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get reportText => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set reportText($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasReportText() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearReportText() => $_clearField(8);
+}
+
+class NodeAdminRequest extends $pb.GeneratedMessage {
+  factory NodeAdminRequest({
+    $core.String? nodeId,
+    $core.String? method,
+    $core.String? bodyJson,
+  }) {
+    final result = NodeAdminRequest._();
+    if (nodeId != null) result.nodeId = nodeId;
+    if (method != null) result.method = method;
+    if (bodyJson != null) result.bodyJson = bodyJson;
+    return result;
+  }
+
+  NodeAdminRequest._();
+
+  factory NodeAdminRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeAdminRequest()..mergeFromBuffer(data, registry);
+  factory NodeAdminRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeAdminRequest()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeAdminRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: NodeAdminRequest.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(2, _omitFieldNames ? '' : 'method')
+    ..aOS(3, _omitFieldNames ? '' : 'bodyJson')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeAdminRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeAdminRequest copyWith(void Function(NodeAdminRequest) updates) =>
+      super.copyWith((message) => updates(message as NodeAdminRequest))
+          as NodeAdminRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use NodeAdminRequest() / NodeAdminRequest.new instead')
+  static NodeAdminRequest create() => NodeAdminRequest._();
+  static $pb.GeneratedMessage $_createMessage() => NodeAdminRequest._();
+  @$core.override
+  NodeAdminRequest createEmptyInstance() => NodeAdminRequest._();
+  @$core.pragma('dart2js:noInline')
+  static NodeAdminRequest getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<NodeAdminRequest>(
+          NodeAdminRequest.$_createMessage);
+  static NodeAdminRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get nodeId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set nodeId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNodeId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNodeId() => $_clearField(1);
+
+  /// Method name on raycontrol.node.v1.NodeService (e.g. "GetStatus", "ListUsers") or "DeviceService/GetSelf".
+  @$pb.TagNumber(2)
+  $core.String get method => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set method($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasMethod() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMethod() => $_clearField(2);
+
+  /// Optional JSON request body; defaults to "{}".
+  @$pb.TagNumber(3)
+  $core.String get bodyJson => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set bodyJson($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasBodyJson() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearBodyJson() => $_clearField(3);
+}
+
+class NodeAdminResponse extends $pb.GeneratedMessage {
+  factory NodeAdminResponse({
+    $core.String? bodyJson,
+  }) {
+    final result = NodeAdminResponse._();
+    if (bodyJson != null) result.bodyJson = bodyJson;
+    return result;
+  }
+
+  NodeAdminResponse._();
+
+  factory NodeAdminResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeAdminResponse()..mergeFromBuffer(data, registry);
+  factory NodeAdminResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeAdminResponse()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeAdminResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: NodeAdminResponse.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'bodyJson')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeAdminResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeAdminResponse copyWith(void Function(NodeAdminResponse) updates) =>
+      super.copyWith((message) => updates(message as NodeAdminResponse))
+          as NodeAdminResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use NodeAdminResponse() / NodeAdminResponse.new instead')
+  static NodeAdminResponse create() => NodeAdminResponse._();
+  static $pb.GeneratedMessage $_createMessage() => NodeAdminResponse._();
+  @$core.override
+  NodeAdminResponse createEmptyInstance() => NodeAdminResponse._();
+  @$core.pragma('dart2js:noInline')
+  static NodeAdminResponse getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<NodeAdminResponse>(
+          NodeAdminResponse.$_createMessage);
+  static NodeAdminResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get bodyJson => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set bodyJson($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasBodyJson() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearBodyJson() => $_clearField(1);
+}
+
+class SetNodeLanRequest extends $pb.GeneratedMessage {
+  factory SetNodeLanRequest({
+    $core.String? nodeId,
+    $core.bool? show,
+  }) {
+    final result = SetNodeLanRequest._();
+    if (nodeId != null) result.nodeId = nodeId;
+    if (show != null) result.show = show;
+    return result;
+  }
+
+  SetNodeLanRequest._();
+
+  factory SetNodeLanRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      SetNodeLanRequest()..mergeFromBuffer(data, registry);
+  factory SetNodeLanRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      SetNodeLanRequest()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetNodeLanRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: SetNodeLanRequest.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'nodeId')
+    ..aOB(2, _omitFieldNames ? '' : 'show')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetNodeLanRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetNodeLanRequest copyWith(void Function(SetNodeLanRequest) updates) =>
+      super.copyWith((message) => updates(message as SetNodeLanRequest))
+          as SetNodeLanRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use SetNodeLanRequest() / SetNodeLanRequest.new instead')
+  static SetNodeLanRequest create() => SetNodeLanRequest._();
+  static $pb.GeneratedMessage $_createMessage() => SetNodeLanRequest._();
+  @$core.override
+  SetNodeLanRequest createEmptyInstance() => SetNodeLanRequest._();
+  @$core.pragma('dart2js:noInline')
+  static SetNodeLanRequest getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<SetNodeLanRequest>(
+          SetNodeLanRequest.$_createMessage);
+  static SetNodeLanRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get nodeId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set nodeId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNodeId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNodeId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.bool get show => $_getBF(1);
+  @$pb.TagNumber(2)
+  set show($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasShow() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearShow() => $_clearField(2);
 }
 
 const $core.bool _omitFieldNames =

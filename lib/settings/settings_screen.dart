@@ -320,6 +320,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _choice('ipv6Mode', _s.setIpv6,
               [('0', _s.setIpv6Off), ('1', _s.setIpv6On), ('2', _s.setIpv6Prefer), ('3', _s.setIpv6Only)], cell: 84),
           _switch('globalAllowInsecure', _s.setInsecure, sub: _s.setDangerous),
+          _switch('raycontrolAutoSwitch', _s.setRayAutoSwitch, sub: _s.setRayAutoSwitchSub),
+          _switch('raycontrolBrutal', _s.setRayBrutal, sub: _s.setRayBrutalSub),
+          _switch('raycontrolReports', _s.setRayReports, sub: _s.setRayReportsSub),
         ]),
         _section(_Section.dns, _s.setDns, [
           _value(_s.setRemoteDns, _dnsServers('remoteDns'),

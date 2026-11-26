@@ -296,6 +296,9 @@ class MemoryDaemon implements Daemon {
     'dpiDirect': 'off',
     'dpiDirectPreset': 'auto',
     'dpiDirectCustom': '',
+    'raycontrolAutoSwitch': true,
+    'raycontrolBrutal': false,
+    'raycontrolReports': false,
   };
 
   final profileBeans = <int, String>{};
@@ -618,6 +621,131 @@ class MemoryDaemon implements Daemon {
     for (final id in targets) {
       yield ProfileTestEntry(profileId: id, latencyMs: 30 + id * 10);
     }
+  }
+
+  Stream<NodeTestEvent> Function(String nodeId, String runId)? onRunNodeTest;
+  Future<String> Function(String nodeId, String method, String bodyJson)? onNodeAdminCall;
+  final clearedSwitchedNodes = <String>[];
+  final lanShowToggles = <(String, bool)>[];
+
+  @override
+  Stream<NodeTestEvent> runNodeTest(String nodeId, {String runId = ''}) async* {
+    if (onRunNodeTest != null) {
+      yield* onRunNodeTest!(nodeId, runId);
+      return;
+    }
+    final id = runId.isEmpty ? 'r-test' : runId;
+    yield NodeTestEvent(runId: id, step: 'start', line: '{"step":"start"}');
+    yield NodeTestEvent(
+      runId: id,
+      step: 'findings',
+      line: '{"step":"findings"}',
+      done: true,
+      reportName: 'niko-$id.log',
+      reportText: '# Niko test run $id\nredacted report',
+      findings: const NodeTestFindings(
+        profiles: [
+          NodeTestProfile(key: '1#via-eu', name: 'Hy2', relay: 'eu', works: true, kbps: 42000, firstByteMs: 35),
+          NodeTestProfile(key: '1', name: 'Hy2 Direct', works: false, cause: 'timeout'),
+        ],
+        notes: [NodeTestNote(note: 'relay_only')],
+      ),
+    );
+  }
+
+  @override
+  Future<String> nodeAdminCall(String nodeId, String method, {String bodyJson = '{}'}) async {
+    if (onNodeAdminCall != null) return onNodeAdminCall!(nodeId, method, bodyJson);
+    return switch (method) {
+      'GetStatus' => '{"version":"0.36.0","hostname":"node-1","uptimeSeconds":3600,"warnings":["Check Brutal"]}',
+      'ListUsers' => '{"users":[{"name":"alice","trafficUsed":1048576,"trafficLimit":1073741824}]}',
+      'ListDevices' => '{"devices":[{"id":"dev1","name":"Laptop","role":"user"}]}',
+      'CreateInvite' => '{"invite":"rcinv3:generated-token"}',
+      'ListServices' => '{"services":[{"name":"hy2","kind":"hysteria2","port":443,"enabled":true}]}',
+      'GetAudit' => '{"entries":[{"action":"create_invite","target":"alice","actor":"admin","result":"ok"}]}',
+      _ => '{}',
+    };
+  }
+
+  @override
+  Future<void> clearNodeSwitched(String nodeId) async {
+    clearedSwitchedNodes.add(nodeId);
+    nodeRows = [
+      for (final n in nodeRows)
+        if (n.id == nodeId)
+          NodeRow(
+            id: n.id,
+            host: n.host,
+            name: n.name,
+            note: n.note,
+            groupId: n.groupId,
+            profiles: n.profiles,
+            dnsName: n.dnsName,
+            subscription: n.subscription,
+            updated: n.updated,
+            expires: n.expires,
+            nextUpdate: n.nextUpdate,
+            refused: n.refused,
+            failed: n.failed,
+            error: n.error,
+            traffic: n.traffic,
+            minVersion: n.minVersion,
+            refusedVersion: n.refusedVersion,
+            clockSkew: n.clockSkew,
+            updating: n.updating,
+            unreadable: n.unreadable,
+            admin: n.admin,
+            hasProbe: n.hasProbe,
+            hasLan: n.hasLan,
+            lanShow: n.lanShow,
+            relays: n.relays,
+          )
+        else
+          n,
+    ];
+    _changed(StoreKind.nodes, const []);
+  }
+
+  @override
+  Future<void> setNodeLan(String nodeId, bool show) async {
+    lanShowToggles.add((nodeId, show));
+    nodeRows = [
+      for (final n in nodeRows)
+        if (n.id == nodeId)
+          NodeRow(
+            id: n.id,
+            host: n.host,
+            name: n.name,
+            note: n.note,
+            groupId: n.groupId,
+            profiles: n.profiles,
+            dnsName: n.dnsName,
+            subscription: n.subscription,
+            updated: n.updated,
+            expires: n.expires,
+            nextUpdate: n.nextUpdate,
+            refused: n.refused,
+            failed: n.failed,
+            error: n.error,
+            traffic: n.traffic,
+            minVersion: n.minVersion,
+            refusedVersion: n.refusedVersion,
+            clockSkew: n.clockSkew,
+            updating: n.updating,
+            unreadable: n.unreadable,
+            admin: n.admin,
+            hasProbe: n.hasProbe,
+            hasLan: n.hasLan,
+            lanShow: show,
+            relays: n.relays,
+            switchedFrom: n.switchedFrom,
+            switchedTo: n.switchedTo,
+            switchedAt: n.switchedAt,
+          )
+        else
+          n,
+    ];
+    _changed(StoreKind.nodes, const []);
   }
 
   @override

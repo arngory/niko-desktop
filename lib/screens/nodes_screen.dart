@@ -23,13 +23,22 @@ import 'profile_editor.dart';
 /// groups beside profiles, custom group management, subscription settings/update-all/copy/delete,
 /// raycontrol node cards, per-profile latency testing, and manual profile creation/editing.
 class NodesScreen extends StatefulWidget {
-  const NodesScreen({super.key, required this.feed, required this.linked, required this.onAdd});
+  const NodesScreen({
+    super.key,
+    required this.feed,
+    required this.linked,
+    required this.onAdd,
+    this.onWhy,
+    this.onAdmin,
+  });
 
   final ProfilesFeed feed;
 
   /// The window talks to the daemon: without it the store cannot be read.
   final bool linked;
   final VoidCallback onAdd;
+  final ValueChanged<NodeRow>? onWhy;
+  final ValueChanged<NodeRow>? onAdmin;
 
   @override
   State<NodesScreen> createState() => _NodesScreenState();
@@ -196,12 +205,20 @@ class _NodesScreenState extends State<NodesScreen> {
           ],
           if (group != null && linked && feed.nodeOfGroup(group.id) != null) ...[
             const SizedBox(height: NikoSpace.s2),
-            NodeCard(
-              key: ValueKey('node-${group.nodeId}'),
-              node: feed.nodeOfGroup(group.id)!,
-              strings: strings,
-              onUpdate: () => feed.refreshNode(group.nodeId),
-              onDelete: () => feed.deleteNode(group.nodeId),
+            Builder(
+              builder: (context) {
+                final node = feed.nodeOfGroup(group.id)!;
+                return NodeCard(
+                  key: ValueKey('node-${group.nodeId}'),
+                  node: node,
+                  strings: strings,
+                  onUpdate: () => feed.refreshNode(group.nodeId),
+                  onDelete: () => feed.deleteNode(group.nodeId),
+                  onWhy: widget.onWhy == null ? null : () => widget.onWhy!(node),
+                  onAdmin: widget.onAdmin == null ? null : () => widget.onAdmin!(node),
+                  onToggleLan: (show) => unawaited(feed.setNodeLan(group.nodeId, show)),
+                );
+              },
             ),
           ] else if (group?.info case final info? when linked) ...[
             const SizedBox(height: NikoSpace.s2),
@@ -574,12 +591,24 @@ String nodeUpdates(NodeRow node, NikoStrings strings) {
 
 /// A node's card under its group's title (D-NODE-01…07).
 class NodeCard extends StatefulWidget {
-  const NodeCard({super.key, required this.node, required this.strings, required this.onUpdate, required this.onDelete});
+  const NodeCard({
+    super.key,
+    required this.node,
+    required this.strings,
+    required this.onUpdate,
+    required this.onDelete,
+    this.onWhy,
+    this.onAdmin,
+    this.onToggleLan,
+  });
 
   final NodeRow node;
   final NikoStrings strings;
   final VoidCallback onUpdate;
   final VoidCallback onDelete;
+  final VoidCallback? onWhy;
+  final VoidCallback? onAdmin;
+  final ValueChanged<bool>? onToggleLan;
 
   @override
   State<NodeCard> createState() => _NodeCardState();
@@ -616,6 +645,17 @@ class _NodeCardState extends State<NodeCard> {
         Text(nodeUpdates(node, strings), maxLines: 2, overflow: TextOverflow.ellipsis, style: NikoType.bodySm.style(colors.ink2)),
         if (node.subscription && node.updated > 0)
           Text(strings.nodeSigned, maxLines: 2, style: NikoType.bodySm.style(colors.ink2)),
+        if (node.relays > 0)
+          Text(strings.nodeRelaysCount(node.relays), maxLines: 1, style: NikoType.bodySm.style(colors.ink2)),
+        if (node.hasLan && widget.onToggleLan != null) ...[
+          const SizedBox(height: NikoSpace.s2),
+          NikoSwitchRow(
+            title: strings.nodeLanShow,
+            on: node.lanShow,
+            divider: false,
+            onChanged: widget.onToggleLan!,
+          ),
+        ],
         const SizedBox(height: NikoSpace.s3),
         Wrap(
           spacing: NikoSpace.s2,
@@ -625,6 +665,10 @@ class _NodeCardState extends State<NodeCard> {
               label: node.updating ? strings.subscriptionUpdating : strings.subscriptionUpdate,
               onPressed: node.updating || node.refused || node.unreadable || !node.subscription ? null : widget.onUpdate,
             ),
+            if (widget.onWhy != null && !node.unreadable)
+              NikoTonalButton(label: strings.nodeWhy, onPressed: widget.onWhy),
+            if (node.admin && widget.onAdmin != null && !node.unreadable)
+              NikoTonalButton(label: strings.nodeAdmin, onPressed: widget.onAdmin),
             NikoGhostButton(label: strings.nodeDelete, onPressed: () => setState(() => _confirming = true)),
           ],
         ),

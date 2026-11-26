@@ -132,6 +132,15 @@ class TracedDaemon implements Daemon {
   @override
   Future<void> deleteNode(String id) => _inner.deleteNode(id);
   @override
+  Stream<NodeTestEvent> runNodeTest(String nodeId, {String runId = ''}) => _inner.runNodeTest(nodeId, runId: runId);
+  @override
+  Future<String> nodeAdminCall(String nodeId, String method, {String bodyJson = '{}'}) =>
+      _inner.nodeAdminCall(nodeId, method, bodyJson: bodyJson);
+  @override
+  Future<void> clearNodeSwitched(String nodeId) => _inner.clearNodeSwitched(nodeId);
+  @override
+  Future<void> setNodeLan(String nodeId, bool show) => _inner.setNodeLan(nodeId, show);
+  @override
   Future<List<RuleRow>> rules() => _inner.rules();
   @override
   Future<RuleRow> saveRule(RuleRow rule) => _inner.saveRule(rule);

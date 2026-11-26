@@ -508,4 +508,101 @@ class NikoStrings {
 
   String get trayOpen => _ru ? 'Открыть Niko' : 'Open Niko';
   String get trayQuit => _ru ? 'Выйти' : 'Quit';
+
+  // Phase P6: raycontrol dynamics, D-WHY, D-ADMIN
+  String get switchedBannerTitle => _ru ? 'Профиль переключён автоматически' : 'Profile switched automatically';
+  String switchedBannerText(String from, String to) =>
+      _ru ? 'Сторож переключил подключение с «$from» на «$to»' : 'Watchdog switched connection from “$from” to “$to”';
+  String get switchedBannerDismiss => _ru ? 'Понятно' : 'Dismiss';
+
+  String get nodeWhy => _ru ? 'Почему не работает?' : 'Why isn’t it working?';
+  String get nodeAdmin => _ru ? 'Админ-панель' : 'Admin panel';
+  String get nodeLanShow => _ru ? 'Показывать это устройство в LAN узла' : 'Show this device on node LAN';
+  String nodeRelaysCount(int n) => _ru ? 'Ретрансляторов: $n' : 'Relays: $n';
+
+  String get setRaycontrolSection => 'raycontrol';
+  String get setRayAutoSwitch => _ru ? 'Автопереключение при сбое' : 'Auto-switch on failure';
+  String get setRayAutoSwitchSub => _ru
+      ? 'Сторож переключит узел на другой рабочий профиль, если текущий перестал отвечать'
+      : 'Watchdog switches to another working profile on the node when the active one fails';
+  String get setRayBrutal => _ru ? 'Hysteria2 Brutal по замеру канала' : 'Measured Hysteria2 Brutal';
+  String get setRayBrutalSub => _ru
+      ? 'Измерять полосу канала раз в сутки и понижать скорость при потерях'
+      : 'Measure channel bandwidth daily and back off automatically on packet loss';
+  String get setRayReports => _ru ? 'Анонимные сводки сети узлу' : 'Anonymous network summaries';
+  String get setRayReportsSub => _ru
+      ? 'Отправлять грубую статистику без идентификаторов не чаще раза в сутки'
+      : 'Send coarse bucketed status without identifiers at most once per day';
+
+  String get whyTitle => _ru ? 'Диагностика узла' : 'Node diagnostics';
+  String get whyRunId => _ru ? 'ID прогона' : 'Run ID';
+  String get whyStart => _ru ? 'Запустить проверку' : 'Start diagnostics';
+  String get whyRunning => _ru ? 'Идёт проверка…' : 'Running diagnostics…';
+  String get whyFindings => _ru ? 'Результаты' : 'Findings';
+  String get whyWorking => _ru ? 'Работают' : 'Working';
+  String get whyFailing => _ru ? 'Не работают' : 'Failing';
+  String get whyNotes => _ru ? 'Сеть и узел' : 'Network & node';
+  String get whySteps => _ru ? 'Ход проверки' : 'Progress log';
+  String get whyCopyReport => _ru ? 'Копировать отчёт' : 'Copy report';
+  String get whySaveReport => _ru ? 'Сохранить отчёт' : 'Save report';
+  String get whyReportCopied => _ru ? 'Обезличенный отчёт скопирован' : 'Redacted report copied';
+  String whyReportSaved(String path) => _ru ? 'Отчёт сохранён: $path' : 'Report saved: $path';
+  String get whyBack => _ru ? 'Назад' : 'Back';
+
+  String whyCause(String cause) => switch (cause) {
+        'stalls' => _ru ? 'зависает после первых КБ (DPI)' : 'stalls after initial KB (DPI)',
+        'timeout' => _ru ? 'таймаут ответа' : 'timed out',
+        'reset' => _ru ? 'обрыв соединения (RST/EOF)' : 'connection reset (RST/EOF)',
+        'refused' => _ru ? 'соединение отклонено' : 'connection refused',
+        'tls' => _ru ? 'ошибка TLS / REALITY' : 'TLS / REALITY failure',
+        'name' => _ru ? 'имя узла не резолвится' : 'DNS name failed to resolve',
+        'unreachable' => _ru ? 'нет маршрута к узлу' : 'network unreachable',
+        'busy' => _ru ? 'узел занят другой проверкой' : 'node probe busy',
+        'http' => _ru ? 'HTTP-ошибка узла' : 'HTTP error from node',
+        'limit' => _ru ? 'превышен лимит соединений' : 'connection limit reached',
+        'auth' => _ru ? 'отказ авторизации профиля' : 'profile authentication rejected',
+        'in_use' => _ru ? 'используется сейчас' : 'currently in use',
+        _ => _ru ? 'ошибка' : 'error',
+      };
+
+  String whyNoteText(String note, int number, String detail) => switch (note) {
+        'no_network' => _ru ? 'Нет сетевого подключения' : 'No network connection',
+        'clock' => _ru ? 'Часы расходятся с узлом на $number с (SPA ломается >30 с)' : 'Clock skew with node: ${number}s (SPA fails >30s)',
+        'no_subscription' => _ru ? 'Подписка не обновилась: $detail' : 'Subscription failed: $detail',
+        'no_direct' => _ru ? 'Прямой путь к узлу не отвечает${detail.isEmpty ? '' : ': $detail'}' : 'Direct path did not answer${detail.isEmpty ? '' : ': $detail'}',
+        'udp_blocked' => _ru ? 'UDP к узлу заблокирован' : 'Direct UDP to node is blocked',
+        'udp_small' => _ru ? 'UDP MTU ограничен до $number байт (меньше 1200 для QUIC)' : 'Direct UDP MTU capped at $number bytes (<1200 for QUIC)',
+        'dns_none' => _ru ? 'Ни один DNS-резолвер не пропускает туннель' : 'No DNS resolver passes the DNS tunnel',
+        'dns_spare' => _ru ? 'Работает запасная DNS-зона #$number' : 'Spare DNS zone #$number is active',
+        'relay_only' => _ru ? 'Работают только профили через ретранслятор' : 'Only relay profiles work on this network',
+        'dns_only' => _ru ? 'Работают только DNS-туннели' : 'Only DNS tunnels work on this network',
+        _ => note,
+      };
+
+  String get adminTitle => _ru ? 'Админ-панель' : 'Admin panel';
+  String get adminTabStatus => _ru ? 'Состояние' : 'Status';
+  String get adminTabUsers => _ru ? 'Пользователи' : 'Users';
+  String get adminTabServices => _ru ? 'Сервисы' : 'Services';
+  String get adminTabAudit => _ru ? 'Аудит' : 'Audit';
+  String get adminRefresh => _ru ? 'Обновить' : 'Refresh';
+  String get adminVersion => _ru ? 'Версия узла' : 'Node version';
+  String get adminWarnings => _ru ? 'Предупреждения' : 'Warnings';
+  String get adminDevices => _ru ? 'Устройства' : 'Devices';
+  String get adminCreateInvite => _ru ? 'Создать инвайт' : 'Create invite';
+  String get adminInviteUser => _ru ? 'Пользователь' : 'User';
+  String get adminInviteDevice => _ru ? 'Устройство' : 'Device name';
+  String get adminInviteRole => _ru ? 'Роль' : 'Role';
+  String get adminInvitePin => _ru ? 'Защитить инвайт PIN-кодом' : 'Protect invite with PIN';
+  String get adminInviteTtl => _ru ? 'Срок действия (ч)' : 'Expires in (hours)';
+  String get adminInviteCreated => _ru ? 'Инвайт создан' : 'Invite created';
+  String get adminCopyInvite => _ru ? 'Копировать инвайт' : 'Copy invite';
+  String get adminInviteCopied => _ru ? 'Инвайт скопирован' : 'Invite copied';
+  String get adminRevoke => _ru ? 'Отозвать' : 'Revoke';
+  String adminRevokeConfirm(String name) => _ru ? 'Отозвать устройство «$name»?' : 'Revoke device “$name”?';
+  String get adminRenewUser => _ru ? 'Сменить ключи' : 'Renew keys';
+  String get adminSetLimit => _ru ? 'Лимит (ГБ)' : 'Limit (GB)';
+  String get adminRotateService => _ru ? 'Ротация' : 'Rotate';
+  String get adminEnable => _ru ? 'Включить' : 'Enable';
+  String get adminDisable => _ru ? 'Выключить' : 'Disable';
+  String get adminNoItems => _ru ? 'Пусто' : 'Empty';
 }

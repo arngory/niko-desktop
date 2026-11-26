@@ -371,6 +371,43 @@ class NikoServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// Runs a full diagnostic test against a raycontrol node ("Why isn't it working", D-WHY): direct path,
+  /// subscription refresh, DNS tunnel check, and each profile, streaming steps and returning redacted findings.
+  /// Owner-only, outside the lifecycle lock.
+  $grpc.ResponseStream<$0.NodeTestEvent> runNodeTest(
+    $0.NodeTestRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createStreamingCall(
+        _$runNodeTest, $async.Stream.fromIterable([request]),
+        options: options);
+  }
+
+  /// Proxies an allowlisted admin RPC (NodeService/* or DeviceService/GetSelf) to a raycontrol node using the
+  /// daemon's sealed client certificate (D-ADMIN). Owner-only, outside the lifecycle lock.
+  $grpc.ResponseFuture<$0.NodeAdminResponse> nodeAdminCall(
+    $0.NodeAdminRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$nodeAdminCall, request, options: options);
+  }
+
+  /// Dismisses the D-STATE-SWITCHED notice after the watchdog automatically switched a node's active profile.
+  $grpc.ResponseFuture<$0.Empty> clearNodeSwitched(
+    $0.NodeId request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$clearNodeSwitched, request, options: options);
+  }
+
+  /// Toggles lan-v1 visibility for this device on a raycontrol node.
+  $grpc.ResponseFuture<$0.Empty> setNodeLan(
+    $0.SetNodeLanRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$setNodeLan, request, options: options);
+  }
+
   // method descriptors
 
   static final _$getInfo = $grpc.ClientMethod<$0.GetInfoRequest, $0.Info>(
@@ -521,6 +558,25 @@ class NikoServiceClient extends $grpc.Client {
           '/niko.v1.NikoService/TestProfiles',
           ($0.TestProfilesRequest value) => value.writeToBuffer(),
           $0.ProfileTestResult.fromBuffer);
+  static final _$runNodeTest =
+      $grpc.ClientMethod<$0.NodeTestRequest, $0.NodeTestEvent>(
+          '/niko.v1.NikoService/RunNodeTest',
+          ($0.NodeTestRequest value) => value.writeToBuffer(),
+          $0.NodeTestEvent.fromBuffer);
+  static final _$nodeAdminCall =
+      $grpc.ClientMethod<$0.NodeAdminRequest, $0.NodeAdminResponse>(
+          '/niko.v1.NikoService/NodeAdminCall',
+          ($0.NodeAdminRequest value) => value.writeToBuffer(),
+          $0.NodeAdminResponse.fromBuffer);
+  static final _$clearNodeSwitched = $grpc.ClientMethod<$0.NodeId, $0.Empty>(
+      '/niko.v1.NikoService/ClearNodeSwitched',
+      ($0.NodeId value) => value.writeToBuffer(),
+      $0.Empty.fromBuffer);
+  static final _$setNodeLan =
+      $grpc.ClientMethod<$0.SetNodeLanRequest, $0.Empty>(
+          '/niko.v1.NikoService/SetNodeLan',
+          ($0.SetNodeLanRequest value) => value.writeToBuffer(),
+          $0.Empty.fromBuffer);
 }
 
 @$pb.GrpcServiceName('niko.v1.NikoService')
@@ -774,6 +830,34 @@ abstract class NikoServiceBase extends $grpc.Service {
             ($core.List<$core.int> value) =>
                 $0.TestProfilesRequest.fromBuffer(value),
             ($0.ProfileTestResult value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.NodeTestRequest, $0.NodeTestEvent>(
+        'RunNodeTest',
+        runNodeTest_Pre,
+        false,
+        true,
+        ($core.List<$core.int> value) => $0.NodeTestRequest.fromBuffer(value),
+        ($0.NodeTestEvent value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.NodeAdminRequest, $0.NodeAdminResponse>(
+        'NodeAdminCall',
+        nodeAdminCall_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.NodeAdminRequest.fromBuffer(value),
+        ($0.NodeAdminResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.NodeId, $0.Empty>(
+        'ClearNodeSwitched',
+        clearNodeSwitched_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.NodeId.fromBuffer(value),
+        ($0.Empty value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SetNodeLanRequest, $0.Empty>(
+        'SetNodeLan',
+        setNodeLan_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.SetNodeLanRequest.fromBuffer(value),
+        ($0.Empty value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.Info> getInfo_Pre($grpc.ServiceCall $call,
@@ -1045,4 +1129,36 @@ abstract class NikoServiceBase extends $grpc.Service {
 
   $async.Stream<$0.ProfileTestResult> testProfiles(
       $grpc.ServiceCall call, $0.TestProfilesRequest request);
+
+  $async.Stream<$0.NodeTestEvent> runNodeTest_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.NodeTestRequest> $request) async* {
+    yield* runNodeTest($call, await $request);
+  }
+
+  $async.Stream<$0.NodeTestEvent> runNodeTest(
+      $grpc.ServiceCall call, $0.NodeTestRequest request);
+
+  $async.Future<$0.NodeAdminResponse> nodeAdminCall_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.NodeAdminRequest> $request) async {
+    return nodeAdminCall($call, await $request);
+  }
+
+  $async.Future<$0.NodeAdminResponse> nodeAdminCall(
+      $grpc.ServiceCall call, $0.NodeAdminRequest request);
+
+  $async.Future<$0.Empty> clearNodeSwitched_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.NodeId> $request) async {
+    return clearNodeSwitched($call, await $request);
+  }
+
+  $async.Future<$0.Empty> clearNodeSwitched(
+      $grpc.ServiceCall call, $0.NodeId request);
+
+  $async.Future<$0.Empty> setNodeLan_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.SetNodeLanRequest> $request) async {
+    return setNodeLan($call, await $request);
+  }
+
+  $async.Future<$0.Empty> setNodeLan(
+      $grpc.ServiceCall call, $0.SetNodeLanRequest request);
 }

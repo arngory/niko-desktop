@@ -40,6 +40,7 @@ class MainScreen extends StatefulWidget {
     this.reloadNeeded = false,
     this.onReconnect,
     this.networkRestored = false,
+    this.onClearSwitched,
   });
 
   final ConnectionController controller;
@@ -59,6 +60,9 @@ class MainScreen extends StatefulWidget {
 
   /// Service link recovered from a drop (D-STATE-NET).
   final bool networkRestored;
+
+  /// Dismisses the D-STATE-SWITCHED notice banner on the active raycontrol node.
+  final ValueChanged<String>? onClearSwitched;
 
   /// The raycontrol node of the selected profile, for its term, traffic and last update (D-MAIN-13); null for none.
   final NodeRow? node;
@@ -399,6 +403,20 @@ class _MainScreenState extends State<MainScreen> {
                 if (ready && widget.networkRestored) ...[
                   const SizedBox(height: NikoSpace.s6),
                   NikoBanner(icon: NikoIcons.rotateCw, title: strings.networkRestoredTitle),
+                ],
+                // D-STATE-SWITCHED: raycontrol watchdog switched to another profile automatically
+                if (widget.node case final node? when ready && node.switchedTo.isNotEmpty) ...[
+                  const SizedBox(height: NikoSpace.s6),
+                  NikoBanner(
+                    icon: NikoIcons.rotateCw,
+                    title: strings.switchedBannerTitle,
+                    text: strings.switchedBannerText(
+                      node.switchedFrom.isEmpty ? '—' : node.switchedFrom,
+                      node.switchedTo,
+                    ),
+                    action: widget.onClearSwitched == null ? null : strings.switchedBannerDismiss,
+                    onAction: widget.onClearSwitched == null ? null : () => widget.onClearSwitched!(node.id),
+                  ),
                 ],
                 // D-NAV-02: the mode, chosen here as in the settings; a running core is started again in it
                 if (state.connectsProfile && mode != null) ...[

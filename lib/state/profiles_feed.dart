@@ -279,6 +279,34 @@ class ProfilesFeed extends ChangeNotifier {
     }
   }
 
+  /// Dismisses the watchdog D-STATE-SWITCHED notice banner on [nodeId].
+  Future<void> clearNodeSwitched(String nodeId) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return;
+    try {
+      await daemon.clearNodeSwitched(nodeId);
+      nodes = await daemon.nodes();
+      error = '';
+    } catch (e) {
+      error = daemonError(e);
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Toggles lan-v1 visibility for this device on [nodeId].
+  Future<void> setNodeLan(String nodeId, bool show) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return;
+    try {
+      await daemon.setNodeLan(nodeId, show);
+      nodes = await daemon.nodes();
+      error = '';
+    } catch (e) {
+      error = daemonError(e);
+    }
+    if (!_disposed) notifyListeners();
+  }
+
   /// Creates or updates a basic or subscription group (D-GROUP-01, D-SUB-08).
   Future<String?> saveGroup(GroupRow group) async {
     final daemon = _link.daemon;

@@ -23,12 +23,14 @@ import '../theme/niko_theme.dart';
 import '../settings/settings_screen.dart';
 import '../ui/header.dart';
 import 'add_screen.dart';
+import 'admin_screen.dart';
 import 'check_screen.dart';
 import 'connections_screen.dart';
 import 'log_screen.dart';
 import 'main_screen.dart';
 import 'nodes_screen.dart';
 import 'rules_screen.dart';
+import 'why_screen.dart';
 
 /// The sections the window has, in the canvas's order.
 enum AppSection { home, nodes, check, connections, rules, log, settings }
@@ -80,6 +82,8 @@ class _NikoShellState extends State<NikoShell> {
   late SettingsFeed _settings;
   late RouteCheckController _routeCheck;
   bool _adding = false;
+  NodeRow? _whyNode;
+  NodeRow? _adminNode;
   AppSection _section = AppSection.home;
   late bool _advanced = widget.settings.advanced;
   bool _localeSynced = false;
@@ -345,6 +349,8 @@ class _NikoShellState extends State<NikoShell> {
     setState(() {
       _section = section;
       _adding = false;
+      _whyNode = null;
+      _adminNode = null;
     });
     // the section Узлы reads the store anew, as when it was not followed on the main screen
     if (section == AppSection.nodes) _profiles.hide();
@@ -422,6 +428,7 @@ class _NikoShellState extends State<NikoShell> {
                   reloadNeeded: _reloadNeeded,
                   onReconnect: () => unawaited(_reconnect()),
                   networkRestored: _networkRestored,
+                  onClearSwitched: (id) => unawaited(_profiles.clearNodeSwitched(id)),
                 ),
               ),
               AppSection.check => ListenableBuilder(
@@ -448,13 +455,34 @@ class _NikoShellState extends State<NikoShell> {
               ),
               AppSection.nodes => ListenableBuilder(
                 listenable: Listenable.merge([_profiles, state]),
-                builder: (context, _) => _adding
-                    ? AddScreen(feed: _profiles, onDone: (_) => setState(() => _adding = false))
-                    : NodesScreen(
-                        feed: _profiles,
-                        linked: state.link == LinkPhase.ready,
-                        onAdd: () => setState(() => _adding = true),
-                      ),
+                builder: (context, _) {
+                  final daemon = state.daemon;
+                  if (_whyNode case final node? when daemon != null) {
+                    return WhyScreen(
+                      daemon: daemon,
+                      node: node,
+                      saveTo: widget.saveTo ?? _resolvedSaveDirectory,
+                      now: widget.now,
+                      onBack: () => setState(() => _whyNode = null),
+                    );
+                  }
+                  if (_adminNode case final node? when daemon != null) {
+                    return AdminScreen(
+                      daemon: daemon,
+                      node: node,
+                      onBack: () => setState(() => _adminNode = null),
+                    );
+                  }
+                  return _adding
+                      ? AddScreen(feed: _profiles, onDone: (_) => setState(() => _adding = false))
+                      : NodesScreen(
+                          feed: _profiles,
+                          linked: state.link == LinkPhase.ready,
+                          onAdd: () => setState(() => _adding = true),
+                          onWhy: state.nikoApi >= 15 ? (n) => setState(() => _whyNode = n) : null,
+                          onAdmin: state.nikoApi >= 15 ? (n) => setState(() => _adminNode = n) : null,
+                        );
+                },
               ),
               AppSection.rules => ListenableBuilder(
                 listenable: Listenable.merge([_rules, _profiles, state]),

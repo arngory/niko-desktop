@@ -83,15 +83,19 @@ void main() {
       expect(find.text(missing), findsNothing, reason: missing);
     }
 
+    await tester.ensureVisible(find.text('Пускать из локальной сети'));
     await tester.tap(find.text('Пускать из локальной сети'));
     await tester.pump();
     expect(values.flag('allowAccess'), isTrue);
+    await tester.ensureVisible(find.text('Сниффинг'));
     await tester.tap(find.text('Сниффинг'));
     await tester.pump();
     expect(values.flag('trafficSniffing'), isFalse);
+    await tester.ensureVisible(find.text('Сначала'));
     await tester.tap(find.text('Сначала'));
     await tester.pump();
     expect(values.text('ipv6Mode'), '2');
+    await tester.ensureVisible(find.text('VPN'));
     await tester.tap(find.text('VPN'));
     await tester.pump();
     expect(values.text('serviceMode'), 'vpn');
