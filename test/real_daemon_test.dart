@@ -896,7 +896,20 @@ void main() {
       ]);
       expect(dup.exitCode, isNot(0));
 
+      // Verify full ConnectionController lifecycle (GetDaemonInfo + NikoService.GetInfo +
+      // owner-protected SubscribeServiceStatus) reaches and stays in LinkPhase.ready on first launch.
+      final userController = ConnectionController(daemon: GrpcDaemon.unix(userSock), loadConfig: null);
+      userController.attach();
+      await until(() => userController.link == LinkPhase.ready, 'user-mode controller ready');
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      expect(userController.link, LinkPhase.ready, reason: 'linkError=${userController.linkError}');
+      expect(userController.isUserMode, isTrue);
+      expect(userController.privileged, isFalse);
+      expect(userController.tunAvailable, isFalse);
+      userController.dispose();
+
       userDaemon = GrpcDaemon.unix(userSock);
+
       final info = await userDaemon.nikoInfo();
       expect(info.api, greaterThanOrEqualTo(13));
       expect(info.privileged, isFalse);

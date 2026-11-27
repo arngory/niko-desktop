@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/widgets.dart';
 import 'package:grpc/grpc.dart' show GrpcError, StatusCode;
@@ -36,6 +37,18 @@ const _dev = bool.fromEnvironment('NIKO_DEV');
 ///   and offers 1-click `pkexec` installation (with copyable `sudo` fallback and automatic store migration).
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // grpc-dart 5.x Http2TransportStream can write to an already-closed http2 sink when a stream is
+  // cancelled or reset mid-flight; swallow only that narrow transport-teardown StateError so it
+  // does not surface as an unhandled exception in the root zone.
+  final previousOnError = PlatformDispatcher.instance.onError;
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    if (error is StateError &&
+        error.message == 'Cannot add event after closing' &&
+        stack.toString().contains('_StreamSinkWrapper.add')) {
+      return true;
+    }
+    return previousOnError?.call(error, stack) ?? false;
+  };
   Daemon? daemon;
   ServiceController? serviceInstall;
   UserStoreMigrationController? userMigration;

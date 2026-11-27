@@ -1210,7 +1210,17 @@ class GrpcDaemon implements Daemon {
   static final _ruleSetTasks = CallOptions(timeout: const Duration(hours: 1));
 
   @override
-  Future<String> version() async => (await _desktop.getDaemonInfo(Empty(), options: _short)).version;
+  Future<String> version() async {
+    final info = await _desktop.getDaemonInfo(Empty(), options: _short);
+    if (info.ownership == DaemonOwnership.DAEMON_OWNERSHIP_AVAILABLE) {
+      try {
+        await _desktop.claimService(Empty(), options: _short);
+      } on GrpcError catch (e) {
+        if (e.code != StatusCode.unimplemented) rethrow;
+      }
+    }
+    return info.version;
+  }
 
   @override
   Stream<ServiceState> serviceStatus() => _started

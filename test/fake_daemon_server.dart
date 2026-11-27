@@ -138,6 +138,9 @@ class _Desktop extends DesktopServiceBase {
       DaemonInfo(version: '1.14.0-fake', ownership: DaemonOwnership.DAEMON_OWNERSHIP_AVAILABLE);
 
   @override
+  Future<Empty> claimService(ServiceCall call, Empty request) async => Empty();
+
+  @override
   Future<CrashReportList> listCrashReports(ServiceCall call, Empty request) async =>
       CrashReportList(reports: daemon.crashes);
 
