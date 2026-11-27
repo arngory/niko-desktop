@@ -80,6 +80,12 @@ class DesktopIntegration {
     } catch (_) {}
   }
 
+  Future<void> closeWindow() async {
+    try {
+      await _channel.invokeMethod<void>('closeWindow');
+    } catch (_) {}
+  }
+
   Future<void> notify({required String title, required String body}) async {
     try {
       final handled = await _channel.invokeMethod<bool>('notify', {'title': title, 'body': body});

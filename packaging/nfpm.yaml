@@ -22,14 +22,10 @@ overrides:
     depends:
       - libgtk-3-0
       - libglib2.0-0
-    recommends:
-      - libayatana-appindicator3-1
   rpm:
     depends:
       - gtk3
       - glib2
-    recommends:
-      - libayatana-appindicator-gtk3
 
 contents:
   - src: "${NIKO_STAGE_DIR}/"

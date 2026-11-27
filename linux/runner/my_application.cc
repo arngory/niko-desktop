@@ -1,6 +1,5 @@
 #include "my_application.h"
 
-#include <dlfcn.h>
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_WAYLAND
 #include <gdk/gdkwayland.h>
@@ -8,50 +7,13 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <string>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "linux_tray.h"
 
 namespace {
-
-// Dynamic AppIndicator3 bindings (libayatana-appindicator3 / libappindicator3) so builds never
-// require extra dev packages while native Linux trays work automatically when installed.
-using AppIndicatorNewFn = gpointer (*)(const gchar*, const gchar*, gint);
-using AppIndicatorSetStatusFn = void (*)(gpointer, gint);
-using AppIndicatorSetMenuFn = void (*)(gpointer, GtkMenu*);
-using AppIndicatorSetTitleFn = void (*)(gpointer, const gchar*);
-using AppIndicatorSetIconFullFn = void (*)(gpointer, const gchar*, const gchar*);
-
-struct AppIndicatorApi {
-  void* handle = nullptr;
-  bool attempted = false;
-  bool ready = false;
-  AppIndicatorNewFn new_fn = nullptr;
-  AppIndicatorSetStatusFn set_status = nullptr;
-  AppIndicatorSetMenuFn set_menu = nullptr;
-  AppIndicatorSetTitleFn set_title = nullptr;
-  AppIndicatorSetIconFullFn set_icon_full = nullptr;
-
-  bool Load() {
-    if (attempted) return ready;
-    attempted = true;
-    handle = dlopen("libayatana-appindicator3.so.1", RTLD_LAZY);
-    if (handle == nullptr) {
-      handle = dlopen("libappindicator3.so.1", RTLD_LAZY);
-    }
-    if (handle == nullptr) return false;
-    new_fn = reinterpret_cast<AppIndicatorNewFn>(dlsym(handle, "app_indicator_new"));
-    set_status = reinterpret_cast<AppIndicatorSetStatusFn>(dlsym(handle, "app_indicator_set_status"));
-    set_menu = reinterpret_cast<AppIndicatorSetMenuFn>(dlsym(handle, "app_indicator_set_menu"));
-    set_title = reinterpret_cast<AppIndicatorSetTitleFn>(dlsym(handle, "app_indicator_set_title"));
-    set_icon_full = reinterpret_cast<AppIndicatorSetIconFullFn>(dlsym(handle, "app_indicator_set_icon_full"));
-    ready = (new_fn != nullptr && set_status != nullptr && set_menu != nullptr);
-    return ready;
-  }
-};
-
-constexpr gint kAppIndicatorCategoryApplicationStatus = 0;
-constexpr gint kAppIndicatorStatusActive = 1;
 
 const gchar* MapGetString(FlValue* map, const gchar* key, const gchar* fallback) {
   if (map == nullptr || fl_value_get_type(map) != FL_VALUE_TYPE_MAP) return fallback;
@@ -81,13 +43,7 @@ struct _MyApplication {
   gboolean close_to_tray;
   gboolean quitting;
   gboolean dialog_open;
-  AppIndicatorApi tray_api;
-  gpointer tray_indicator;
-  GtkWidget* tray_menu;
-  GtkWidget* tray_status_item;
-  GtkWidget* tray_toggle_item;
-  GtkWidget* tray_open_item;
-  GtkWidget* tray_quit_item;
+  LinuxTray* tray;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -99,39 +55,39 @@ static void emit_tray_action(MyApplication* self, const gchar* action) {
                                   nullptr, nullptr, nullptr);
 }
 
-static void tray_toggle_cb(GtkMenuItem* /*item*/, gpointer user_data) {
-  emit_tray_action(MY_APPLICATION(user_data), "toggle");
-}
-
-static void tray_open_cb(GtkMenuItem* /*item*/, gpointer user_data) {
+static gboolean force_close_timeout_cb(gpointer user_data) {
   MyApplication* self = MY_APPLICATION(user_data);
   if (self->window != nullptr) {
-    gtk_widget_show(GTK_WIDGET(self->window));
-    gtk_window_present(self->window);
+    gtk_window_close(self->window);
   }
-  emit_tray_action(self, "show");
+  g_object_unref(self);
+  return G_SOURCE_REMOVE;
 }
 
-static void tray_quit_cb(GtkMenuItem* /*item*/, gpointer user_data) {
-  MyApplication* self = MY_APPLICATION(user_data);
+static void request_graceful_quit(MyApplication* self) {
+  if (self->quitting) return;
   self->quitting = TRUE;
-  emit_tray_action(self, "quit");
-  if (self->window != nullptr) {
+  if (self->window_channel != nullptr) {
+    emit_tray_action(self, "quit");
+    // Guarantee window exit within 3s even if Dart fails to answer closeWindow.
+    g_timeout_add_seconds(3, force_close_timeout_cb, g_object_ref(self));
+  } else if (self->window != nullptr) {
     gtk_window_close(self->window);
   }
 }
 
-// Filter only the upstream deprecation notice emitted by libayatana-appindicator3's
-// GObject constructor while keeping libayatana-appindicator3 compatibility across
-// Debian/Ubuntu/Arch/Fedora until libayatana-appindicator-glib is widely shipped.
-static void suppress_appindicator_deprecation_log(const gchar* log_domain,
-                                                  GLogLevelFlags log_level,
-                                                  const gchar* message,
-                                                  gpointer user_data) {
-  if (message != nullptr && strstr(message, "is deprecated") != nullptr) {
-    return;
+static void handle_tray_action(MyApplication* self, const gchar* action) {
+  if (g_strcmp0(action, "show") == 0) {
+    if (self->window != nullptr) {
+      gtk_widget_show(GTK_WIDGET(self->window));
+      gtk_window_present(self->window);
+    }
+    emit_tray_action(self, "show");
+  } else if (g_strcmp0(action, "toggle") == 0) {
+    emit_tray_action(self, "toggle");
+  } else if (g_strcmp0(action, "quit") == 0) {
+    request_graceful_quit(self);
   }
-  g_log_default_handler(log_domain, log_level, message, user_data);
 }
 
 static void ensure_linux_tray(MyApplication* self,
@@ -141,66 +97,31 @@ static void ensure_linux_tray(MyApplication* self,
                               const gchar* toggle_label,
                               const gchar* open_label,
                               const gchar* quit_label) {
-  if (!self->tray_api.Load()) return;
-  if (self->tray_indicator == nullptr) {
-    self->tray_menu = gtk_menu_new();
-    self->tray_status_item = gtk_menu_item_new_with_label(status_label);
-    gtk_widget_set_sensitive(self->tray_status_item, FALSE);
-    self->tray_toggle_item = gtk_menu_item_new_with_label(toggle_label);
-    self->tray_open_item = gtk_menu_item_new_with_label(open_label);
-    self->tray_quit_item = gtk_menu_item_new_with_label(quit_label);
-
-    g_signal_connect(self->tray_toggle_item, "activate", G_CALLBACK(tray_toggle_cb), self);
-    g_signal_connect(self->tray_open_item, "activate", G_CALLBACK(tray_open_cb), self);
-    g_signal_connect(self->tray_quit_item, "activate", G_CALLBACK(tray_quit_cb), self);
-
-    gtk_menu_shell_append(GTK_MENU_SHELL(self->tray_menu), self->tray_status_item);
-    gtk_menu_shell_append(GTK_MENU_SHELL(self->tray_menu), gtk_separator_menu_item_new());
-    gtk_menu_shell_append(GTK_MENU_SHELL(self->tray_menu), self->tray_toggle_item);
-    gtk_menu_shell_append(GTK_MENU_SHELL(self->tray_menu), self->tray_open_item);
-    gtk_menu_shell_append(GTK_MENU_SHELL(self->tray_menu), gtk_separator_menu_item_new());
-    gtk_menu_shell_append(GTK_MENU_SHELL(self->tray_menu), self->tray_quit_item);
-    gtk_widget_show_all(self->tray_menu);
-
-    const gchar* icon = connected ? "network-vpn" : "network-offline";
-    const guint log_handler_id = g_log_set_handler(
-        "libayatana-appindicator",
-        static_cast<GLogLevelFlags>(G_LOG_LEVEL_WARNING | G_LOG_FLAG_RECURSION),
-        suppress_appindicator_deprecation_log, nullptr);
-    self->tray_indicator = self->tray_api.new_fn(
-        "niko-desktop", icon, kAppIndicatorCategoryApplicationStatus);
-    g_log_remove_handler("libayatana-appindicator", log_handler_id);
-    if (self->tray_indicator != nullptr) {
-      self->tray_api.set_status(self->tray_indicator, kAppIndicatorStatusActive);
-      self->tray_api.set_menu(self->tray_indicator, GTK_MENU(self->tray_menu));
-    }
+  if (self->tray == nullptr) {
+    self->tray = new LinuxTray([self](const char* action) {
+      handle_tray_action(self, action);
+    });
   }
-  if (self->tray_indicator != nullptr) {
-    std::string header = status_label;
-    if (profile_name != nullptr && profile_name[0] != '\0') {
-      header += " · ";
-      header += profile_name;
-    }
-    gtk_menu_item_set_label(GTK_MENU_ITEM(self->tray_status_item), header.c_str());
-    gtk_menu_item_set_label(GTK_MENU_ITEM(self->tray_toggle_item), toggle_label);
-    gtk_menu_item_set_label(GTK_MENU_ITEM(self->tray_open_item), open_label);
-    gtk_menu_item_set_label(GTK_MENU_ITEM(self->tray_quit_item), quit_label);
-    if (self->tray_api.set_title != nullptr) {
-      self->tray_api.set_title(self->tray_indicator, header.c_str());
-    }
-    if (self->tray_api.set_icon_full != nullptr) {
-      const gchar* icon = connected ? "network-vpn" : "network-offline";
-      self->tray_api.set_icon_full(self->tray_indicator, icon, header.c_str());
-    }
-  }
+  self->tray->Update(
+      connected,
+      status_label ? status_label : "Niko",
+      profile_name ? profile_name : "",
+      toggle_label ? toggle_label : "Connect",
+      open_label ? open_label : "Open Niko",
+      quit_label ? quit_label : "Quit");
 }
 
 static gboolean window_delete_event_cb(GtkWidget* widget,
                                        GdkEvent* /*event*/,
                                        gpointer user_data) {
   MyApplication* self = MY_APPLICATION(user_data);
-  if (self->close_to_tray && !self->quitting && self->tray_indicator != nullptr) {
+  if (self->close_to_tray && !self->quitting && self->tray != nullptr &&
+      self->tray->IsAvailable()) {
     gtk_widget_hide(widget);
+    return TRUE;
+  }
+  if (!self->quitting && self->window_channel != nullptr) {
+    request_graceful_quit(self);
     return TRUE;
   }
   return FALSE;
@@ -477,11 +398,16 @@ static void my_application_startup(GApplication* application) {
 }
 
 static void my_application_shutdown(GApplication* application) {
+  MyApplication* self = MY_APPLICATION(application);
+  delete self->tray;
+  self->tray = nullptr;
   G_APPLICATION_CLASS(my_application_parent_class)->shutdown(application);
 }
 
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
+  delete self->tray;
+  self->tray = nullptr;
   g_clear_object(&self->window_channel);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
@@ -498,8 +424,7 @@ static void my_application_class_init(MyApplicationClass* klass) {
 static void my_application_init(MyApplication* self) {
   self->close_to_tray = FALSE;
   self->quitting = FALSE;
-  self->tray_indicator = nullptr;
-  self->tray_menu = nullptr;
+  self->tray = nullptr;
 }
 
 #ifndef NDEBUG
