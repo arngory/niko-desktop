@@ -159,6 +159,10 @@ Future<StagedLinuxDaemon> stageLinuxDaemonForPkexec(
 String buildLinuxManualInstallCommand(String bundledDaemonPath) =>
     'sudo ${shellQuotePosix(bundledDaemonPath)} service install';
 
+/// Builds a copyable manual `sudo` uninstall command for headless / no-polkit environments.
+String buildLinuxManualUninstallCommand(String daemonPath) =>
+    'sudo ${shellQuotePosix(daemonPath)} service uninstall';
+
 /// Runs `pkexec <daemon> service install` (staging to `$XDG_RUNTIME_DIR` first when in AppImage)
 /// and maps `pkexec` / `boxdd` exit codes into an [InstallResult].
 Future<InstallResult> runLinuxPkexecInstall({
@@ -185,6 +189,41 @@ Future<InstallResult> runLinuxPkexecInstall({
     return InstallResult.exit(res.exitCode);
   } on ProcessException {
     // pkexec binary itself is not installed -> treat identically to exit 127 (no polkit agent).
+    return const InstallResult.exit(127);
+  } finally {
+    await staged?.cleanup();
+  }
+}
+
+/// Runs `pkexec <daemon> service uninstall` (staging into `$XDG_RUNTIME_DIR` when invoking a
+/// bundled daemon inside an AppImage FUSE mount) and maps exit codes into an [InstallResult].
+Future<InstallResult> runLinuxPkexecUninstall({
+  required String daemonPath,
+  Map<String, String>? environment,
+  String? resolvedExecutable,
+  ProcessRunner? runProcess,
+  String? mountInfoContent,
+}) async {
+  StagedLinuxDaemon? staged;
+  var daemonToRun = daemonPath;
+  try {
+    final inAppImageMount = daemonPath.contains('/.mount_') ||
+        (isAppImageEnvironment(environment: environment, resolvedExecutable: resolvedExecutable) &&
+            !daemonPath.startsWith('/usr/') &&
+            !daemonPath.startsWith('/opt/'));
+    if (inAppImageMount) {
+      staged = await stageLinuxDaemonForPkexec(
+        daemonPath,
+        environment: environment,
+        mountInfoContent: mountInfoContent,
+      );
+      daemonToRun = staged.daemonPath;
+    }
+    final res = runProcess != null
+        ? await runProcess('pkexec', [daemonToRun, 'service', 'uninstall'])
+        : await Process.run('pkexec', [daemonToRun, 'service', 'uninstall']);
+    return InstallResult.exit(res.exitCode);
+  } on ProcessException {
     return const InstallResult.exit(127);
   } finally {
     await staged?.cleanup();

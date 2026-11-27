@@ -636,6 +636,17 @@ class NikoStrings {
       ? 'Работает полностью офлайн · краткое руководство по Niko Desktop'
       : 'Available offline · quick guide to Niko Desktop';
 
+  String get setSystemService => _ru ? 'Системная служба' : 'System service';
+  String get serviceInstalledStatus => _ru ? 'Установлена (VPN / TUN доступен)' : 'Installed (VPN / TUN available)';
+  String get serviceNotInstalledStatus => _ru ? 'Не установлена (только Прокси)' : 'Not installed (Proxy only)';
+  String get uninstallService => _ru ? 'Удалить службу' : 'Uninstall service';
+  String get uninstallingService => _ru ? 'Удаление службы…' : 'Uninstalling service…';
+  String get uninstallServiceConfirmTitle => _ru ? 'Удалить системную службу?' : 'Uninstall system service?';
+  String get uninstallServiceConfirmText => _ru
+      ? 'Режим VPN (TUN) станет недоступен. Клиент переключится обратно на пользовательский режим Прокси.'
+      : 'VPN (TUN) mode will no longer be available. The client will switch back to unprivileged Proxy mode.';
+  String get uninstallServiceDone => _ru ? 'Системная служба удалена' : 'System service uninstalled';
+
   List<(String, String)> get faqEntries => _ru
       ? const [
           (

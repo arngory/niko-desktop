@@ -258,18 +258,22 @@ Future<WindowsInstallDetection> detectWindowsInstallState({
 
 const _windowChannel = MethodChannel('niko/window');
 
-/// Controls elevated service installation (Windows UAC + handoff, or Linux `pkexec` + hot-attach).
+/// Controls elevated service installation and uninstallation (Windows UAC, or Linux `pkexec` + hot-attach).
 class ServiceController extends ChangeNotifier {
   ServiceController({
     required this.mode,
     required this.installedWindowPath,
     this.manualCommand = '',
+    this.manualUninstallCommand = '',
     this.onInstalledInPlace,
+    this.onUninstalledInPlace,
     Future<InstallResult> Function()? runElevatedInstall,
+    Future<InstallResult> Function()? runElevatedUninstall,
     this.probeStatus,
     Future<void> Function(String windowPath)? launchInstalled,
     Future<void> Function()? exitApp,
   })  : _runElevatedInstall = runElevatedInstall ?? _defaultRunElevatedInstall,
+        _runElevatedUninstall = runElevatedUninstall ?? _defaultRunElevatedUninstall,
         _launchInstalled = launchInstalled ?? _defaultLaunchInstalled,
         _exitApp = exitApp ?? _defaultExitApp;
 
@@ -279,20 +283,36 @@ class ServiceController extends ChangeNotifier {
   /// Copyable manual command (e.g. `sudo /path/to/niko-daemon service install` on Linux when polkit is unavailable).
   final String manualCommand;
 
+  /// Copyable manual uninstall command (e.g. `sudo /usr/local/libexec/niko/niko-daemon service uninstall`).
+  final String manualUninstallCommand;
+
   /// When set (Linux), called on successful install to attach the running window directly to the
   /// newly started service without relaunching the window.
   final Future<void> Function()? onInstalledInPlace;
+
+  /// Called on successful uninstall to detach the system service and fall back to user-mode proxy.
+  final Future<void> Function()? onUninstalledInPlace;
   final Future<InstallResult> Function() _runElevatedInstall;
+  final Future<InstallResult> Function() _runElevatedUninstall;
   final Future<WindowsInstallDetection> Function()? probeStatus;
   final Future<void> Function(String windowPath) _launchInstalled;
   final Future<void> Function() _exitApp;
 
   bool installing = false;
+  bool uninstalling = false;
+  bool lastActionWasUninstall = false;
   InstallOutcome? lastOutcome;
   String lastError = '';
 
+  bool get busy => installing || uninstalling;
+
   static Future<InstallResult> _defaultRunElevatedInstall() async {
     final raw = await _windowChannel.invokeMethod<Object?>('installService');
+    return parseInstallChannelResult(raw);
+  }
+
+  static Future<InstallResult> _defaultRunElevatedUninstall() async {
+    final raw = await _windowChannel.invokeMethod<Object?>('uninstallService');
     return parseInstallChannelResult(raw);
   }
 
@@ -318,8 +338,9 @@ class ServiceController extends ChangeNotifier {
   /// - On Linux (`onInstalledInPlace` set): attaches this window directly to the running service.
   /// - On Windows: re-probes SCM, launches installed `niko.exe --after-install=<pid>`, and exits.
   Future<void> installService() async {
-    if (installing) return;
+    if (busy) return;
     installing = true;
+    lastActionWasUninstall = false;
     lastOutcome = null;
     lastError = '';
     notifyListeners();
@@ -362,9 +383,38 @@ class ServiceController extends ChangeNotifier {
     }
   }
 
+  /// Triggers elevated `niko-daemon service uninstall` (pkexec on Linux, UAC on Windows) and
+  /// switches the window back to unprivileged user-mode proxy when [onUninstalledInPlace] is set.
+  Future<void> uninstallService() async {
+    if (busy) return;
+    uninstalling = true;
+    lastActionWasUninstall = true;
+    lastOutcome = null;
+    lastError = '';
+    notifyListeners();
+    try {
+      final result = await _runElevatedUninstall();
+      final (outcome, detail) = classifyInstallResult(result);
+      lastOutcome = outcome;
+      lastError = detail;
+      if (outcome == InstallOutcome.ok) {
+        mode = InstallMode.notInstalled;
+        if (onUninstalledInPlace case final onUninstalled?) {
+          await onUninstalled();
+        }
+      }
+    } catch (error) {
+      lastOutcome = InstallOutcome.failed;
+      lastError = error.toString();
+    } finally {
+      uninstalling = false;
+      notifyListeners();
+    }
+  }
+
   /// Opens the already-installed `niko.exe` and exits this portable copy.
   Future<void> openInstalled() async {
-    if (installing) return;
+    if (busy) return;
     lastOutcome = null;
     lastError = '';
     try {

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 
 import '../app_info.dart';
@@ -7,6 +8,7 @@ import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
 import '../platform/autostart.dart';
 import '../platform/desktop_integration.dart';
+import '../platform/service_install.dart';
 import '../state/window_settings.dart';
 import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
@@ -36,6 +38,7 @@ class SettingsScreen extends StatefulWidget {
     this.onCheckUpdate,
     this.onDownloadUpdate,
     this.onOpenFaq,
+    this.serviceInstall,
   });
 
   /// The settings by the app's names (SettingsFeed: the daemon's).
@@ -68,6 +71,9 @@ class SettingsScreen extends StatefulWidget {
 
   /// Optional built-in offline FAQ navigation callback (D-SET-31).
   final VoidCallback? onOpenFaq;
+
+  /// Optional system service install/uninstall controller (Linux pkexec / Windows UAC).
+  final ServiceController? serviceInstall;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -104,6 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   UpdateCheckResult? _updateInfo;
   UpdateDownloadResult? _updateDownload;
   String _updateError = '';
+  bool _confirmUninstallService = false;
 
   WindowSettings get _window => widget.window ?? (_ownedWindow ??= WindowSettings.memory());
 
@@ -367,7 +374,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _choice('serviceMode', _s.setMode, [('vpn', _s.setModeVpn), ('proxy', _s.setModeProxy)], cell: 96),
           _switch('systemProxy', _s.setSystemProxy, sub: _s.setSystemProxySub),
         ],
+        if (widget.serviceInstall case final svc?) _serviceRow(svc),
       ]);
+
+  Widget _serviceRow(ServiceController svc) {
+    final colors = NikoTheme.of(context);
+    final installed = svc.mode == InstallMode.installed || svc.mode == InstallMode.portableServiceReady;
+    final manualCmd = svc.lastActionWasUninstall ? svc.manualUninstallCommand : svc.manualCommand;
+    final outcome = svc.lastOutcome;
+    String statusMsg = '';
+    var isDanger = false;
+    if (outcome == InstallOutcome.ok && svc.lastActionWasUninstall) {
+      statusMsg = _s.uninstallServiceDone;
+    } else if (outcome == InstallOutcome.cancelled) {
+      statusMsg = _s.installCancelled;
+    } else if (outcome == InstallOutcome.polkitUnavailable) {
+      statusMsg = manualCmd.isNotEmpty ? '${_s.installPolkitUnavailable}\n$manualCmd' : _s.installPolkitUnavailable;
+      isDanger = true;
+    } else if (outcome != null && outcome != InstallOutcome.ok) {
+      statusMsg = svc.lastError.isNotEmpty ? '${_s.installFailed}: ${svc.lastError}' : _s.installFailed;
+      isDanger = true;
+    }
+    return CustomPaint(
+      foregroundPainter: _AboutHairline(colors.line),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s4, vertical: NikoSpace.s3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_s.setSystemService, style: NikoType.body.style(colors.ink)),
+                      Text(
+                        installed ? _s.serviceInstalledStatus : _s.serviceNotInstalledStatus,
+                        style: NikoType.bodySm.style(colors.ink2),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: NikoSpace.s3),
+                if (installed)
+                  NikoGhostButton(
+                    label: svc.uninstalling ? _s.uninstallingService : _s.uninstallService,
+                    onPressed: svc.busy ? null : () => setState(() => _confirmUninstallService = true),
+                  )
+                else
+                  NikoTonalButton(
+                    label: svc.installing ? _s.installingService : _s.installService,
+                    onPressed: svc.busy ? null : () => unawaited(svc.installService()),
+                  ),
+              ],
+            ),
+            if (_confirmUninstallService && installed) ...[
+              const SizedBox(height: NikoSpace.s3),
+              NikoBanner(
+                icon: NikoIcons.trash,
+                title: _s.uninstallServiceConfirmTitle,
+                text: _s.uninstallServiceConfirmText,
+                danger: true,
+              ),
+              const SizedBox(height: NikoSpace.s2),
+              Row(
+                children: [
+                  NikoPrimaryButton(
+                    label: svc.uninstalling ? _s.uninstallingService : _s.uninstallService,
+                    onPressed: svc.busy
+                        ? null
+                        : () {
+                            setState(() => _confirmUninstallService = false);
+                            unawaited(svc.uninstallService());
+                          },
+                  ),
+                  const SizedBox(width: NikoSpace.s3),
+                  NikoGhostButton(
+                    label: _s.cancel,
+                    onPressed: () => setState(() => _confirmUninstallService = false),
+                  ),
+                ],
+              ),
+            ],
+            if (statusMsg.isNotEmpty) ...[
+              const SizedBox(height: NikoSpace.s3),
+              NikoBanner(
+                icon: isDanger ? NikoIcons.alert : NikoIcons.copy,
+                title: statusMsg,
+                danger: isDanger,
+                action: outcome == InstallOutcome.polkitUnavailable && manualCmd.isNotEmpty ? _s.copyCommand : null,
+                onAction: outcome == InstallOutcome.polkitUnavailable && manualCmd.isNotEmpty
+                    ? () => unawaited(Clipboard.setData(ClipboardData(text: manualCmd)))
+                    : null,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
   List<Widget> _daemonSections() => [
         _section(_Section.connection, _s.setConnection, [
@@ -561,7 +667,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ColoredBox(
       color: colors.surface0,
       child: ListenableBuilder(
-        listenable: Listenable.merge([_v, _window]),
+        listenable: Listenable.merge([_v, _window, ?widget.serviceInstall]),
         builder: (context, _) => Stack(
           children: [
             ExcludeSemantics(

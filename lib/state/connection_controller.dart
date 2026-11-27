@@ -100,8 +100,8 @@ class ConnectionController extends ChangeNotifier {
     unawaited(_connect());
   }
 
-  /// Replaces the daemon endpoint at runtime (e.g. right after Linux 1-click service install) and connects immediately.
-  void attachDaemon(Daemon daemon) {
+  /// Replaces (or detaches when null) the daemon endpoint at runtime (e.g. after 1-click service install/uninstall).
+  void attachDaemon(Daemon? daemon) {
     if (_disposed) return;
     _generation++;
     unawaited(_statusSubscription?.cancel());
@@ -114,13 +114,16 @@ class ConnectionController extends ChangeNotifier {
     if (previous != null && previous != daemon) {
       unawaited(previous.close());
     }
-    link = LinkPhase.connecting;
+    link = daemon == null ? LinkPhase.none : LinkPhase.connecting;
     linkError = '';
     actionError = '';
     drops = 0;
     _quickSpent = false;
+    service = const ServiceState(ServicePhase.idle);
     notifyListeners();
-    unawaited(_connect());
+    if (daemon != null) {
+      unawaited(_connect());
+    }
   }
 
   Future<void> _connect() async {

@@ -83,18 +83,12 @@ Future<void> main(List<String> arguments) async {
           ),
         );
       }
-      serviceInstall = ServiceController(
-        mode: detection.mode,
-        installedWindowPath: detection.installedWindowPath,
-        probeStatus: probe,
-      );
-    } else {
-      serviceInstall = ServiceController(
-        mode: detection.mode,
-        installedWindowPath: detection.installedWindowPath,
-        probeStatus: probe,
-      );
     }
+    serviceInstall = ServiceController(
+      mode: detection.mode,
+      installedWindowPath: detection.installedWindowPath,
+      probeStatus: probe,
+    );
   } else if (Platform.isLinux) {
     linuxLocation = await locateLinuxDaemon();
     final active = linuxLocation.activeCandidate;
@@ -140,28 +134,74 @@ Future<void> main(List<String> arguments) async {
     );
   }
 
+  if (!_dev && Platform.isWindows && serviceInstall != null) {
+    final daemonExe = WorkerProcess.defaultDaemonPath();
+    final existing = serviceInstall;
+    serviceInstall = ServiceController(
+      mode: existing.mode,
+      installedWindowPath: existing.installedWindowPath,
+      probeStatus: existing.probeStatus,
+      onUninstalledInPlace: () async {
+        final oldDaemon = controller.daemon;
+        if (oldDaemon != null) {
+          try {
+            await oldDaemon.stop().timeout(const Duration(seconds: 2));
+          } catch (_) {}
+        }
+        if (File(daemonExe).existsSync()) {
+          controller.attachDaemon(
+            GrpcDaemon.worker(
+              WorkerProcess(
+                daemonExecutablePath: daemonExe,
+                userMode: true,
+                workingDirectory: defaultWindowsUserDataDir(),
+              ),
+            ),
+          );
+        } else {
+          controller.attachDaemon(null);
+        }
+      },
+    );
+  }
+
   if (!_dev &&
       Platform.isLinux &&
       linuxLocation != null &&
-      linuxLocation.hasBundledDaemon &&
-      linuxLocation.activeCandidate?.kind != DaemonCandidateKind.systemService) {
-    final bundled = linuxLocation.bundledDaemonPath;
+      (linuxLocation.hasBundledDaemon ||
+          linuxLocation.activeCandidate?.kind == DaemonCandidateKind.systemService)) {
+    final isInstalled = linuxLocation.activeCandidate?.kind == DaemonCandidateKind.systemService;
+    final bundled = linuxLocation.hasBundledDaemon ? linuxLocation.bundledDaemonPath : '';
+    final installedBinary = linuxLocation.serviceStatus.binary;
+    final uninstallDaemonPath = installedBinary.isNotEmpty && File(installedBinary).existsSync()
+        ? installedBinary
+        : (bundled.isNotEmpty ? bundled : '/usr/local/libexec/niko/niko-daemon');
     final userDataDir = defaultLinuxUserDataDir();
-    userMigration ??= userDataDir == null
-        ? null
-        : UserStoreMigrationController(
-            userDataDir: userDataDir,
-            exportUserSnapshot: () => UserStoreMigrationController.exportViaTemporaryUserDaemon(
-              daemonExecutablePath: bundled,
+    if (bundled.isNotEmpty) {
+      userMigration ??= userDataDir == null
+          ? null
+          : UserStoreMigrationController(
               userDataDir: userDataDir,
-            ),
-            getServiceDaemon: () => controller.privileged ? controller.daemon : null,
-          );
+              exportUserSnapshot: () => UserStoreMigrationController.exportViaTemporaryUserDaemon(
+                daemonExecutablePath: bundled,
+                userDataDir: userDataDir,
+              ),
+              getServiceDaemon: () => controller.privileged ? controller.daemon : null,
+            );
+    }
     serviceInstall = ServiceController(
-      mode: InstallMode.notInstalled,
+      mode: isInstalled ? InstallMode.installed : InstallMode.notInstalled,
       installedWindowPath: Platform.resolvedExecutable,
-      manualCommand: buildLinuxManualInstallCommand(bundled),
-      runElevatedInstall: () => runLinuxPkexecInstall(bundledDaemonPath: bundled),
+      manualCommand: bundled.isNotEmpty ? buildLinuxManualInstallCommand(bundled) : '',
+      manualUninstallCommand: buildLinuxManualUninstallCommand(uninstallDaemonPath),
+      runElevatedInstall: bundled.isNotEmpty
+          ? () => runLinuxPkexecInstall(bundledDaemonPath: bundled)
+          : () async => const InstallResult.exit(11),
+      runElevatedUninstall: () => runLinuxPkexecUninstall(
+        daemonPath: File(uninstallDaemonPath).existsSync()
+            ? uninstallDaemonPath
+            : (bundled.isNotEmpty ? bundled : uninstallDaemonPath),
+      ),
       onInstalledInPlace: () async {
         // Export user-mode snapshot and stop any running user-mode proxy core before switching to service.
         List<int>? snapshot;
@@ -202,6 +242,24 @@ Future<void> main(List<String> arguments) async {
           }
           userMigration?.refresh();
         }
+      },
+      onUninstalledInPlace: () async {
+        final oldDaemon = controller.daemon;
+        if (oldDaemon != null) {
+          try {
+            await oldDaemon.stop().timeout(const Duration(seconds: 2));
+          } catch (_) {}
+        }
+        if (bundled.isNotEmpty && File(bundled).existsSync()) {
+          linuxUserMode = await LinuxUserModeDaemon.ensureRunning(
+            daemonExecutablePath: bundled,
+          );
+          if (linuxUserMode != null) {
+            controller.attachDaemon(GrpcDaemon.unix(linuxUserMode!.socketPath, onClose: linuxUserMode!.stop));
+            return;
+          }
+        }
+        controller.attachDaemon(null);
       },
     );
   }

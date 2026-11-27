@@ -8,6 +8,7 @@ import 'package:niko_desktop/app.dart';
 import 'package:niko_desktop/daemon/daemon.dart';
 import 'package:niko_desktop/platform/deep_link.dart';
 import 'package:niko_desktop/platform/desktop_integration.dart';
+import 'package:niko_desktop/platform/service_install.dart';
 import 'package:niko_desktop/state/connection_controller.dart';
 import 'package:niko_desktop/state/window_settings.dart';
 
@@ -184,5 +185,82 @@ void main() {
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
     expect(find.text('Help & FAQ'), findsOneWidget);
+  });
+
+  testWidgets('SettingsScreen offers 1-click system service uninstall with confirmation and polkit fallback', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    var uninstallCalls = 0;
+    var switchedToUserMode = false;
+    var nextExit = 127;
+    final svc = ServiceController(
+      mode: InstallMode.installed,
+      installedWindowPath: '/opt/niko/niko',
+      manualCommand: 'sudo /opt/niko/resources/daemon/niko-daemon service install',
+      manualUninstallCommand: 'sudo /usr/local/libexec/niko/niko-daemon service uninstall',
+      runElevatedUninstall: () async {
+        uninstallCalls++;
+        return InstallResult.exit(nextExit);
+      },
+      onUninstalledInPlace: () async {
+        switchedToUserMode = true;
+      },
+    );
+    final daemon = MemoryDaemon()
+      ..api = 16
+      ..groupRows = [const GroupRow(id: 1, name: '', ungrouped: true)];
+    final controller = ConnectionController(daemon: daemon, loadConfig: null)..attach();
+    final settings = WindowSettings.memory(advanced: true, language: 'en');
+    addTearDown(() {
+      svc.dispose();
+      controller.dispose();
+      settings.dispose();
+    });
+
+    await tester.pumpWidget(
+      NikoApp(
+        controller: controller,
+        settings: settings,
+        locale: const Locale('en'),
+        serviceInstall: svc,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('System service'), findsOneWidget);
+    expect(find.text('Installed (VPN / TUN available)'), findsOneWidget);
+
+    // Clicking Uninstall asks for confirmation first.
+    await tester.ensureVisible(find.text('Uninstall service'));
+    await tester.tap(find.text('Uninstall service'));
+    await tester.pumpAndSettle();
+    expect(find.text('Uninstall system service?'), findsOneWidget);
+
+    // 1. Polkit unavailable (exit 127) shows copyable sudo uninstall command.
+    await tester.tap(find.text('Uninstall service').last);
+    await tester.pumpAndSettle();
+    expect(uninstallCalls, 1);
+    expect(find.textContaining('sudo /usr/local/libexec/niko/niko-daemon service uninstall'), findsOneWidget);
+    expect(find.text('Copy command'), findsOneWidget);
+    expect(svc.mode, InstallMode.installed);
+
+    // 2. Successful uninstall (exit 0) switches to notInstalled and runs onUninstalledInPlace.
+    nextExit = 0;
+    await tester.tap(find.text('Uninstall service'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Uninstall service').last);
+    await tester.pumpAndSettle();
+    expect(uninstallCalls, 2);
+    expect(switchedToUserMode, isTrue);
+    expect(svc.mode, InstallMode.notInstalled);
+    expect(find.text('System service uninstalled'), findsOneWidget);
+    expect(find.text('Not installed (Proxy only)'), findsOneWidget);
+    expect(find.text('Install service'), findsOneWidget);
   });
 }

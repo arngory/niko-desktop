@@ -563,6 +563,7 @@ class _NikoShellState extends State<NikoShell> {
                                 )
                             : null,
                         onOpenFaq: () => setState(() => _showingFaq = true),
+                        serviceInstall: widget.serviceInstall,
                         onLanguage: (lang) {
                           final d = state.daemon;
                           if (d != null && state.link == LinkPhase.ready) {

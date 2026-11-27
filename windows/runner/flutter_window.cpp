@@ -324,9 +324,11 @@ bool FlutterWindow::OnCreate() {
           }
           return;
         }
-        if (call.method_name() == "installService") {
+        if (call.method_name() == "installService" ||
+            call.method_name() == "uninstallService") {
+          const bool uninstall = call.method_name() == "uninstallService";
           if (pending_install_result_ != nullptr) {
-            result->Error("busy", "service installation already in progress");
+            result->Error("busy", "service operation already in progress");
             return;
           }
           if (install_complete_message_ == 0) {
@@ -346,7 +348,8 @@ bool FlutterWindow::OnCreate() {
           sei.hwnd = GetHandle();
           sei.lpVerb = L"runas";
           sei.lpFile = daemon_path.c_str();
-          sei.lpParameters = L"service install";
+          sei.lpParameters =
+              uninstall ? L"service uninstall" : L"service install";
           sei.nShow = SW_HIDE;
           if (!::ShellExecuteExW(&sei)) {
             const DWORD err = ::GetLastError();
