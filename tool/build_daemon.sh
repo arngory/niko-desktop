@@ -3,7 +3,7 @@
 # release mode) and verifies libcronet SHA256SUMS + Chromium anchor version.
 #
 # Usage:
-#   tool/build_daemon.sh --os linux|windows|all --mode dev|release [--arch amd64|arm64] [--manifest-sha256 <hex>] [--out <dir>]
+#   tool/build_daemon.sh --os linux|windows|darwin|all --mode dev|release [--arch amd64|arm64] [--manifest-sha256 <hex>] [--out <dir>]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -85,9 +85,19 @@ build_windows() {
   echo "Built $out/niko-daemon.exe ($MODE, $NIKO_VERSION)"
 }
 
+build_darwin() {
+  local out="$OUT_DIR/darwin-$TARGET_ARCH"
+  mkdir -p "$out"
+  local tags="$BASE_TAGS"
+  (cd "$NIKO_DIR/libcore" && GOOS=darwin GOARCH="$TARGET_ARCH" CGO_ENABLED=0 go build -trimpath \
+    -ldflags="$LDFLAGS" -tags="$tags" -o "$out/niko-daemon" ./cmd/nikod)
+  echo "Built $out/niko-daemon ($MODE, $NIKO_VERSION)"
+}
+
 case "$TARGET_OS" in
   linux) build_linux ;;
   windows) build_windows ;;
+  darwin) build_darwin ;;
   all) build_linux; build_windows ;;
-  *) echo "ERROR: --os must be linux, windows, or all" >&2; exit 2 ;;
+  *) echo "ERROR: --os must be linux, windows, darwin, or all" >&2; exit 2 ;;
 esac

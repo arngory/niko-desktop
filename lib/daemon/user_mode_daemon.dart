@@ -15,6 +15,7 @@ String? defaultWindowsUserDataDir({Map<String, String>? environment}) {
 String? defaultUserModeDataDir({Map<String, String>? environment}) {
   if (Platform.isWindows) return defaultWindowsUserDataDir(environment: environment);
   if (Platform.isLinux) return defaultLinuxUserDataDir(environment: environment);
+  if (Platform.isMacOS) return defaultMacosUserDataDir(environment: environment);
   return null;
 }
 
@@ -121,7 +122,10 @@ typedef DetachedProcessStarter = Future<Process> Function(
   ProcessStartMode mode,
 });
 
-/// Handle to a Linux unprivileged user-mode daemon process (`niko-daemon run --user-mode`).
+/// Handle to a Unix (Linux / macOS) unprivileged user-mode daemon process (`niko-daemon run --user-mode`).
+typedef UnixUserModeDaemon = LinuxUserModeDaemon;
+
+/// Handle to a Linux/macOS unprivileged user-mode daemon process (`niko-daemon run --user-mode`).
 class LinuxUserModeDaemon {
   LinuxUserModeDaemon({
     required this.socketPath,
@@ -135,7 +139,7 @@ class LinuxUserModeDaemon {
   /// Non-null when this window spawned the daemon process itself.
   final Process? process;
 
-  /// Ensures a Linux user-mode daemon is listening on [socketPath], starting one if needed.
+  /// Ensures a Unix user-mode daemon is listening on [socketPath], starting one if needed.
   static Future<LinuxUserModeDaemon?> ensureRunning({
     required String daemonExecutablePath,
     String? socketPath,
@@ -147,8 +151,14 @@ class LinuxUserModeDaemon {
     Duration readyTimeout = const Duration(seconds: 6),
     Duration pollInterval = const Duration(milliseconds: 100),
   }) async {
-    final sock = socketPath ?? defaultLinuxUserSocketPath(environment: environment);
-    final dir = dataDir ?? defaultLinuxUserDataDir(environment: environment);
+    final sock = socketPath ??
+        (Platform.isMacOS
+            ? defaultMacosUserSocketPath(environment: environment)
+            : defaultLinuxUserSocketPath(environment: environment));
+    final dir = dataDir ??
+        (Platform.isMacOS
+            ? defaultMacosUserDataDir(environment: environment)
+            : defaultLinuxUserDataDir(environment: environment));
     if (sock == null || sock.isEmpty || dir == null || dir.isEmpty) {
       return null;
     }

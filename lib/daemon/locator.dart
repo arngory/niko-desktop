@@ -76,6 +76,41 @@ String defaultLinuxBundledDaemonPath({String? resolvedExecutable}) {
   return '$exeDir/resources/daemon/niko-daemon';
 }
 
+/// Resolves `~/Library/Caches/Niko/niko-daemon.sock` for the unprivileged macOS user-mode daemon.
+String? defaultMacosUserSocketPath({Map<String, String>? environment}) {
+  final env = environment ?? Platform.environment;
+  final home = env['HOME']?.trim();
+  if (home == null || home.isEmpty) return null;
+  return '$home/Library/Caches/Niko/niko-daemon.sock';
+}
+
+/// Resolves `~/Library/Application Support/Niko/user-daemon` on macOS.
+String? defaultMacosUserDataDir({Map<String, String>? environment}) {
+  final env = environment ?? Platform.environment;
+  final home = env['HOME']?.trim();
+  if (home == null || home.isEmpty) return null;
+  return '$home/Library/Application Support/Niko/user-daemon';
+}
+
+/// Resolves the bundled macOS `niko-daemon` inside `Niko.app/Contents/Resources/daemon/niko-daemon`,
+/// falling back to `<exeDir>/resources/daemon/niko-daemon` for non-bundle layouts.
+String defaultMacosBundledDaemonPath({
+  String? resolvedExecutable,
+  bool Function(String path)? fileExists,
+}) {
+  final existsFn = fileExists ?? ((p) => File(p).existsSync());
+  final exeDir = File(resolvedExecutable ?? Platform.resolvedExecutable).parent;
+  final appResourcesPath = '${exeDir.parent.path}/Resources/daemon/niko-daemon';
+  if (existsFn(appResourcesPath)) {
+    return appResourcesPath;
+  }
+  final siblingPath = '${exeDir.path}/resources/daemon/niko-daemon';
+  if (existsFn(siblingPath)) {
+    return siblingPath;
+  }
+  return appResourcesPath;
+}
+
 /// Performs a live non-blocking connect probe to a Unix domain socket path.
 Future<bool> probeUnixSocketReachable(
   String socketPath, {

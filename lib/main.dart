@@ -125,6 +125,21 @@ Future<void> main(List<String> arguments) async {
         daemon = GrpcDaemon.unix(linuxUserMode.socketPath, onClose: linuxUserMode.stop);
       }
     }
+  } else if (Platform.isMacOS) {
+    final userSock = defaultMacosUserSocketPath();
+    final bundled = defaultMacosBundledDaemonPath();
+    if (userSock != null && await probeUnixSocketReachable(userSock)) {
+      daemon = GrpcDaemon.unix(userSock);
+    } else if (File(bundled).existsSync()) {
+      final macosUserMode = await UnixUserModeDaemon.ensureRunning(
+        daemonExecutablePath: bundled,
+        socketPath: userSock,
+        dataDir: defaultMacosUserDataDir(),
+      );
+      if (macosUserMode != null) {
+        daemon = GrpcDaemon.unix(macosUserMode.socketPath, onClose: macosUserMode.stop);
+      }
+    }
   }
 
   final file = config;
