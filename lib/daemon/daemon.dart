@@ -529,6 +529,8 @@ class NodeRow {
     this.switchedFrom = '',
     this.switchedTo = '',
     this.switchedAt = 0,
+    this.dnsResolver = '',
+    this.naiveUdpState = '',
   });
 
   final String id;
@@ -577,6 +579,8 @@ class NodeRow {
   final String switchedFrom;
   final String switchedTo;
   final int switchedAt;
+  final String dnsResolver;
+  final String naiveUdpState;
 }
 
 /// One profile result from a diagnostic node test run (D-WHY).
@@ -673,6 +677,8 @@ class ProfileRow {
     required this.type,
     required this.name,
     required this.address,
+    this.kind = '',
+    this.transport = '',
   });
 
   final int id;
@@ -683,6 +689,27 @@ class ProfileRow {
   final String type;
   final String name;
   final String address;
+
+  /// Specific protocol kind (`vless-reality`, `hysteria2`, `dnstt`, `awg`...) and transport (`tcp`, `udp`, `dns`).
+  final String kind;
+  final String transport;
+}
+
+/// Result of validating a profile's type and bean JSON without saving it (NikoService.CheckProfile).
+class ProfileCheckResult {
+  const ProfileCheckResult({
+    this.ok = true,
+    this.error = '',
+    this.warnings = const [],
+    this.kind = '',
+    this.transport = '',
+  });
+
+  final bool ok;
+  final String error;
+  final List<String> warnings;
+  final String kind;
+  final String transport;
 }
 
 /// What an input is (NikoService.Recognize): a raycontrol node's invite or package is a [node], which comes with the
@@ -999,6 +1026,10 @@ abstract interface class Daemon {
   /// A new profile at the end of its group, from its type and bean (NikoService.SaveProfile): its id.
   Future<int> addProfile({required int groupId, required String type, required String beanJson});
 
+  /// Validates a profile's type and bean JSON without saving it (NikoService.CheckProfile, API 17).
+  Future<ProfileCheckResult> checkProfile({required String type, required String beanJson}) async =>
+      const ProfileCheckResult(ok: true);
+
   /// Deletes the profiles of those ids (NikoService.DeleteProfiles).
   Future<void> deleteProfiles(List<int> ids);
 
@@ -1210,17 +1241,7 @@ class GrpcDaemon implements Daemon {
   static final _ruleSetTasks = CallOptions(timeout: const Duration(hours: 1));
 
   @override
-  Future<String> version() async {
-    final info = await _desktop.getDaemonInfo(Empty(), options: _short);
-    if (info.ownership == DaemonOwnership.DAEMON_OWNERSHIP_AVAILABLE) {
-      try {
-        await _desktop.claimService(Empty(), options: _short);
-      } on GrpcError catch (e) {
-        if (e.code != StatusCode.unimplemented) rethrow;
-      }
-    }
-    return info.version;
-  }
+  Future<String> version() async => (await _desktop.getDaemonInfo(Empty(), options: _short)).version;
 
   @override
   Stream<ServiceState> serviceStatus() => _started
@@ -1537,6 +1558,8 @@ class GrpcDaemon implements Daemon {
         type: p.type,
         name: p.name,
         address: p.address,
+        kind: p.kind,
+        transport: p.transport,
       );
 
   @override
@@ -1576,6 +1599,18 @@ class GrpcDaemon implements Daemon {
       (await _niko.saveProfile(niko.Profile(groupId: Int64(groupId), type: type, beanJson: beanJson), options: _short))
           .id
           .toInt();
+
+  @override
+  Future<ProfileCheckResult> checkProfile({required String type, required String beanJson}) async {
+    final res = await _niko.checkProfile(niko.Profile(type: type, beanJson: beanJson), options: _short);
+    return ProfileCheckResult(
+      ok: res.ok,
+      error: res.error,
+      warnings: List.unmodifiable(res.warnings),
+      kind: res.kind,
+      transport: res.transport,
+    );
+  }
 
   @override
   Future<void> deleteProfiles(List<int> ids) =>
@@ -1714,6 +1749,8 @@ class GrpcDaemon implements Daemon {
           switchedFrom: n.switchedFrom,
           switchedTo: n.switchedTo,
           switchedAt: n.switchedAt.toInt(),
+          dnsResolver: n.dnsResolver,
+          naiveUdpState: n.naiveUdpState,
         ),
       ),
     );

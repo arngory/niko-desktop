@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:grpc/grpc.dart' show GrpcError, StatusCode;
 
 import 'app.dart';
+import 'daemon/bootstrap.dart';
 import 'daemon/daemon.dart';
 import 'daemon/endpoint.dart';
 import 'daemon/locator.dart';
@@ -42,9 +43,7 @@ Future<void> main(List<String> arguments) async {
   // does not surface as an unhandled exception in the root zone.
   final previousOnError = PlatformDispatcher.instance.onError;
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    if (error is StateError &&
-        error.message == 'Cannot add event after closing' &&
-        stack.toString().contains('_StreamSinkWrapper.add')) {
+    if (isHttp2TeardownStateError(error, stack)) {
       return true;
     }
     return previousOnError?.call(error, stack) ?? false;
@@ -107,11 +106,11 @@ Future<void> main(List<String> arguments) async {
     final active = linuxLocation.activeCandidate;
     if (active != null && active.kind == DaemonCandidateKind.systemService) {
       daemon = GrpcDaemon.unix(active.socketPath);
-      if (linuxLocation.hasBundledDaemon) {
-        migrationDaemonExe = linuxLocation.bundledDaemonPath;
-      } else if (linuxLocation.serviceStatus.binary.isNotEmpty) {
-        migrationDaemonExe = linuxLocation.serviceStatus.binary;
-      }
+      migrationDaemonExe = resolveLinuxMigrationDaemonPath(
+        hasBundledDaemon: linuxLocation.hasBundledDaemon,
+        bundledDaemonPath: linuxLocation.bundledDaemonPath,
+        installedBinaryPath: linuxLocation.serviceStatus.binary,
+      );
       migrationDataDir = defaultLinuxUserDataDir();
       // Ensure no orphaned user-mode daemon keeps holding port 2080 or desktop proxy settings.
       unawaited(stopExistingUserModeDaemon(migrationDataDir));
@@ -201,9 +200,10 @@ Future<void> main(List<String> arguments) async {
     final isInstalled = linuxLocation.activeCandidate?.kind == DaemonCandidateKind.systemService;
     final bundled = linuxLocation.hasBundledDaemon ? linuxLocation.bundledDaemonPath : '';
     final installedBinary = linuxLocation.serviceStatus.binary;
-    final uninstallDaemonPath = installedBinary.isNotEmpty && File(installedBinary).existsSync()
-        ? installedBinary
-        : (bundled.isNotEmpty ? bundled : '/usr/local/libexec/niko/niko-daemon');
+    final uninstallDaemonPath = resolveLinuxUninstallDaemonPath(
+      installedBinaryPath: installedBinary,
+      bundledDaemonPath: bundled,
+    );
     final userDataDir = defaultLinuxUserDataDir();
     if (bundled.isNotEmpty) {
       userMigration ??= userDataDir == null

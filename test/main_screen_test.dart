@@ -28,6 +28,9 @@ class MemoryDaemon implements Daemon {
   @override
   Future<String> version() async => '1.14.4-niko';
   @override
+  Future<ProfileCheckResult> checkProfile({required String type, required String beanJson}) async =>
+      const ProfileCheckResult(ok: true);
+  @override
   Stream<ServiceState> serviceStatus() => status.stream;
   @override
   Stream<Traffic> traffic(Duration interval) => rates.stream;

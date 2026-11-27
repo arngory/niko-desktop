@@ -655,6 +655,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _v.text('dpiDirectCustom').isEmpty ? '—' : _v.text('dpiDirectCustom'),
               _Dialog(_s.setDpiCustomArgs, [('dpiDirectCustom', _s.setDpiCustomArgs, FieldInput.text)]),
             ),
+          _value(
+            'dnstt resolver',
+            _v.text('raycontrolDnsttResolver').isEmpty ? 'auto' : _v.text('raycontrolDnsttResolver'),
+            _Dialog('dnstt resolver', [('raycontrolDnsttResolver', 'dnstt resolver', FieldInput.text)]),
+          ),
+          _value(
+            'MasterDnsVPN resolvers',
+            _v.text('raycontrolMasterDnsResolvers').isEmpty ? 'auto' : _v.text('raycontrolMasterDnsResolvers').split('\n').first,
+            _Dialog('MasterDnsVPN resolvers', [('raycontrolMasterDnsResolvers', 'MasterDnsVPN resolvers', FieldInput.lines)]),
+          ),
         ]),
         // D-RULES-06: as the phone's apps through the VPN, a rule by program ahead of the rules (D-RULES-02)
         _section(_Section.programs, _s.setPrograms, [
@@ -687,6 +697,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _switch('icmpNoLocalReply', _s.setNoPingReply),
           _switch('trafficSniffing', _s.setSniffing),
           _switch('resolveDestination', _s.setResolveDestination),
+          _choice('rootStore', 'naive roots', const [('chrome', 'Chrome'), ('mozilla', 'Mozilla'), ('system', 'System')],
+              cell: 84),
+          _switch('yggdrasilEnabled', 'Yggdrasil'),
+          if (_v.flag('yggdrasilEnabled')) ...[
+            _value(
+              'Yggdrasil peers',
+              _v.text('yggdrasilPeers').isEmpty ? '—' : _v.text('yggdrasilPeers').split('\n').first,
+              _Dialog('Yggdrasil peers', [('yggdrasilPeers', 'Yggdrasil peers', FieldInput.lines)]),
+            ),
+            _switch('yggdrasilTlsChrome', 'Yggdrasil TLS Chrome'),
+            _switch('yggdrasilAllowInbound', 'Yggdrasil inbound'),
+          ],
+          _value(
+            'Connection test URL',
+            _v.text('connectionTestURL').isEmpty ? 'http://cp.cloudflare.com/' : _v.text('connectionTestURL'),
+            _Dialog('Connection test URL', [('connectionTestURL', 'Connection test URL', FieldInput.text)]),
+          ),
+          _value(
+            'Clash API',
+            _v.text('clashApi').isEmpty ? '—' : _v.text('clashApi'),
+            _Dialog('Clash API', [('clashApi', 'Clash API (127.0.0.1:9090)', FieldInput.text)]),
+          ),
         ]),
         _section(_Section.log, _s.setLog, [
           _choice('logLevel', _s.setLogLevel,

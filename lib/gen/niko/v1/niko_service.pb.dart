@@ -2235,6 +2235,8 @@ class Profile extends $pb.GeneratedMessage {
     $core.String? address,
     $core.String? beanJson,
     $core.String? nodeId,
+    $core.String? kind,
+    $core.String? transport,
   }) {
     final result = Profile._();
     if (id != null) result.id = id;
@@ -2245,6 +2247,8 @@ class Profile extends $pb.GeneratedMessage {
     if (address != null) result.address = address;
     if (beanJson != null) result.beanJson = beanJson;
     if (nodeId != null) result.nodeId = nodeId;
+    if (kind != null) result.kind = kind;
+    if (transport != null) result.transport = transport;
     return result;
   }
 
@@ -2269,6 +2273,8 @@ class Profile extends $pb.GeneratedMessage {
     ..aOS(6, _omitFieldNames ? '' : 'address')
     ..aOS(7, _omitFieldNames ? '' : 'beanJson')
     ..aOS(9, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(10, _omitFieldNames ? '' : 'kind')
+    ..aOS(11, _omitFieldNames ? '' : 'transport')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2366,6 +2372,125 @@ class Profile extends $pb.GeneratedMessage {
   $core.bool hasNodeId() => $_has(7);
   @$pb.TagNumber(9)
   void clearNodeId() => $_clearField(9);
+
+  /// specific protocol kind (naive, naive-quic, hysteria2, vless-reality, vless-xhttp, dnstt, masterdns, slipstream, ygg, awg...)
+  @$pb.TagNumber(10)
+  $core.String get kind => $_getSZ(8);
+  @$pb.TagNumber(10)
+  set kind($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(10)
+  $core.bool hasKind() => $_has(8);
+  @$pb.TagNumber(10)
+  void clearKind() => $_clearField(10);
+
+  /// primary carrier transport: "tcp", "udp", or "dns"
+  @$pb.TagNumber(11)
+  $core.String get transport => $_getSZ(9);
+  @$pb.TagNumber(11)
+  set transport($core.String value) => $_setString(9, value);
+  @$pb.TagNumber(11)
+  $core.bool hasTransport() => $_has(9);
+  @$pb.TagNumber(11)
+  void clearTransport() => $_clearField(11);
+}
+
+class CheckProfileResult extends $pb.GeneratedMessage {
+  factory CheckProfileResult({
+    $core.bool? ok,
+    $core.String? error,
+    $core.Iterable<$core.String>? warnings,
+    $core.String? kind,
+    $core.String? transport,
+  }) {
+    final result = CheckProfileResult._();
+    if (ok != null) result.ok = ok;
+    if (error != null) result.error = error;
+    if (warnings != null) result.warnings.addAll(warnings);
+    if (kind != null) result.kind = kind;
+    if (transport != null) result.transport = transport;
+    return result;
+  }
+
+  CheckProfileResult._();
+
+  factory CheckProfileResult.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      CheckProfileResult()..mergeFromBuffer(data, registry);
+  factory CheckProfileResult.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      CheckProfileResult()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CheckProfileResult',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: CheckProfileResult.$_createMessage)
+    ..aOB(1, _omitFieldNames ? '' : 'ok')
+    ..aOS(2, _omitFieldNames ? '' : 'error')
+    ..pPS(3, _omitFieldNames ? '' : 'warnings')
+    ..aOS(4, _omitFieldNames ? '' : 'kind')
+    ..aOS(5, _omitFieldNames ? '' : 'transport')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CheckProfileResult clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CheckProfileResult copyWith(void Function(CheckProfileResult) updates) =>
+      super.copyWith((message) => updates(message as CheckProfileResult))
+          as CheckProfileResult;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use CheckProfileResult() / CheckProfileResult.new instead')
+  static CheckProfileResult create() => CheckProfileResult._();
+  static $pb.GeneratedMessage $_createMessage() => CheckProfileResult._();
+  @$core.override
+  CheckProfileResult createEmptyInstance() => CheckProfileResult._();
+  @$core.pragma('dart2js:noInline')
+  static CheckProfileResult getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CheckProfileResult>(
+          CheckProfileResult.$_createMessage);
+  static CheckProfileResult? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get ok => $_getBF(0);
+  @$pb.TagNumber(1)
+  set ok($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasOk() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearOk() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get error => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set error($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasError() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearError() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $pb.PbList<$core.String> get warnings => $_getList(2);
+
+  @$pb.TagNumber(4)
+  $core.String get kind => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set kind($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasKind() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearKind() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get transport => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set transport($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasTransport() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearTransport() => $_clearField(5);
 }
 
 class ProfileList extends $pb.GeneratedMessage {
@@ -2639,6 +2764,17 @@ class Settings extends $pb.GeneratedMessage {
     $core.bool? raycontrolAutoSwitch,
     $core.bool? raycontrolBrutal,
     $core.bool? raycontrolReports,
+    $core.String? raycontrolDnsttResolver,
+    $core.String? raycontrolMasterDnsResolvers,
+    $core.String? rootStore,
+    $core.bool? yggdrasilEnabled,
+    $core.String? yggdrasilPeers,
+    $core.bool? yggdrasilTlsChrome,
+    $core.bool? yggdrasilAllowInbound,
+    $core.String? yggdrasilInboundPorts,
+    $core.bool? yggdrasilPeersViaProxy,
+    $core.String? connectionTestUrl,
+    $core.String? clashApi,
   }) {
     final result = Settings._();
     if (serviceMode != null) result.serviceMode = serviceMode;
@@ -2683,6 +2819,23 @@ class Settings extends $pb.GeneratedMessage {
       result.raycontrolAutoSwitch = raycontrolAutoSwitch;
     if (raycontrolBrutal != null) result.raycontrolBrutal = raycontrolBrutal;
     if (raycontrolReports != null) result.raycontrolReports = raycontrolReports;
+    if (raycontrolDnsttResolver != null)
+      result.raycontrolDnsttResolver = raycontrolDnsttResolver;
+    if (raycontrolMasterDnsResolvers != null)
+      result.raycontrolMasterDnsResolvers = raycontrolMasterDnsResolvers;
+    if (rootStore != null) result.rootStore = rootStore;
+    if (yggdrasilEnabled != null) result.yggdrasilEnabled = yggdrasilEnabled;
+    if (yggdrasilPeers != null) result.yggdrasilPeers = yggdrasilPeers;
+    if (yggdrasilTlsChrome != null)
+      result.yggdrasilTlsChrome = yggdrasilTlsChrome;
+    if (yggdrasilAllowInbound != null)
+      result.yggdrasilAllowInbound = yggdrasilAllowInbound;
+    if (yggdrasilInboundPorts != null)
+      result.yggdrasilInboundPorts = yggdrasilInboundPorts;
+    if (yggdrasilPeersViaProxy != null)
+      result.yggdrasilPeersViaProxy = yggdrasilPeersViaProxy;
+    if (connectionTestUrl != null) result.connectionTestUrl = connectionTestUrl;
+    if (clashApi != null) result.clashApi = clashApi;
     return result;
   }
 
@@ -2732,6 +2885,18 @@ class Settings extends $pb.GeneratedMessage {
     ..aOB(31, _omitFieldNames ? '' : 'raycontrolAutoSwitch')
     ..aOB(32, _omitFieldNames ? '' : 'raycontrolBrutal')
     ..aOB(33, _omitFieldNames ? '' : 'raycontrolReports')
+    ..aOS(34, _omitFieldNames ? '' : 'raycontrolDnsttResolver')
+    ..aOS(35, _omitFieldNames ? '' : 'raycontrolMasterDnsResolvers')
+    ..aOS(36, _omitFieldNames ? '' : 'rootStore')
+    ..aOB(37, _omitFieldNames ? '' : 'yggdrasilEnabled')
+    ..aOS(38, _omitFieldNames ? '' : 'yggdrasilPeers')
+    ..aOB(39, _omitFieldNames ? '' : 'yggdrasilTlsChrome')
+    ..aOB(40, _omitFieldNames ? '' : 'yggdrasilAllowInbound')
+    ..aOS(41, _omitFieldNames ? '' : 'yggdrasilInboundPorts')
+    ..aOB(42, _omitFieldNames ? '' : 'yggdrasilPeersViaProxy')
+    ..aOS(43, _omitFieldNames ? '' : 'connectionTestURL',
+        protoName: 'connection_test_url')
+    ..aOS(44, _omitFieldNames ? '' : 'clashApi')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3082,6 +3247,107 @@ class Settings extends $pb.GeneratedMessage {
   $core.bool hasRaycontrolReports() => $_has(32);
   @$pb.TagNumber(33)
   void clearRaycontrolReports() => $_clearField(33);
+
+  /// API 17 protocol & advanced settings (D-SET-15/21/29/30, H2, M7).
+  @$pb.TagNumber(34)
+  $core.String get raycontrolDnsttResolver => $_getSZ(33);
+  @$pb.TagNumber(34)
+  set raycontrolDnsttResolver($core.String value) => $_setString(33, value);
+  @$pb.TagNumber(34)
+  $core.bool hasRaycontrolDnsttResolver() => $_has(33);
+  @$pb.TagNumber(34)
+  void clearRaycontrolDnsttResolver() => $_clearField(34);
+
+  @$pb.TagNumber(35)
+  $core.String get raycontrolMasterDnsResolvers => $_getSZ(34);
+  @$pb.TagNumber(35)
+  set raycontrolMasterDnsResolvers($core.String value) =>
+      $_setString(34, value);
+  @$pb.TagNumber(35)
+  $core.bool hasRaycontrolMasterDnsResolvers() => $_has(34);
+  @$pb.TagNumber(35)
+  void clearRaycontrolMasterDnsResolvers() => $_clearField(35);
+
+  @$pb.TagNumber(36)
+  $core.String get rootStore => $_getSZ(35);
+  @$pb.TagNumber(36)
+  set rootStore($core.String value) => $_setString(35, value);
+  @$pb.TagNumber(36)
+  $core.bool hasRootStore() => $_has(35);
+  @$pb.TagNumber(36)
+  void clearRootStore() => $_clearField(36);
+
+  @$pb.TagNumber(37)
+  $core.bool get yggdrasilEnabled => $_getBF(36);
+  @$pb.TagNumber(37)
+  set yggdrasilEnabled($core.bool value) => $_setBool(36, value);
+  @$pb.TagNumber(37)
+  $core.bool hasYggdrasilEnabled() => $_has(36);
+  @$pb.TagNumber(37)
+  void clearYggdrasilEnabled() => $_clearField(37);
+
+  @$pb.TagNumber(38)
+  $core.String get yggdrasilPeers => $_getSZ(37);
+  @$pb.TagNumber(38)
+  set yggdrasilPeers($core.String value) => $_setString(37, value);
+  @$pb.TagNumber(38)
+  $core.bool hasYggdrasilPeers() => $_has(37);
+  @$pb.TagNumber(38)
+  void clearYggdrasilPeers() => $_clearField(38);
+
+  @$pb.TagNumber(39)
+  $core.bool get yggdrasilTlsChrome => $_getBF(38);
+  @$pb.TagNumber(39)
+  set yggdrasilTlsChrome($core.bool value) => $_setBool(38, value);
+  @$pb.TagNumber(39)
+  $core.bool hasYggdrasilTlsChrome() => $_has(38);
+  @$pb.TagNumber(39)
+  void clearYggdrasilTlsChrome() => $_clearField(39);
+
+  @$pb.TagNumber(40)
+  $core.bool get yggdrasilAllowInbound => $_getBF(39);
+  @$pb.TagNumber(40)
+  set yggdrasilAllowInbound($core.bool value) => $_setBool(39, value);
+  @$pb.TagNumber(40)
+  $core.bool hasYggdrasilAllowInbound() => $_has(39);
+  @$pb.TagNumber(40)
+  void clearYggdrasilAllowInbound() => $_clearField(40);
+
+  @$pb.TagNumber(41)
+  $core.String get yggdrasilInboundPorts => $_getSZ(40);
+  @$pb.TagNumber(41)
+  set yggdrasilInboundPorts($core.String value) => $_setString(40, value);
+  @$pb.TagNumber(41)
+  $core.bool hasYggdrasilInboundPorts() => $_has(40);
+  @$pb.TagNumber(41)
+  void clearYggdrasilInboundPorts() => $_clearField(41);
+
+  @$pb.TagNumber(42)
+  $core.bool get yggdrasilPeersViaProxy => $_getBF(41);
+  @$pb.TagNumber(42)
+  set yggdrasilPeersViaProxy($core.bool value) => $_setBool(41, value);
+  @$pb.TagNumber(42)
+  $core.bool hasYggdrasilPeersViaProxy() => $_has(41);
+  @$pb.TagNumber(42)
+  void clearYggdrasilPeersViaProxy() => $_clearField(42);
+
+  @$pb.TagNumber(43)
+  $core.String get connectionTestUrl => $_getSZ(42);
+  @$pb.TagNumber(43)
+  set connectionTestUrl($core.String value) => $_setString(42, value);
+  @$pb.TagNumber(43)
+  $core.bool hasConnectionTestUrl() => $_has(42);
+  @$pb.TagNumber(43)
+  void clearConnectionTestUrl() => $_clearField(43);
+
+  @$pb.TagNumber(44)
+  $core.String get clashApi => $_getSZ(43);
+  @$pb.TagNumber(44)
+  set clashApi($core.String value) => $_setString(43, value);
+  @$pb.TagNumber(44)
+  $core.bool hasClashApi() => $_has(43);
+  @$pb.TagNumber(44)
+  void clearClashApi() => $_clearField(44);
 }
 
 class SettingsUpdate extends $pb.GeneratedMessage {
@@ -3729,6 +3995,8 @@ class Node extends $pb.GeneratedMessage {
     $core.String? switchedFrom,
     $core.String? switchedTo,
     $fixnum.Int64? switchedAt,
+    $core.String? dnsResolver,
+    $core.String? naiveUdpState,
   }) {
     final result = Node._();
     if (id != null) result.id = id;
@@ -3759,6 +4027,8 @@ class Node extends $pb.GeneratedMessage {
     if (switchedFrom != null) result.switchedFrom = switchedFrom;
     if (switchedTo != null) result.switchedTo = switchedTo;
     if (switchedAt != null) result.switchedAt = switchedAt;
+    if (dnsResolver != null) result.dnsResolver = dnsResolver;
+    if (naiveUdpState != null) result.naiveUdpState = naiveUdpState;
     return result;
   }
 
@@ -3804,6 +4074,8 @@ class Node extends $pb.GeneratedMessage {
     ..aOS(26, _omitFieldNames ? '' : 'switchedFrom')
     ..aOS(27, _omitFieldNames ? '' : 'switchedTo')
     ..aInt64(28, _omitFieldNames ? '' : 'switchedAt')
+    ..aOS(29, _omitFieldNames ? '' : 'dnsResolver')
+    ..aOS(30, _omitFieldNames ? '' : 'naiveUdpState')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4096,6 +4368,25 @@ class Node extends $pb.GeneratedMessage {
   $core.bool hasSwitchedAt() => $_has(27);
   @$pb.TagNumber(28)
   void clearSwitchedAt() => $_clearField(28);
+
+  /// API 17: active probed DNS tunnel resolver summary (D-NODE-10) and naive UDP state (D-NODE-09).
+  @$pb.TagNumber(29)
+  $core.String get dnsResolver => $_getSZ(28);
+  @$pb.TagNumber(29)
+  set dnsResolver($core.String value) => $_setString(28, value);
+  @$pb.TagNumber(29)
+  $core.bool hasDnsResolver() => $_has(28);
+  @$pb.TagNumber(29)
+  void clearDnsResolver() => $_clearField(29);
+
+  @$pb.TagNumber(30)
+  $core.String get naiveUdpState => $_getSZ(29);
+  @$pb.TagNumber(30)
+  set naiveUdpState($core.String value) => $_setString(29, value);
+  @$pb.TagNumber(30)
+  $core.bool hasNaiveUdpState() => $_has(29);
+  @$pb.TagNumber(30)
+  void clearNaiveUdpState() => $_clearField(30);
 }
 
 class NodeTraffic extends $pb.GeneratedMessage {

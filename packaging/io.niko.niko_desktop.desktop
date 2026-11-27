@@ -9,4 +9,4 @@ Terminal=false
 Categories=Network;Utility;
 StartupNotify=true
 StartupWMClass=io.niko.niko_desktop
-MimeType=x-scheme-handler/niko;x-scheme-handler/sn;x-scheme-handler/clash;
+MimeType=x-scheme-handler/niko;x-scheme-handler/rcinv1;x-scheme-handler/rcinv2;x-scheme-handler/rcinv3;x-scheme-handler/sn;x-scheme-handler/clash;x-scheme-handler/hiddify;x-scheme-handler/sing-box;x-scheme-handler/v2rayng;x-scheme-handler/anytls;x-scheme-handler/naive+https;x-scheme-handler/naive+quic;

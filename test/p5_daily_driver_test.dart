@@ -320,6 +320,7 @@ void main() {
       await tester.tap(find.text('New profile'));
       await tester.pumpAndSettle();
       expect(find.text('Protocol'), findsOneWidget);
+      await tester.ensureVisible(find.text('Cancel'));
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
     });

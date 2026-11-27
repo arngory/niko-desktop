@@ -28,8 +28,17 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>niko</string>
+				<string>rcinv1</string>
+				<string>rcinv2</string>
+				<string>rcinv3</string>
 				<string>sn</string>
 				<string>clash</string>
+				<string>hiddify</string>
+				<string>sing-box</string>
+				<string>v2rayng</string>
+				<string>anytls</string>
+				<string>naive+https</string>
+				<string>naive+quic</string>
 			</array>
 		</dict>
 	</array>

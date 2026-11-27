@@ -241,6 +241,17 @@ class ProfilesFeed extends ChangeNotifier {
     return daemon.recognize(text);
   }
 
+  /// Validates a profile's type and bean JSON before saving (NikoService.CheckProfile).
+  Future<ProfileCheckResult> checkProfile({required String type, required String beanJson}) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return const ProfileCheckResult(ok: false, error: 'no link to the service');
+    try {
+      return await daemon.checkProfile(type: type, beanJson: beanJson);
+    } catch (e) {
+      return ProfileCheckResult(ok: false, error: '$e');
+    }
+  }
+
   /// Imports a subscription's link (D-SUB-01): the daemon makes its group and updates it; that group is shown, and
   /// what its first update did is said. Fails where the group was not made.
   Future<void> addSubscription(String text) async {

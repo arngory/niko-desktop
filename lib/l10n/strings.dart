@@ -632,8 +632,8 @@ class NikoStrings {
   String get updateUnverifiedMirror =>
       _ru ? 'Из зеркала узла — подпись будет проверена при загрузке' : 'From node mirror — signature will be verified on download';
   String updateDownloaded(String path, String sha) => _ru
-      ? 'Проверено и сохранено: $path (SHA-256 ${sha.length > 12 ? sha.substring(0, 12) : sha}…)'
-      : 'Verified and saved: $path (SHA-256 ${sha.length > 12 ? sha.substring(0, 12) : sha}…)';
+      ? 'Архив проверен и сохранён: $path (SHA-256 ${sha.length > 12 ? sha.substring(0, 12) : sha}…). Распакуйте его вручную для обновления.'
+      : 'Archive verified and saved: $path (SHA-256 ${sha.length > 12 ? sha.substring(0, 12) : sha}…). Unpack it manually to update.';
 
   String get faqOpen => _ru ? 'Справка и FAQ' : 'Help & FAQ';
   String get faqTitle => _ru ? 'Справка и частые вопросы' : 'Help & FAQ';

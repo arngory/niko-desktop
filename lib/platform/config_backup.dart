@@ -24,6 +24,62 @@ class BackupExportSummary {
   final int skippedNodes;
 }
 
+/// Dry-run preview of a desktop configuration backup before applying it (H6 / D-ADD-10).
+class BackupPreview {
+  const BackupPreview({
+    required this.groups,
+    required this.subscriptions,
+    required this.profiles,
+    required this.rules,
+    required this.hasSettings,
+    required this.containsSecrets,
+  });
+
+  final int groups;
+  final int subscriptions;
+  final int profiles;
+  final int rules;
+  final bool hasSettings;
+  final bool containsSecrets;
+}
+
+/// Inspects a backup JSON string without modifying the daemon store.
+BackupPreview inspectDesktopBackupJson(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<String, dynamic>) {
+    throw const FormatException('backup file must be a JSON object');
+  }
+  if (decoded['format'] != desktopBackupFormat) {
+    throw const FormatException('unsupported backup format');
+  }
+  final version = decoded['version'];
+  if (version is! int || version < 1 || version > desktopBackupVersion) {
+    throw FormatException('unsupported backup version: $version');
+  }
+  final rawGroups = decoded['groups'] is List ? decoded['groups'] as List : const [];
+  var groups = 0;
+  var subs = 0;
+  for (final g in rawGroups) {
+    if (g is! Map) continue;
+    if (g['subscription'] == true) {
+      subs++;
+    } else if (g['ungrouped'] != true) {
+      groups++;
+    }
+  }
+  final profiles = decoded['profiles'] is List ? (decoded['profiles'] as List).length : 0;
+  final rules = decoded['rules'] is List ? (decoded['rules'] as List).length : 0;
+  final hasSettings = decoded['settings'] is Map && (decoded['settings'] as Map).isNotEmpty;
+  return BackupPreview(
+    groups: groups,
+    subscriptions: subs,
+    profiles: profiles,
+    rules: rules,
+    hasSettings: hasSettings,
+    containsSecrets: profiles > 0 || subs > 0,
+  );
+}
+
 /// Summary of an imported desktop configuration backup.
 class BackupImportSummary {
   const BackupImportSummary({
@@ -51,6 +107,7 @@ Future<(Map<String, Object?> payload, int groups, int profiles, int rules, int s
   final exportedGroups = <Map<String, Object?>>[];
   final exportedProfiles = <Map<String, Object?>>[];
   final groupIndexById = <int, int>{};
+  final profileIndexById = <int, int>{};
   var skippedNodes = 0;
 
   for (final g in allGroups) {
@@ -80,6 +137,7 @@ Future<(Map<String, Object?> payload, int groups, int profiles, int rules, int s
       for (final row in rows) {
         try {
           final saved = await daemon.profile(row.id);
+          profileIndexById[row.id] = exportedProfiles.length;
           exportedProfiles.add({
             'groupIndex': idx,
             'type': saved.row.type,
@@ -108,6 +166,8 @@ Future<(Map<String, Object?> payload, int groups, int profiles, int rules, int s
         'programs': r.programs,
         'dpiBypass': r.dpiBypass,
         'outbound': r.outbound,
+        if (r.outbound > 0 && profileIndexById.containsKey(r.outbound))
+          'outboundProfileIndex': profileIndexById[r.outbound],
         'config': r.config,
       },
   ];
@@ -157,12 +217,21 @@ Future<BackupExportSummary> exportDesktopBackup({
   final path = '${destDir.path}${Platform.pathSeparator}niko-backup-$stamp.json';
   final file = File(path);
   final encoder = const JsonEncoder.withIndent('  ');
-  await file.writeAsString('${encoder.convert(payload)}\n', flush: true);
+  // Create empty file and lock down permissions BEFORE writing any plaintext credentials (H6).
+  await file.create(exclusive: false);
   if (!Platform.isWindows) {
     try {
       await Process.run('chmod', ['600', path]);
     } catch (_) {}
+  } else {
+    final user = Platform.environment['USERNAME']?.trim();
+    if (user != null && user.isNotEmpty) {
+      try {
+        await Process.run('icacls', [path, '/inheritance:r', '/grant:r', '$user:(R,W)']);
+      } catch (_) {}
+    }
   }
+  await file.writeAsString('${encoder.convert(payload)}\n', flush: true);
   return BackupExportSummary(
     path: path,
     groups: groups,
@@ -265,16 +334,45 @@ Future<BackupImportSummary> importDesktopBackupJson({
   }
 
   var importedProfiles = 0;
+  final importedProfileIds = <int, int>{};
   final rawProfiles = decoded['profiles'];
   if (rawProfiles is List) {
-    for (final entry in rawProfiles) {
+    // Build per-group signature sets so re-importing the same backup does not duplicate profiles (H6).
+    final existingByGroup = <int, Map<String, int>>{};
+    Future<Map<String, int>> loadGroupSigs(int groupId) async {
+      final cached = existingByGroup[groupId];
+      if (cached != null) return cached;
+      final map = <String, int>{};
+      try {
+        final rows = await daemon.profiles(groupId: groupId);
+        for (final row in rows) {
+          try {
+            final saved = await daemon.profile(row.id);
+            map['${saved.row.type}|${_canonicalJson(saved.beanJson)}'] = row.id;
+          } catch (_) {}
+        }
+      } catch (_) {}
+      existingByGroup[groupId] = map;
+      return map;
+    }
+
+    for (var i = 0; i < rawProfiles.length; i++) {
+      final entry = rawProfiles[i];
       if (entry is! Map<String, dynamic>) continue;
       final type = (entry['type'] as String? ?? '').trim();
       final beanJson = (entry['beanJson'] as String? ?? '').trim();
       if (type.isEmpty || beanJson.isEmpty) continue;
       final gIdx = (entry['groupIndex'] as num?)?.toInt() ?? -1;
       final targetGroupId = importedGroupIds[gIdx] ?? ungroupedId;
-      await daemon.addProfile(groupId: targetGroupId, type: type, beanJson: beanJson);
+      final sigs = await loadGroupSigs(targetGroupId);
+      final sig = '$type|${_canonicalJson(beanJson)}';
+      if (sigs.containsKey(sig)) {
+        importedProfileIds[i] = sigs[sig]!;
+        continue;
+      }
+      final added = await daemon.addProfile(groupId: targetGroupId, type: type, beanJson: beanJson);
+      sigs[sig] = added;
+      importedProfileIds[i] = added;
       importedProfiles++;
     }
   }
@@ -288,14 +386,20 @@ Future<BackupImportSummary> importDesktopBackupJson({
     final seenRules = {for (final r in existingRules) ruleSig(r)};
     for (final entry in rawRules) {
       if (entry is! Map<String, dynamic>) continue;
+      final outProfileIdx = (entry['outboundProfileIndex'] as num?)?.toInt();
       final rawOut = entry['outbound'];
-      final outbound = rawOut is int
-          ? (rawOut == RuleOutbound.direct || rawOut == RuleOutbound.block ? rawOut : RuleOutbound.proxy)
-          : switch (rawOut) {
-              'direct' => RuleOutbound.direct,
-              'block' => RuleOutbound.block,
-              _ => RuleOutbound.proxy,
-            };
+      final int outbound;
+      if (outProfileIdx != null && importedProfileIds.containsKey(outProfileIdx)) {
+        outbound = importedProfileIds[outProfileIdx]!;
+      } else {
+        outbound = rawOut is int
+            ? (rawOut == RuleOutbound.direct || rawOut == RuleOutbound.block ? rawOut : RuleOutbound.proxy)
+            : switch (rawOut) {
+                'direct' => RuleOutbound.direct,
+                'block' => RuleOutbound.block,
+                _ => RuleOutbound.proxy,
+              };
+      }
       final rawProgs = entry['programs'];
       final programs = rawProgs is List
           ? [for (final p in rawProgs) if (p is String && p.isNotEmpty) p]
@@ -360,4 +464,23 @@ Future<BackupImportSummary> importDesktopBackupJson({
     rules: importedRules,
     settingsRestored: settingsRestored,
   );
+}
+
+String _canonicalJson(String raw) {
+  try {
+    return jsonEncode(_sortJson(jsonDecode(raw)));
+  } catch (_) {
+    return raw.trim();
+  }
+}
+
+Object? _sortJson(Object? value) {
+  if (value is Map) {
+    final keys = value.keys.map((k) => '$k').toList()..sort();
+    return {for (final k in keys) k: _sortJson(value[k])};
+  }
+  if (value is List) {
+    return [for (final item in value) _sortJson(item)];
+  }
+  return value;
 }

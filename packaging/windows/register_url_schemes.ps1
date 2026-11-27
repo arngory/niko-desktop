@@ -50,9 +50,9 @@ function Test-OwnedByUs([string]$Scheme) {
     return $val.StartsWith("`"$resolvedExe`"", [System.StringComparison]::OrdinalIgnoreCase)
 }
 
-$schemes = @("niko")
+$schemes = @("niko", "rcinv1", "rcinv2", "rcinv3")
 if ($IncludeThirdPartySchemes -or $Unregister) {
-    $schemes += @("sn", "clash")
+    $schemes += @("sn", "clash", "hiddify", "sing-box", "v2rayng", "anytls", "naive+https", "naive+quic")
 }
 
 if ($Unregister) {

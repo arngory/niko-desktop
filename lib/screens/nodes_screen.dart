@@ -94,6 +94,8 @@ class _NodesScreenState extends State<NodesScreen> {
         groupId: feed.importGroup,
         initialType: _editProfileType,
         initialBeanJson: _editProfileJson,
+        onCheck: ({required String type, required String beanJson}) =>
+            feed.checkProfile(type: type, beanJson: beanJson),
         onSave: ({required int id, required int groupId, required String type, required String beanJson}) async {
           final err = await feed.saveProfile(id: id, groupId: groupId, type: type, beanJson: beanJson);
           if (err == null && mounted) {
@@ -124,7 +126,7 @@ class _NodesScreenState extends State<NodesScreen> {
           latency: feed.latencies[p.id],
           onPressed: () => feed.select(p.id),
           onEdit: canAddManual ? () => unawaited(_openProfileEditor(existing: p)) : null,
-          onDelete: () => feed.delete(p),
+          onDelete: !feed.shownIsNode ? () => feed.delete(p) : null,
           onShare: share ? () => feed.share(p, copyText) : null,
           onQr: share
               ? () => unawaited(feed.shareLink(p).then((link) {
@@ -160,6 +162,43 @@ class _NodesScreenState extends State<NodesScreen> {
         ),
       );
       return scrollable ? Flexible(child: card) : card;
+    }
+
+    Widget buildProfilesSliver() {
+      if (feed.profiles.isEmpty) {
+        return SliverToBoxAdapter(child: buildProfiles(scrollable: false));
+      }
+      final share = !feed.shownIsNode;
+      return DecoratedSliver(
+        decoration: BoxDecoration(
+          color: colors.surface1,
+          borderRadius: BorderRadius.circular(NikoRadius.md),
+        ),
+        sliver: SliverList.builder(
+          itemCount: feed.profiles.length,
+          itemBuilder: (context, i) {
+            final p = feed.profiles[i];
+            return _ProfileRow(
+              key: ValueKey(p.id),
+              profile: p,
+              selected: p.id == feed.selected,
+              divider: i > 0,
+              latency: feed.latencies[p.id],
+              onPressed: () => feed.select(p.id),
+              onEdit: canAddManual ? () => unawaited(_openProfileEditor(existing: p)) : null,
+              onDelete: !feed.shownIsNode ? () => feed.delete(p) : null,
+              onShare: share ? () => feed.share(p, copyText) : null,
+              onQr: share
+                  ? () => unawaited(feed.shareLink(p).then((link) {
+                        if (mounted && link != null && link.isNotEmpty) {
+                          setState(() => _qrShare = (p.name, link));
+                        }
+                      }))
+                  : null,
+            );
+          },
+        ),
+      );
     }
 
     List<Widget> detailChildren({required bool scrollable}) => [
@@ -279,7 +318,9 @@ class _NodesScreenState extends State<NodesScreen> {
             NikoBanner(icon: NikoIcons.alert, title: strings.storeUnreachable, text: feed.error, danger: true),
             const SizedBox(height: NikoSpace.s4),
           ],
-          buildProfiles(scrollable: scrollable),
+        ];
+
+    List<Widget> detailFooterChildren() => [
           if (feed.deleted case final gone?) ...[
             const SizedBox(height: NikoSpace.s4),
             _Snackbar(text: strings.profileDeleted(gone.saved.row.name), action: strings.undo, onAction: feed.undo),
@@ -296,6 +337,12 @@ class _NodesScreenState extends State<NodesScreen> {
                       : '${strings.subscriptionUpdateFailed}: $line',
             ),
           ],
+        ];
+
+    List<Widget> detailSlivers() => [
+          SliverList.list(children: detailChildren(scrollable: false)),
+          buildProfilesSliver(),
+          SliverList.list(children: detailFooterChildren()),
         ];
 
     final mainLayout = LayoutBuilder(
@@ -324,7 +371,7 @@ class _NodesScreenState extends State<NodesScreen> {
                 const SizedBox(width: NikoSpace.s6),
                 Expanded(
                   child: CustomScrollView(
-                    slivers: [SliverList.list(children: detailChildren(scrollable: false))],
+                    slivers: detailSlivers(),
                   ),
                 ),
               ],
@@ -335,7 +382,7 @@ class _NodesScreenState extends State<NodesScreen> {
         return CustomScrollView(
           slivers: [
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(pad, NikoSpace.s4, pad, NikoSpace.s8),
+              padding: EdgeInsets.fromLTRB(pad, NikoSpace.s4, pad, 0),
               sliver: SliverList.list(
                 children: [
                   Align(
@@ -346,6 +393,14 @@ class _NodesScreenState extends State<NodesScreen> {
                   ...detailChildren(scrollable: false),
                 ],
               ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: pad),
+              sliver: buildProfilesSliver(),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(pad, 0, pad, NikoSpace.s8),
+              sliver: SliverList.list(children: detailFooterChildren()),
             ),
           ],
         );
@@ -677,6 +732,10 @@ class _NodeCardState extends State<NodeCard> {
           Text(strings.nodeSigned, maxLines: 2, style: NikoType.bodySm.style(colors.ink2)),
         if (node.relays > 0)
           Text(strings.nodeRelaysCount(node.relays), maxLines: 1, style: NikoType.bodySm.style(colors.ink2)),
+        if (node.dnsResolver.isNotEmpty)
+          Text('DNS: ${node.dnsResolver}', maxLines: 1, style: NikoType.bodySm.style(colors.ink2)),
+        if (node.naiveUdpState.isNotEmpty)
+          Text('naive UDP: ${node.naiveUdpState}', maxLines: 1, style: NikoType.bodySm.style(colors.ink2)),
         if (node.hasLan && widget.onToggleLan != null) ...[
           const SizedBox(height: NikoSpace.s2),
           NikoSwitchRow(
@@ -921,21 +980,40 @@ class _GroupRow extends StatelessWidget {
   }
 }
 
-/// The label of a bean's type in a row's tag: the app's names, VMess's bean holding VLESS too.
-String typeLabel(String type) => switch (type) {
-      'vmess' => 'V2Ray',
-      'ss' => 'Shadowsocks',
-      'socks' => 'SOCKS',
-      'hysteria' => 'Hysteria',
-      'trojan' => 'Trojan',
-      'trojan_go' => 'Trojan-Go',
-      'naive' => 'naive',
-      'tuic' => 'TUIC',
-      'anytls' => 'AnyTLS',
-      'mieru' => 'Mieru',
-      'http' => 'HTTP',
-      _ => type,
-    };
+/// The label of a profile's protocol in a row's tag (M3 / Stage 1): prefers specific [kind] from API 17.
+String typeLabel(String type, {String kind = ''}) {
+  final key = kind.isNotEmpty ? kind : type;
+  return switch (key) {
+    'naive-quic' => 'naive QUIC',
+    'naive' => 'naive',
+    'hysteria2' => 'Hysteria2',
+    'hysteria' => 'Hysteria',
+    'vless-reality' => 'REALITY',
+    'vless-xhttp' => 'XHTTP',
+    'vless-tls' => 'VLESS TLS',
+    'vless' => 'VLESS',
+    'vmess' => 'VMess',
+    'dnstt' => 'dnstt',
+    'masterdns' || 'masterdnsvpn' => 'MasterDnsVPN',
+    'slipstream' => 'slipstream',
+    'ygg' || 'yggdrasil' => 'Yggdrasil',
+    'awg' => 'AmneziaWG',
+    'wg' || 'wireguard' => 'WireGuard',
+    'ss' => 'Shadowsocks',
+    'socks' => 'SOCKS',
+    'trojan' => 'Trojan',
+    'trojan-go' || 'trojan_go' => 'Trojan-Go',
+    'tuic' => 'TUIC',
+    'anytls' => 'AnyTLS',
+    'mieru' => 'Mieru',
+    'shadowtls' => 'ShadowTLS',
+    'chain' => 'Chain',
+    'ssh' => 'SSH',
+    'config' => 'JSON',
+    'http' => 'HTTP',
+    _ => key,
+  };
+}
 
 /// A profile as a row (m-row): radio, name, type/address, optional latency badge, edit, share, delete.
 class _ProfileRow extends StatelessWidget {
@@ -947,7 +1025,7 @@ class _ProfileRow extends StatelessWidget {
     this.latency,
     required this.onPressed,
     this.onEdit,
-    required this.onDelete,
+    this.onDelete,
     this.onShare,
     this.onQr,
   });
@@ -958,7 +1036,7 @@ class _ProfileRow extends StatelessWidget {
   final ProfileTestEntry? latency;
   final VoidCallback onPressed;
   final VoidCallback? onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onDelete;
   final VoidCallback? onShare;
   final VoidCallback? onQr;
 
@@ -996,7 +1074,7 @@ class _ProfileRow extends StatelessWidget {
                         const SizedBox(height: 2),
                         Row(
                           children: [
-                            NikoTag(typeLabel(profile.type)),
+                            NikoTag(typeLabel(profile.type, kind: profile.kind)),
                             const SizedBox(width: NikoSpace.s2),
                             Flexible(
                               child: Text(profile.address,
@@ -1039,16 +1117,19 @@ class _ProfileRow extends StatelessWidget {
               small: true,
               onPressed: onShare,
             ),
-          Padding(
-            padding: const EdgeInsets.only(right: NikoSpace.s2),
-            child: NikoIconButton(
-              icon: NikoIcons.trash,
-              label: strings.profileDelete(profile.name),
-              muted: true,
-              small: true,
-              onPressed: onDelete,
-            ),
-          ),
+          if (onDelete != null)
+            Padding(
+              padding: const EdgeInsets.only(right: NikoSpace.s2),
+              child: NikoIconButton(
+                icon: NikoIcons.trash,
+                label: strings.profileDelete(profile.name),
+                muted: true,
+                small: true,
+                onPressed: onDelete,
+              ),
+            )
+          else
+            const SizedBox(width: NikoSpace.s2),
         ],
       ),
     );

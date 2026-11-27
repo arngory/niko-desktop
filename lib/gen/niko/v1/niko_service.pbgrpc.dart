@@ -94,6 +94,14 @@ class NikoServiceClient extends $grpc.Client {
     return $createUnaryCall(_$saveProfile, request, options: options);
   }
 
+  /// Validates a profile's type and bean_json via DecodeBean + nikoconf without saving it (D-PROFILE-01..03).
+  $grpc.ResponseFuture<$0.CheckProfileResult> checkProfile(
+    $0.Profile request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$checkProfile, request, options: options);
+  }
+
   /// Deletes the profiles of those ids that are there.
   $grpc.ResponseFuture<$0.Empty> deleteProfiles(
     $0.ProfileIds request, {
@@ -461,6 +469,11 @@ class NikoServiceClient extends $grpc.Client {
       '/niko.v1.NikoService/SaveProfile',
       ($0.Profile value) => value.writeToBuffer(),
       $0.Profile.fromBuffer);
+  static final _$checkProfile =
+      $grpc.ClientMethod<$0.Profile, $0.CheckProfileResult>(
+          '/niko.v1.NikoService/CheckProfile',
+          ($0.Profile value) => value.writeToBuffer(),
+          $0.CheckProfileResult.fromBuffer);
   static final _$deleteProfiles = $grpc.ClientMethod<$0.ProfileIds, $0.Empty>(
       '/niko.v1.NikoService/DeleteProfiles',
       ($0.ProfileIds value) => value.writeToBuffer(),
@@ -665,6 +678,13 @@ abstract class NikoServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.Profile.fromBuffer(value),
         ($0.Profile value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.Profile, $0.CheckProfileResult>(
+        'CheckProfile',
+        checkProfile_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.Profile.fromBuffer(value),
+        ($0.CheckProfileResult value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ProfileIds, $0.Empty>(
         'DeleteProfiles',
         deleteProfiles_Pre,
@@ -962,6 +982,14 @@ abstract class NikoServiceBase extends $grpc.Service {
   }
 
   $async.Future<$0.Profile> saveProfile(
+      $grpc.ServiceCall call, $0.Profile request);
+
+  $async.Future<$0.CheckProfileResult> checkProfile_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.Profile> $request) async {
+    return checkProfile($call, await $request);
+  }
+
+  $async.Future<$0.CheckProfileResult> checkProfile(
       $grpc.ServiceCall call, $0.Profile request);
 
   $async.Future<$0.Empty> deleteProfiles_Pre(

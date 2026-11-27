@@ -2,9 +2,9 @@
 
 English | [Русский](README.ru.md)
 
-The window of [Niko](https://github.com/arngory/niko) for Windows and Linux, in Flutter. It only shows and asks:
-the core and Niko's logic live in the daemon, `nikod` (the core's `boxdd` with Niko's `NikoService` beside it),
-which the window talks to over gRPC. What the window can do and where its parts are is in
+The window of [Niko](https://github.com/arngory/niko) for Windows, Linux, and macOS (minimal base), in Flutter. It only
+shows and asks: the core and Niko's logic live in the daemon, `nikod` (the core's `boxdd` with Niko's `NikoService`,
+API 17, beside it), which the window talks to over gRPC. What the window can do and where its parts are is in
 [README.ru.md](README.ru.md); the design is Niko's
 [docs/design/desktop.md](https://github.com/arngory/niko/blob/main/docs/design/desktop.md) and
 [docs/design/desktop-stage3.md](https://github.com/arngory/niko/blob/main/docs/design/desktop-stage3.md).
@@ -57,11 +57,14 @@ VPN mode and of the system proxy change the machine: they run on Windows only wi
 
 ## Known desktop runner limits
 
-- **Linux (Wayland):** Impeller is disabled by default on Linux (set `NIKO_IMPELLER=1` to opt in). On Wayland,
-  launching a second instance activates the existing window via D-Bus, though without an activation token the
-  compositor may not raise it above other windows.
+- **Linux (Wayland):** Native Wayland rendering is supported on Flutter 3.50.1+ (Impeller is disabled by default; set
+  `NIKO_IMPELLER=1` to opt in). System tray uses native GDBus StatusNotifierItem without deprecated
+  `libayatana-appindicator`. On Wayland, launching a second instance activates the existing window via D-Bus, though
+  without an activation token the compositor may not raise it above other windows.
 - **Windows:** exported logs and crash reports save to `%USERPROFILE%\Downloads`; redirected Known Folders
   (such as OneDrive) are not resolved yet.
+- **macOS:** minimal user-mode Proxy base (`networksetup` system proxy, Unix socket daemon, URL schemes); privileged
+  TUN / LaunchDaemon packaging is not wired yet.
 
 ## Support the project
 

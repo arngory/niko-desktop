@@ -14,6 +14,8 @@ This document freezes the on-disk layout of Niko Desktop release archives so tha
 | Windows arm64 | `niko-<version>-windows-arm64.zip` | `SHA256SUMS`, `SHA256SUMS.minisig` |
 | Linux x64 | `niko-<version>-linux-amd64.tar.gz` | `SHA256SUMS`, `SHA256SUMS.minisig` |
 | Linux arm64 | `niko-<version>-linux-arm64.tar.gz` | `SHA256SUMS`, `SHA256SUMS.minisig` |
+| macOS arm64 | `niko-<version>-darwin-arm64.zip` | `SHA256SUMS`, `SHA256SUMS.minisig` |
+| macOS x64 | `niko-<version>-darwin-amd64.zip` | `SHA256SUMS`, `SHA256SUMS.minisig` |
 
 `<version>` comes from `pubspec.yaml` (`version:` without `+<build>`), e.g. `0.1.0`.
 
@@ -63,7 +65,7 @@ Because `niko-daemon.exe` embeds the SHA-256 of `resources/files.sha256` (which 
 
 ### Installed Target Directory (Windows)
 
-When the user clicks **Install service** in Niko Desktop, elevated `niko-daemon.exe service install` copies the verified tree into `%ProgramFiles%\Niko\` with strict ACLs (`SYSTEM` + `BUILTIN\Administrators` full control, `Authenticated Users` read/execute) and registers the `NikoService` Windows service pointing to `%ProgramFiles%\Niko\resources\daemon\niko-daemon.exe`.
+When the user clicks **Install service** in Niko Desktop, elevated `niko-daemon.exe service install` copies the verified tree into `%ProgramFiles%\Niko\` with strict ACLs (`SYSTEM` + `BUILTIN\Administrators` full control, `Authenticated Users` read/execute) and registers the `niko-daemon` Windows service pointing to `%ProgramFiles%\Niko\resources\daemon\niko-daemon.exe`.
 
 ## Linux Release Tarball Layout (P3)
 
@@ -78,5 +80,24 @@ niko-<version>-linux-amd64/
     └── daemon/
         ├── files.sha256              # Manifest of daemon files verified by Linux service install
         ├── niko-daemon               # Release nikod (embedded manifestSHA256)
-        └── libcronet.so              # Verified against cronet-go SHA256SUMS & ChromiumAnchorsVersion
+        ├── libcronet.so              # Verified against cronet-go SHA256SUMS & ChromiumAnchorsVersion
+        └── slipstream-client         # Optional: external slipstream helper (built via tool/build_slipstream.sh)
+```
+
+## macOS Application Bundle Layout (Minimal Base)
+
+On macOS (`darwin-arm64` / `darwin-amd64`), user-mode Proxy launches the bundled `niko-daemon` beside the `.app` resources and configures system HTTP/HTTPS proxy via `networksetup`:
+
+```text
+Niko.app/
+└── Contents/
+    ├── Info.plist                    # URL schemes (rcinv1/2/3, vless, hy2, naive+https/quic, …)
+    ├── MacOS/
+    │   └── niko                      # Flutter macOS release executable
+    ├── Frameworks/...
+    └── Resources/
+        └── daemon/
+            ├── niko-daemon           # Release nikod (user-mode socket under ~/Library/Application Support/Niko/)
+            ├── libcronet.dylib       # Optional: cronet library for naive outbound
+            └── slipstream-client     # Optional: external slipstream helper
 ```

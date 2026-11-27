@@ -78,8 +78,11 @@ void main() {
     expect(find.text('cloudflare-dns.com +1'), findsOneWidget, reason: 'the first server\'s host, and one after it');
     expect(find.text('не заданы'), findsOneWidget);
     expect(find.text('Авто'), findsOneWidget, reason: 'every domain strategy the core\'s own');
+    // API 17 protocol rows are now shown in Settings
+    expect(find.text('Yggdrasil'), findsOneWidget);
+    expect(find.text('Clash API'), findsOneWidget);
     // what the window has not yet is not shown
-    for (final missing in ['Узлы raycontrol', 'naive', 'Yggdrasil', 'Резервная копия', 'Clash API']) {
+    for (final missing in ['Узлы raycontrol', 'naive', 'Резервная копия']) {
       expect(find.text(missing), findsNothing, reason: missing);
     }
 
@@ -217,7 +220,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Inbound for other programs'.toUpperCase()), findsOneWidget);
     expect(find.text('Experiments'), findsNothing, reason: 'the menu is for a wide window');
-    expect(find.byType(NikoChoiceRow<String>), findsNWidgets(7));
+    expect(find.byType(NikoChoiceRow<String>), findsNWidgets(8));
   });
 
   testWidgets('theme and language rows stay available without daemon; language dialog notifies callback', (tester) async {

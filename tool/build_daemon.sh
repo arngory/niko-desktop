@@ -31,7 +31,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-BASE_TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_xhttp,with_awg,with_dnstt,with_masterdnsvpn,with_yggdrasil,badlinkname,tfogo_checklinkname0"
+BASE_TAGS="$(tr -d '\r\n' < "$NIKO_DIR/shared/build-tags.txt")"
+[ -n "$BASE_TAGS" ] || { echo "ERROR: cannot read $NIKO_DIR/shared/build-tags.txt" >&2; exit 1; }
 NIKO_VERSION="$(sed -n 's/^VERSION_NAME=//p' "$NIKO_DIR/niko.properties")-$(git -C "$NIKO_DIR" rev-parse --short=7 HEAD)"
 CHROMIUM="$(sed -n 's/^const ChromiumAnchorsVersion = "\(.*\)"$/\1/p' "$SING_BOX_DIR/common/certificate/chromium_anchors_neko_generated.go")"
 [ -n "$CHROMIUM" ] || { echo "ERROR: cannot read ChromiumAnchorsVersion" >&2; exit 1; }
@@ -59,19 +60,24 @@ copy_verified_cronet() {
   have="$(sha256sum "$libdir/$libfile" | cut -d' ' -f1)"
   [ -n "$want" ] && [ "$have" = "$want" ] || { echo "ERROR: $libfile SHA256 mismatch ($have vs ${want:-none})" >&2; exit 1; }
   grep -q "const Version = \"$CHROMIUM\"" "$libdir"/libcronet*.go || { echo "ERROR: $mod is not Chromium $CHROMIUM" >&2; exit 1; }
-  cp -a "$libdir/$libfile" "$dest/$libfile"
+  rm -f "$dest/$libfile"
+  cp "$libdir/$libfile" "$dest/$libfile"
+  chmod 0644 "$dest/$libfile"
 }
 
 build_linux() {
   local out="$OUT_DIR/linux-$TARGET_ARCH"
   mkdir -p "$out"
-  local tags="$BASE_TAGS"
-  if [ "$MODE" = "release" ]; then
-    tags="$BASE_TAGS,with_naive_outbound,with_purego"
-    copy_verified_cronet linux "$TARGET_ARCH" "$out"
-  fi
+  local tags="$BASE_TAGS,with_naive_outbound,with_purego"
+  copy_verified_cronet linux "$TARGET_ARCH" "$out"
   (cd "$NIKO_DIR/libcore" && GOOS=linux GOARCH="$TARGET_ARCH" CGO_ENABLED=0 go build -trimpath \
     -ldflags="$LDFLAGS" -tags="$tags" -o "$out/niko-daemon" ./cmd/nikod)
+  for required in "sing-box/protocol/knock" "sing-box/protocol/naive" "sing-box/protocol/dnstt" "sing-box/protocol/masterdnsvpn" "sing-box/protocol/yggdrasil" "sing-box/protocol/mieru"; do
+    grep -qaF -- "$required" "$out/niko-daemon" || {
+      echo "ERROR: $out/niko-daemon missing required protocol symbol: $required" >&2
+      exit 1
+    }
+  done
   echo "Built $out/niko-daemon ($MODE, $NIKO_VERSION)"
 }
 
