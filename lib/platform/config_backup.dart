@@ -33,6 +33,7 @@ class BackupPreview {
     required this.rules,
     required this.hasSettings,
     required this.containsSecrets,
+    this.hasSensitiveSettings = false,
   });
 
   final int groups;
@@ -41,7 +42,10 @@ class BackupPreview {
   final int rules;
   final bool hasSettings;
   final bool containsSecrets;
+  final bool hasSensitiveSettings;
 }
+
+const _sensitiveBackupSettings = {'allowAccess', 'clashApi', 'globalAllowInsecure'};
 
 /// Inspects a backup JSON string without modifying the daemon store.
 BackupPreview inspectDesktopBackupJson(String jsonText) {
@@ -69,14 +73,22 @@ BackupPreview inspectDesktopBackupJson(String jsonText) {
   }
   final profiles = decoded['profiles'] is List ? (decoded['profiles'] as List).length : 0;
   final rules = decoded['rules'] is List ? (decoded['rules'] as List).length : 0;
-  final hasSettings = decoded['settings'] is Map && (decoded['settings'] as Map).isNotEmpty;
+  final rawSettings = decoded['settings'] is Map ? decoded['settings'] as Map : const {};
+  final hasSettings = rawSettings.isNotEmpty;
+  final hasSettingsSecrets = (rawSettings['mixedPassword'] is String &&
+          (rawSettings['mixedPassword'] as String).isNotEmpty) ||
+      (rawSettings['clashApi'] is String && (rawSettings['clashApi'] as String).isNotEmpty);
+  final hasSensitive = rawSettings['allowAccess'] == true ||
+      rawSettings['globalAllowInsecure'] == true ||
+      (rawSettings['clashApi'] is String && (rawSettings['clashApi'] as String).isNotEmpty);
   return BackupPreview(
     groups: groups,
     subscriptions: subs,
     profiles: profiles,
     rules: rules,
     hasSettings: hasSettings,
-    containsSecrets: profiles > 0 || subs > 0,
+    containsSecrets: profiles > 0 || subs > 0 || hasSettingsSecrets,
+    hasSensitiveSettings: hasSensitive,
   );
 }
 
@@ -217,18 +229,28 @@ Future<BackupExportSummary> exportDesktopBackup({
   final path = '${destDir.path}${Platform.pathSeparator}niko-backup-$stamp.json';
   final file = File(path);
   final encoder = const JsonEncoder.withIndent('  ');
-  // Create empty file and lock down permissions BEFORE writing any plaintext credentials (H6).
+  // Create empty file and lock down permissions BEFORE writing any plaintext credentials (H6, M5).
   await file.create(exclusive: false);
   if (!Platform.isWindows) {
-    try {
-      await Process.run('chmod', ['600', path]);
-    } catch (_) {}
-  } else {
-    final user = Platform.environment['USERNAME']?.trim();
-    if (user != null && user.isNotEmpty) {
+    final res = await Process.run('chmod', ['600', path]);
+    if (res.exitCode != 0) {
       try {
-        await Process.run('icacls', [path, '/inheritance:r', '/grant:r', '$user:(R,W)']);
+        await file.delete();
       } catch (_) {}
+      throw FileSystemException('failed to restrict backup file permissions (chmod 600)', path);
+    }
+  } else {
+    final user = Platform.environment['USERNAME']?.trim() ?? '';
+    final domain = Platform.environment['USERDOMAIN']?.trim() ?? '';
+    final principal = domain.isNotEmpty && user.isNotEmpty ? '$domain\\$user' : user;
+    if (principal.isNotEmpty) {
+      final res = await Process.run('icacls', [path, '/inheritance:r', '/grant:r', '$principal:(R,W)']);
+      if (res.exitCode != 0) {
+        try {
+          await file.delete();
+        } catch (_) {}
+        throw FileSystemException('failed to restrict backup file ACL (icacls)', path);
+      }
     }
   }
   await file.writeAsString('${encoder.convert(payload)}\n', flush: true);
@@ -242,10 +264,13 @@ Future<BackupExportSummary> exportDesktopBackup({
 }
 
 /// Imports a portable desktop backup JSON string into [daemon] and optionally [windowSettings].
+/// Sensitive exposure settings (`allowAccess`, `clashApi`, `globalAllowInsecure`) are skipped unless
+/// [applySensitiveSettings] is explicitly true (M5).
 Future<BackupImportSummary> importDesktopBackupJson({
   required Daemon daemon,
   required String jsonText,
   WindowSettings? windowSettings,
+  bool applySensitiveSettings = false,
 }) async {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map<String, dynamic>) {
@@ -432,6 +457,9 @@ Future<BackupImportSummary> importDesktopBackupJson({
   if (rawSettings is Map<String, dynamic> && rawSettings.isNotEmpty) {
     final patch = <String, Object>{};
     for (final e in rawSettings.entries) {
+      if (!applySensitiveSettings && _sensitiveBackupSettings.contains(e.key)) {
+        continue;
+      }
       final v = e.value;
       if (v is String || v is int || v is bool) {
         patch[e.key] = v as Object;

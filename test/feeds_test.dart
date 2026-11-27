@@ -63,6 +63,8 @@ class TracedDaemon implements Daemon {
   Future<ProfileCheckResult> checkProfile({required String type, required String beanJson}) =>
       _inner.checkProfile(type: type, beanJson: beanJson);
   @override
+  Future<void> claimService() => _inner.claimService();
+  @override
   Stream<ServiceState> serviceStatus() => _traced('status', _inner.serviceStatus(), (s) => s.phase.name);
   @override
   Stream<Traffic> traffic(Duration interval) => _inner.traffic(interval);

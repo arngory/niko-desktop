@@ -716,8 +716,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           _value(
             'Clash API',
-            _v.text('clashApi').isEmpty ? '—' : _v.text('clashApi'),
-            _Dialog('Clash API', [('clashApi', 'Clash API (127.0.0.1:9090)', FieldInput.text)]),
+            _v.text('clashApi').isEmpty ? '—' : '••••••••',
+            _Dialog(
+              'Clash API',
+              [
+                (
+                  'clashApi',
+                  _s.save == 'Сохранить'
+                      ? 'Секрет Clash API (127.0.0.1:9090)'
+                      : 'Clash API secret (127.0.0.1:9090)',
+                  FieldInput.secret,
+                ),
+              ],
+            ),
           ),
         ]),
         _section(_Section.log, _s.setLog, [

@@ -81,6 +81,11 @@ echo "3. Fetching verified libcronet.so..."
 DAEMON_PRE="$TMP_DIR/daemon-pre"
 "$ROOT/tool/build_daemon.sh" --os linux --arch "$ARCH" --mode release --out "$DAEMON_PRE" >/dev/null
 cp -a "$DAEMON_PRE/linux-$ARCH/libcronet.so" "$STAGE_ROOT/resources/daemon/libcronet.so"
+if [ -n "${SLIPSTREAM_BIN:-}" ] && [ -x "$SLIPSTREAM_BIN" ]; then
+  echo "   staging optional slipstream-client from $SLIPSTREAM_BIN"
+  cp "$SLIPSTREAM_BIN" "$STAGE_ROOT/resources/daemon/slipstream-client"
+  chmod 0755 "$STAGE_ROOT/resources/daemon/slipstream-client"
+fi
 
 echo "4. Generating resources/daemon/files.sha256..."
 (

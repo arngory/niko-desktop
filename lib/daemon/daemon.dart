@@ -1030,6 +1030,9 @@ abstract interface class Daemon {
   Future<ProfileCheckResult> checkProfile({required String type, required String beanJson}) async =>
       const ProfileCheckResult(ok: true);
 
+  /// Claims ownership of the daemon for the current user session when unowned (M3).
+  Future<void> claimService() async {}
+
   /// Deletes the profiles of those ids (NikoService.DeleteProfiles).
   Future<void> deleteProfiles(List<int> ids);
 
@@ -1242,6 +1245,11 @@ class GrpcDaemon implements Daemon {
 
   @override
   Future<String> version() async => (await _desktop.getDaemonInfo(Empty(), options: _short)).version;
+
+  @override
+  Future<void> claimService() async {
+    await _desktop.claimService(Empty(), options: _short);
+  }
 
   @override
   Stream<ServiceState> serviceStatus() => _started

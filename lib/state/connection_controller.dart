@@ -132,6 +132,16 @@ class ConnectionController extends ChangeNotifier {
     try {
       final version = await daemon.version();
       if (_stale(generation)) return;
+      // Claim ownership explicitly on link attach so owner-only StartedService/ManagedService calls
+      // succeed before the first Connect (M3), without hiding a write side effect inside version().
+      try {
+        await daemon.claimService();
+      } on GrpcError catch (e) {
+        if (e.code != StatusCode.unimplemented && e.code != StatusCode.permissionDenied) {
+          rethrow;
+        }
+      }
+      if (_stale(generation)) return;
       // always ask NikoService for versions and API level; connectsProfile still checks _loadConfig == null
       NikoInfo? info;
       try {

@@ -31,6 +31,8 @@ class MemoryDaemon implements Daemon {
   Future<ProfileCheckResult> checkProfile({required String type, required String beanJson}) async =>
       const ProfileCheckResult(ok: true);
   @override
+  Future<void> claimService() async {}
+  @override
   Stream<ServiceState> serviceStatus() => status.stream;
   @override
   Stream<Traffic> traffic(Duration interval) => rates.stream;

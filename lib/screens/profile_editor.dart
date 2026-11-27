@@ -115,6 +115,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
   String _dnsTunnelResolver = '';
   String _dnsTunnelKey = '';
   String _dnsTunnelSeal = '';
+  String _dnsTunnelTls = '';
+  String _dnsTunnelAuth = '';
   String _knockSequence = '';
   String _udpPrelude = '';
   String _udpPreludeSni = '';
@@ -128,6 +130,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
   bool _checking = false;
   bool _saving = false;
 
+  static final Set<String> _structuredTypeCodes = {for (final (code, _) in _profileTypes) code};
+
   @override
   void initState() {
     super.initState();
@@ -137,6 +141,9 @@ class _ProfileEditorState extends State<ProfileEditor> {
       if (!_loadFromJson(widget.initialBeanJson)) {
         _rawMode = true;
       }
+    }
+    if (!_structuredTypeCodes.contains(_type)) {
+      _rawMode = true;
     }
   }
 
@@ -207,6 +214,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
       _dnsTunnelResolver = _s(bean, 'dnsTunnelResolver');
       _dnsTunnelKey = _s(bean, 'dnsTunnelKey');
       _dnsTunnelSeal = _s(bean, 'dnsTunnelSeal');
+      _dnsTunnelTls = _s(bean, 'dnsTunnelTls');
+      _dnsTunnelAuth = _s(bean, 'dnsTunnelAuth');
       _knockSequence = _s(bean, 'knockSequence');
       _udpPrelude = bean['udpPrelude'] != null && bean['udpPrelude'] != 0 ? '${bean['udpPrelude']}' : '';
       _udpPreludeSni = _s(bean, 'udpPreludeSni');
@@ -284,12 +293,16 @@ class _ProfileEditorState extends State<ProfileEditor> {
         case 'vmess':
           if (bean['alterId'] == -1) bean['alterId'] = 0;
           bean['uuid'] = _password;
-          _setStr(bean, 'security', _security);
+          _setStr(bean, 'security', _security == 'tls' ? 'auto' : _security);
           _setStr(bean, 'type', _transport);
           _setStr(bean, 'sni', _sni);
           _setStr(bean, 'host', _host);
           _setStr(bean, 'path', _path);
-          if (_allowInsecure) bean['allowInsecure'] = true;
+          if (_allowInsecure) {
+            bean['allowInsecure'] = true;
+          } else {
+            bean.remove('allowInsecure');
+          }
         case 'trojan' || 'trojan-go':
           bean['password'] = _password;
           _setStr(bean, 'sni', _sni);
@@ -298,7 +311,11 @@ class _ProfileEditorState extends State<ProfileEditor> {
             _setStr(bean, 'host', _host);
             _setStr(bean, 'path', _path);
           }
-          if (_allowInsecure) bean['allowInsecure'] = true;
+          if (_allowInsecure) {
+            bean['allowInsecure'] = true;
+          } else {
+            bean.remove('allowInsecure');
+          }
         case 'ss':
           _setStr(bean, 'method', _username.isEmpty ? '2022-blake3-aes-128-gcm' : _username);
           bean['password'] = _password;
@@ -308,19 +325,33 @@ class _ProfileEditorState extends State<ProfileEditor> {
           _setStr(bean, 'congestionController', _congestionControl);
           _setStr(bean, 'udpRelayMode', _udpRelayMode);
           _setStr(bean, 'sni', _sni);
-          if (_allowInsecure) bean['allowInsecure'] = true;
+          if (_allowInsecure) {
+            bean['allowInsecure'] = true;
+          } else {
+            bean.remove('allowInsecure');
+          }
         case 'anytls':
           bean['password'] = _password;
           _setStr(bean, 'sni', _sni);
           _setStr(bean, 'alpn', _alpn);
           _setStr(bean, 'utlsFingerprint', _utlsFingerprint);
-          if (_allowInsecure) bean['allowInsecure'] = true;
+          if (_allowInsecure) {
+            bean['allowInsecure'] = true;
+          } else {
+            bean.remove('allowInsecure');
+          }
         case 'naive':
           bean['proto'] = _naiveProto == 'quic' ? 'quic' : 'https';
           bean['username'] = _username;
           bean['password'] = _password;
           _setStr(bean, 'sni', _sni);
-          if (_nikoUdp) bean['nikoUdp'] = true;
+          if (_nikoUdp) {
+            bean['nikoUdp'] = true;
+            bean['sUoT'] = true;
+          } else {
+            bean.remove('nikoUdp');
+            bean.remove('sUoT');
+          }
         case 'wg':
           bean['privateKey'] = _password;
           _setStr(bean, 'peerPublicKey', _username);
@@ -336,8 +367,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
           bean['username'] = _username;
           bean['password'] = _password;
         default:
-          bean['password'] = _password;
-          _setStr(bean, 'sni', _sni);
+          // Preserve raw bean for types without structured fields (chain, config, shadowtls).
+          break;
       }
     }
 
@@ -349,6 +380,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
     _setStr(bean, 'dnsTunnelResolver', _dnsTunnelResolver);
     _setStr(bean, 'dnsTunnelKey', _dnsTunnelKey);
     _setStr(bean, 'dnsTunnelSeal', _dnsTunnelSeal);
+    _setStr(bean, 'dnsTunnelTls', _dnsTunnelTls);
+    _setStr(bean, 'dnsTunnelAuth', _dnsTunnelAuth);
     _setStr(bean, 'knockSequence', _knockSequence);
     _setInt(bean, 'udpPrelude', _udpPrelude);
     _setStr(bean, 'udpPreludeSni', _udpPreludeSni);
@@ -448,7 +481,19 @@ class _ProfileEditorState extends State<ProfileEditor> {
                     for (final (code, label) in _profileTypes)
                       _type == code
                           ? NikoPrimaryButton(label: label, onPressed: () {})
-                          : NikoTonalButton(label: label, onPressed: () => setState(() => _type = code)),
+                          : NikoTonalButton(
+                              label: label,
+                              onPressed: () => setState(() {
+                                _type = code;
+                                // Clear stale base bean fields from previous protocol type (M6).
+                                _baseBean = {};
+                                if (code == 'vmess' && _security == 'tls') {
+                                  _security = 'auto';
+                                } else if (code == 'vless' && _security == 'auto') {
+                                  _security = 'tls';
+                                }
+                              }),
+                            ),
                   ],
                 ),
                 const SizedBox(height: NikoSpace.s4),
@@ -592,10 +637,17 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   ),
                   const SizedBox(height: NikoSpace.s3),
                   NikoField(
-                    label: 'Up / Down Mbps (e.g. 50)',
+                    label: 'Upload Mbps (e.g. 50)',
                     value: _upMbps,
                     mono: true,
                     onChanged: (v) => setState(() => _upMbps = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: 'Download Mbps (e.g. 100)',
+                    value: _downMbps,
+                    mono: true,
+                    onChanged: (v) => setState(() => _downMbps = v),
                   ),
                   const SizedBox(height: NikoSpace.s3),
                   NikoField(
@@ -672,7 +724,9 @@ class _ProfileEditorState extends State<ProfileEditor> {
                 Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: NikoGhostButton(
-                    label: _showTuning ? 'Скрыть тонкую настройку' : 'Тонкая настройка (TLS / DNS-туннель / Knock)',
+                    label: strings.save == 'Сохранить'
+                        ? (_showTuning ? 'Скрыть тонкую настройку' : 'Тонкая настройка (TLS / DNS-туннель / Knock)')
+                        : (_showTuning ? 'Hide fine-tuning' : 'Fine-tuning (TLS / DNS tunnel / Knock)'),
                     onPressed: () => setState(() => _showTuning = !_showTuning),
                   ),
                 ),
@@ -726,6 +780,20 @@ class _ProfileEditorState extends State<ProfileEditor> {
                     value: _dnsTunnelSeal,
                     mono: true,
                     onChanged: (v) => setState(() => _dnsTunnelSeal = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: 'DNS Tunnel TLS (alpn;sni)',
+                    value: _dnsTunnelTls,
+                    mono: true,
+                    onChanged: (v) => setState(() => _dnsTunnelTls = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: 'DNS Tunnel Auth (v2;nodeId;svcId)',
+                    value: _dnsTunnelAuth,
+                    mono: true,
+                    onChanged: (v) => setState(() => _dnsTunnelAuth = v),
                   ),
                   const SizedBox(height: NikoSpace.s3),
                   NikoField(
