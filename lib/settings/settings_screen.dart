@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
@@ -7,6 +8,7 @@ import '../app_info.dart';
 import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
 import '../platform/autostart.dart';
+import '../platform/config_backup.dart';
 import '../platform/desktop_integration.dart';
 import '../platform/service_install.dart';
 import '../state/window_settings.dart';
@@ -39,6 +41,9 @@ class SettingsScreen extends StatefulWidget {
     this.onDownloadUpdate,
     this.onOpenFaq,
     this.serviceInstall,
+    this.onExportBackup,
+    this.onImportBackup,
+    this.pickBackupFile,
   });
 
   /// The settings by the app's names (SettingsFeed: the daemon's).
@@ -74,6 +79,11 @@ class SettingsScreen extends StatefulWidget {
 
   /// Optional system service install/uninstall controller (Linux pkexec / Windows UAC).
   final ServiceController? serviceInstall;
+
+  /// Optional portable configuration backup export/import callbacks.
+  final Future<BackupExportSummary> Function()? onExportBackup;
+  final Future<BackupImportSummary> Function(String jsonText)? onImportBackup;
+  final Future<String?> Function()? pickBackupFile;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -111,6 +121,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
   UpdateDownloadResult? _updateDownload;
   String _updateError = '';
   bool _confirmUninstallService = false;
+  bool _backupBusy = false;
+  String _backupMessage = '';
+  bool _backupError = false;
+
+  Future<void> _exportBackup() async {
+    final fn = widget.onExportBackup;
+    if (fn == null || _backupBusy) return;
+    setState(() {
+      _backupBusy = true;
+      _backupMessage = '';
+      _backupError = false;
+    });
+    try {
+      final summary = await fn();
+      if (mounted) {
+        setState(() {
+          _backupMessage = _s.backupExported(summary.path, summary.profiles, summary.rules, summary.skippedNodes);
+          _backupError = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _backupMessage = '${_s.backupFailed}: ${daemonError(e)}';
+          _backupError = true;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final fn = widget.onImportBackup;
+    if (fn == null || _backupBusy) return;
+    final picker = widget.pickBackupFile ??
+        () => DesktopIntegration().pickFile(title: _s.backupImport, extensions: const ['json']);
+    final path = await picker();
+    if (path == null || path.isEmpty || !mounted) return;
+    setState(() {
+      _backupBusy = true;
+      _backupMessage = '';
+      _backupError = false;
+    });
+    try {
+      final file = File(path);
+      const maxBackupBytes = 8 * 1024 * 1024;
+      if (file.lengthSync() > maxBackupBytes) {
+        throw const FormatException('backup file exceeds 8 MiB');
+      }
+      final jsonText = file.readAsStringSync();
+      final summary = await fn(jsonText);
+      if (mounted) {
+        setState(() {
+          _backupMessage = _s.backupImported(summary.groups, summary.profiles, summary.rules);
+          _backupError = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _backupMessage = '${_s.backupFailed}: ${daemonError(e)}';
+          _backupError = true;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
 
   WindowSettings get _window => widget.window ?? (_ownedWindow ??= WindowSettings.memory());
 
@@ -374,8 +453,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _choice('serviceMode', _s.setMode, [('vpn', _s.setModeVpn), ('proxy', _s.setModeProxy)], cell: 96),
           _switch('systemProxy', _s.setSystemProxy, sub: _s.setSystemProxySub),
         ],
+        if (withDaemon && (widget.onExportBackup != null || widget.onImportBackup != null)) _backupRow(),
         if (widget.serviceInstall case final svc?) _serviceRow(svc),
       ]);
+
+  Widget _backupRow() {
+    final colors = NikoTheme.of(context);
+    return CustomPaint(
+      foregroundPainter: _AboutHairline(colors.line),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s4, vertical: NikoSpace.s3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_s.setBackup, style: NikoType.body.style(colors.ink)),
+                      Text(_s.setBackupSub, style: NikoType.bodySm.style(colors.ink2)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: NikoSpace.s3),
+                if (widget.onExportBackup != null)
+                  NikoTonalButton(
+                    label: _backupBusy ? _s.backupBusy : _s.backupExport,
+                    onPressed: _backupBusy ? null : () => unawaited(_exportBackup()),
+                  ),
+                if (widget.onImportBackup != null) ...[
+                  const SizedBox(width: NikoSpace.s2),
+                  NikoGhostButton(
+                    label: _s.backupImport,
+                    onPressed: _backupBusy ? null : () => unawaited(_importBackup()),
+                  ),
+                ],
+              ],
+            ),
+            if (_backupMessage.isNotEmpty) ...[
+              const SizedBox(height: NikoSpace.s2),
+              Text(
+                _backupMessage,
+                style: NikoType.bodySm.style(_backupError ? colors.danger : colors.ink2),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _serviceRow(ServiceController svc) {
     final colors = NikoTheme.of(context);

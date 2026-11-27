@@ -107,6 +107,11 @@ class NikoStrings {
   String get addSub => _ru ? 'Ссылка на профиль или несколько, по одной в строке' : 'A profile\'s link, or several, one a line';
   String get addField => _ru ? 'Ссылка' : 'Link';
   String get addPaste => _ru ? 'Вставить' : 'Paste';
+  String get addFromQr => _ru ? 'Из QR' : 'From QR';
+  String get addQrNotFound => _ru ? 'QR-код на изображении не найден' : 'No QR code found in the image';
+  String get qrCopyLink => _ru ? 'Скопировать ссылку' : 'Copy link';
+  String get qrTooLong => _ru ? 'Ссылка слишком длинная для QR-кода' : 'The link is too long for a QR code';
+  String get close => _ru ? 'Закрыть' : 'Close';
   String addFound(int count) => _ru ? 'Профилей в ссылке: $count' : 'Profiles in the link: $count';
   String addButton(int count) => _ru ? 'Добавить: $count' : 'Add $count';
   String get addSubscriptionFound => _ru ? 'Это ссылка подписки' : 'This is a subscription\'s link';
@@ -646,6 +651,21 @@ class NikoStrings {
       ? 'Режим VPN (TUN) станет недоступен. Клиент переключится обратно на пользовательский режим Прокси.'
       : 'VPN (TUN) mode will no longer be available. The client will switch back to unprivileged Proxy mode.';
   String get uninstallServiceDone => _ru ? 'Системная служба удалена' : 'System service uninstalled';
+
+  String get setBackup => _ru ? 'Резервная копия конфигурации' : 'Configuration backup';
+  String get setBackupSub => _ru
+      ? 'Профили, группы, правила и настройки (без ключей узлов raycontrol)'
+      : 'Profiles, groups, rules, and settings (excluding raycontrol node keys)';
+  String get backupExport => _ru ? 'Экспорт' : 'Export';
+  String get backupImport => _ru ? 'Импорт' : 'Import';
+  String get backupBusy => _ru ? 'Выполняется…' : 'Working…';
+  String backupExported(String path, int profiles, int rules, int skippedNodes) => _ru
+      ? 'Сохранено в $path (профилей: $profiles, правил: $rules${skippedNodes > 0 ? ', узлов пропущено: $skippedNodes' : ''})'
+      : 'Saved to $path (profiles: $profiles, rules: $rules${skippedNodes > 0 ? ', nodes skipped: $skippedNodes' : ''})';
+  String backupImported(int groups, int profiles, int rules) => _ru
+      ? 'Импортировано: групп $groups, профилей $profiles, правил $rules'
+      : 'Imported: $groups groups, $profiles profiles, $rules rules';
+  String get backupFailed => _ru ? 'Ошибка резервной копии' : 'Backup failed';
 
   List<(String, String)> get faqEntries => _ru
       ? const [

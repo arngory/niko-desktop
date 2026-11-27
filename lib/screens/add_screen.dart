@@ -14,6 +14,7 @@ import '../ui/controls.dart';
 import '../ui/format.dart';
 import '../ui/icons.dart';
 import '../ui/list.dart';
+import '../ui/qr_code.dart';
 import 'nodes_screen.dart' show typeLabel;
 
 /// Добавление (B-Add, D-ADD-02…04, -06, D-SUB-01): a link, or several, pasted or typed; the daemon says what they are
@@ -22,7 +23,15 @@ import 'nodes_screen.dart' show typeLabel;
 /// its PIN asked for where the invite needs one (before the first try, again after a wrong one), and the node's
 /// group is shown once its subscription came. QR codes come with their slice.
 class AddScreen extends StatefulWidget {
-  const AddScreen({super.key, required this.feed, required this.onDone, this.pickFile, this.initialText = ''});
+  const AddScreen({
+    super.key,
+    required this.feed,
+    required this.onDone,
+    this.pickFile,
+    this.pickQrFile,
+    this.decodeQrBytes,
+    this.initialText = '',
+  });
 
   final ProfilesFeed feed;
 
@@ -31,6 +40,12 @@ class AddScreen extends StatefulWidget {
 
   /// Optional file picker override for tests; defaults to native [DesktopIntegration.pickFile].
   final Future<String?> Function()? pickFile;
+
+  /// Optional QR image picker override for tests; defaults to native [DesktopIntegration.pickFile] with image filters.
+  final Future<String?> Function()? pickQrFile;
+
+  /// Optional QR decoder override for tests; defaults to [decodeQrFromImageBytes].
+  final Future<String?> Function(Uint8List bytes)? decodeQrBytes;
 
   /// Optional deep-link URL or text prefilled when opened from a URL scheme (D-ADD-11).
   final String initialText;
@@ -98,11 +113,56 @@ class _AddScreenState extends State<AddScreen> {
     if (data?.text != null) _text.text = data!.text!.trim();
   }
 
-  Future<void> _openFile() async {
-    final picker = widget.pickFile ??
-        () => DesktopIntegration().pickFile(extensions: const ['json', 'conf', 'txt', 'zip', 'rcdev1']);
+  static const _imageExtensions = {'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'};
+
+  static bool _isImagePath(String path) {
+    final dot = path.lastIndexOf('.');
+    if (dot < 0 || dot + 1 >= path.length) return false;
+    return _imageExtensions.contains(path.substring(dot + 1).toLowerCase());
+  }
+
+  Future<void> _decodeQrFile(String path) async {
+    final strings = NikoStrings.of(Localizations.localeOf(context));
+    try {
+      final file = File(path);
+      const maxQrImageBytes = 8 * 1024 * 1024;
+      final length = file.lengthSync();
+      if (length > maxQrImageBytes) {
+        if (mounted) setState(() => _error = 'file is larger than 8 MiB');
+        return;
+      }
+      final bytes = file.readAsBytesSync();
+      final decode = widget.decodeQrBytes ?? decodeQrFromImageBytes;
+      final decoded = await decode(bytes);
+      if (!mounted) return;
+      if (decoded == null || decoded.trim().isEmpty) {
+        setState(() => _error = strings.addQrNotFound);
+        return;
+      }
+      setState(() => _error = '');
+      _text.text = decoded.trim();
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
+
+  Future<void> _openQrImage() async {
+    final picker = widget.pickQrFile ??
+        () => DesktopIntegration().pickFile(extensions: const ['png', 'jpg', 'jpeg', 'webp', 'bmp']);
     final path = await picker();
     if (path == null || path.isEmpty || !mounted) return;
+    await _decodeQrFile(path);
+  }
+
+  Future<void> _openFile() async {
+    final picker = widget.pickFile ??
+        () => DesktopIntegration().pickFile(extensions: const ['json', 'conf', 'txt', 'zip', 'rcdev1', 'png', 'jpg', 'jpeg', 'webp']);
+    final path = await picker();
+    if (path == null || path.isEmpty || !mounted) return;
+    if (_isImagePath(path)) {
+      await _decodeQrFile(path);
+      return;
+    }
     try {
       final file = File(path);
       const maxImportFileBytes = 4 * 1024 * 1024;
@@ -217,16 +277,15 @@ class _AddScreenState extends State<AddScreen> {
               const SizedBox(height: NikoSpace.s1),
               Text(strings.addSub, style: NikoType.bodySm.style(colors.ink2)),
               const SizedBox(height: NikoSpace.s6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              NikoTextField(label: strings.addField, placeholder: 'vless://…', controller: _text),
+              const SizedBox(height: NikoSpace.s3),
+              Wrap(
+                spacing: NikoSpace.s2,
+                runSpacing: NikoSpace.s2,
                 children: [
-                  Expanded(
-                    child: NikoTextField(label: strings.addField, placeholder: 'vless://…', controller: _text),
-                  ),
-                  const SizedBox(width: NikoSpace.s3),
                   NikoTonalButton(label: strings.addPaste, onPressed: _paste),
-                  const SizedBox(width: NikoSpace.s2),
                   NikoTonalButton(label: strings.addOpenFile, onPressed: _openFile),
+                  NikoTonalButton(label: strings.addFromQr, onPressed: _openQrImage),
                 ],
               ),
               const SizedBox(height: NikoSpace.s2),

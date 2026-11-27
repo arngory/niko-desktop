@@ -17,6 +17,7 @@ import '../ui/header.dart';
 import '../ui/icons.dart';
 import '../ui/list.dart';
 import '../ui/pressable.dart';
+import '../ui/qr_code.dart';
 import 'profile_editor.dart';
 
 /// Узлы (B-Profiles, D-MAIN-07, D-GROUP-01, D-SUB-01..08, D-PROFILE-01..05, D-MAIN-08/12):
@@ -48,6 +49,7 @@ class _NodesScreenState extends State<NodesScreen> {
   // Dialogs & inline overlays
   GroupRow? _editingGroup; // id 0 = new basic group; >0 = rename basic group or edit subscription settings
   bool _confirmDeleteGroup = false;
+  (String title, String data)? _qrShare;
   // Manual profile editor state
   bool _editingProfile = false;
   int _editProfileId = 0;
@@ -124,6 +126,13 @@ class _NodesScreenState extends State<NodesScreen> {
           onEdit: canAddManual ? () => unawaited(_openProfileEditor(existing: p)) : null,
           onDelete: () => feed.delete(p),
           onShare: share ? () => feed.share(p, copyText) : null,
+          onQr: share
+              ? () => unawaited(feed.shareLink(p).then((link) {
+                    if (mounted && link != null && link.isNotEmpty) {
+                      setState(() => _qrShare = (p.name, link));
+                    }
+                  }))
+              : null,
         );
       }
 
@@ -233,6 +242,9 @@ class _NodesScreenState extends State<NodesScreen> {
               onCopyLink: info.link.isEmpty
                   ? null
                   : () => unawaited(feed.copyNotice(info.link, strings.subscriptionLinkCopied, copyText)),
+              onQr: info.link.isEmpty
+                  ? null
+                  : () => setState(() => _qrShare = (groupName(group!, strings), info.link)),
               onDelete: () => setState(() => _confirmDeleteGroup = true),
             ),
           ],
@@ -340,7 +352,25 @@ class _NodesScreenState extends State<NodesScreen> {
       },
     );
 
-    if (_editingGroup == null) return mainLayout;
+    if (_editingGroup == null && _qrShare == null) return mainLayout;
+
+    if (_qrShare case final qr?) {
+      return Stack(
+        children: [
+          mainLayout,
+          NikoQrDialog(
+            title: qr.$1,
+            data: qr.$2,
+            strings: strings,
+            onCopy: () {
+              unawaited(feed.copyNotice(qr.$2, strings.linkCopied(qr.$1), copyText));
+              setState(() => _qrShare = null);
+            },
+            onClose: () => setState(() => _qrShare = null),
+          ),
+        ],
+      );
+    }
 
     final edit = _editingGroup!;
     return Stack(
@@ -711,6 +741,7 @@ class _SubscriptionLine extends StatelessWidget {
     required this.onUpdate,
     required this.onSettings,
     required this.onCopyLink,
+    this.onQr,
     required this.onDelete,
   });
 
@@ -719,6 +750,7 @@ class _SubscriptionLine extends StatelessWidget {
   final VoidCallback? onUpdate;
   final VoidCallback onSettings;
   final VoidCallback? onCopyLink;
+  final VoidCallback? onQr;
   final VoidCallback onDelete;
 
   @override
@@ -747,6 +779,7 @@ class _SubscriptionLine extends StatelessWidget {
             ),
             NikoGhostButton(label: strings.subscriptionSettings, onPressed: onSettings),
             if (onCopyLink != null) NikoGhostButton(label: strings.subscriptionCopyLink, onPressed: onCopyLink),
+            if (onQr != null) NikoGhostButton(label: 'QR', onPressed: onQr),
             NikoGhostButton(label: strings.subscriptionDelete, onPressed: onDelete),
           ],
         ),
@@ -916,6 +949,7 @@ class _ProfileRow extends StatelessWidget {
     this.onEdit,
     required this.onDelete,
     this.onShare,
+    this.onQr,
   });
 
   final ProfileRow profile;
@@ -926,6 +960,7 @@ class _ProfileRow extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback onDelete;
   final VoidCallback? onShare;
+  final VoidCallback? onQr;
 
   @override
   Widget build(BuildContext context) {
@@ -994,6 +1029,8 @@ class _ProfileRow extends StatelessWidget {
             ),
           if (onEdit != null)
             NikoGhostButton(label: strings.profileEdit, onPressed: onEdit),
+          if (onQr != null)
+            NikoGhostButton(label: 'QR', onPressed: onQr),
           if (onShare != null)
             NikoIconButton(
               icon: NikoIcons.copy,

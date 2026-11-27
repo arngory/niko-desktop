@@ -504,6 +504,22 @@ class ProfilesFeed extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  /// Returns the shareable URI for [row] (NikoService.ShareProfile), recording [error] on failure.
+  Future<String?> shareLink(ProfileRow row) async {
+    final daemon = _link.daemon;
+    if (daemon == null) return null;
+    try {
+      final link = await daemon.shareLink(row.id);
+      error = '';
+      if (!_disposed) notifyListeners();
+      return link;
+    } catch (e) {
+      error = '$e';
+      if (!_disposed) notifyListeners();
+      return null;
+    }
+  }
+
   /// Copies the link to share a profile by (NikoService.ShareProfile) with [copy], and says so for [noticeFor].
   Future<void> share(ProfileRow row, Future<void> Function(String link) copy) async {
     final daemon = _link.daemon;

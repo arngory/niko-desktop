@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import '../app_info.dart';
 import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
+import '../platform/config_backup.dart';
 import '../platform/deep_link.dart';
 import '../platform/desktop_integration.dart';
 import '../platform/places.dart' as places;
@@ -157,7 +158,14 @@ class _NikoShellState extends State<NikoShell> {
         }
       case 'show':
         unawaited(_desktop.showWindow());
+      case 'quit':
+        unawaited(_quitGracefully());
     }
+  }
+
+  Future<void> _quitGracefully() async {
+    await _onExitRequested();
+    await _desktop.closeWindow();
   }
 
   Directory? _resolvedSaveDirectory() {
@@ -564,6 +572,24 @@ class _NikoShellState extends State<NikoShell> {
                             : null,
                         onOpenFaq: () => setState(() => _showingFaq = true),
                         serviceInstall: widget.serviceInstall,
+                        onExportBackup: daemon != null && state.link == LinkPhase.ready
+                            ? () {
+                                final dir = (widget.saveTo ?? _resolvedSaveDirectory)() ?? Directory.systemTemp;
+                                return exportDesktopBackup(
+                                  daemon: daemon,
+                                  destDir: dir,
+                                  windowSettings: widget.settings,
+                                  now: widget.now(),
+                                );
+                              }
+                            : null,
+                        onImportBackup: daemon != null && state.link == LinkPhase.ready
+                            ? (jsonText) => importDesktopBackupJson(
+                                  daemon: daemon,
+                                  jsonText: jsonText,
+                                  windowSettings: widget.settings,
+                                )
+                            : null,
                         onLanguage: (lang) {
                           final d = state.daemon;
                           if (d != null && state.link == LinkPhase.ready) {
