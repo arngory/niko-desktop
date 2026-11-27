@@ -121,6 +121,19 @@ static void tray_quit_cb(GtkMenuItem* /*item*/, gpointer user_data) {
   }
 }
 
+// Filter only the upstream deprecation notice emitted by libayatana-appindicator3's
+// GObject constructor while keeping libayatana-appindicator3 compatibility across
+// Debian/Ubuntu/Arch/Fedora until libayatana-appindicator-glib is widely shipped.
+static void suppress_appindicator_deprecation_log(const gchar* log_domain,
+                                                  GLogLevelFlags log_level,
+                                                  const gchar* message,
+                                                  gpointer user_data) {
+  if (message != nullptr && strstr(message, "is deprecated") != nullptr) {
+    return;
+  }
+  g_log_default_handler(log_domain, log_level, message, user_data);
+}
+
 static void ensure_linux_tray(MyApplication* self,
                               bool connected,
                               const gchar* status_label,
@@ -150,8 +163,13 @@ static void ensure_linux_tray(MyApplication* self,
     gtk_widget_show_all(self->tray_menu);
 
     const gchar* icon = connected ? "network-vpn" : "network-offline";
+    const guint log_handler_id = g_log_set_handler(
+        "libayatana-appindicator",
+        static_cast<GLogLevelFlags>(G_LOG_LEVEL_WARNING | G_LOG_FLAG_RECURSION),
+        suppress_appindicator_deprecation_log, nullptr);
     self->tray_indicator = self->tray_api.new_fn(
         "niko-desktop", icon, kAppIndicatorCategoryApplicationStatus);
+    g_log_remove_handler("libayatana-appindicator", log_handler_id);
     if (self->tray_indicator != nullptr) {
       self->tray_api.set_status(self->tray_indicator, kAppIndicatorStatusActive);
       self->tray_api.set_menu(self->tray_indicator, GTK_MENU(self->tray_menu));
@@ -368,8 +386,8 @@ static void my_application_activate(GApplication* application) {
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
-  // Impeller on Linux (OpenGLESSDF) can render only a quarter of the window on
-  // Wayland; off by default unless NIKO_IMPELLER=1 is set.
+  // Keep Impeller opt-in on Linux desktop (Skia OpenGL is default; requires
+  // Flutter >= 3.50.1 for the #195885 NVIDIA/non-blit compositor offset fix).
   const gboolean impeller = g_strcmp0(g_getenv("NIKO_IMPELLER"), "1") == 0;
   fl_dart_project_set_enable_impeller(project, impeller);
 

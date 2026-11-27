@@ -157,9 +157,9 @@ jobs:
       run:
         shell: bash
     env:
-      # Flutter 3.50.0 stable, by its commit
-      FLUTTER_VERSION: "3.50.0"
-      FLUTTER_COMMIT: ab2912035e160d9cad6306df307576da6128ebdb
+      # Flutter 3.50.1 stable, by its commit (includes Linux #195885 NVIDIA/non-blit compositor fix)
+      FLUTTER_VERSION: "3.50.1"
+      FLUTTER_COMMIT: ae9b586f34a8443573f82ef57c3bf914a908cbf7
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0

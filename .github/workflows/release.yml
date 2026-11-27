@@ -22,8 +22,8 @@ permissions:
   contents: write
 
 env:
-  FLUTTER_VERSION: "3.50.0"
-  FLUTTER_COMMIT: ab2912035e160d9cad6306df307576da6128ebdb
+  FLUTTER_VERSION: "3.50.1"
+  FLUTTER_COMMIT: ae9b586f34a8443573f82ef57c3bf914a908cbf7
 
 jobs:
   windows:
