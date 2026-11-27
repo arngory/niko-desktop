@@ -12,6 +12,24 @@ constexpr const wchar_t kSingleInstanceMutex[] = L"Local\\io.niko.desktop-debug"
 #else
 constexpr const wchar_t kSingleInstanceMutex[] = L"Local\\io.niko.desktop";
 #endif
+constexpr ULONG_PTR kDeepLinkCopyDataId = 0x4E494B4F;  // 'NIKO'
+
+std::string ExtractDeepLinkArg(const std::vector<std::string>& args) {
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "--url" && i + 1 < args.size()) {
+      return args[i + 1];
+    }
+    if (args[i].rfind("--url=", 0) == 0) {
+      return args[i].substr(6);
+    }
+  }
+  for (const auto& arg : args) {
+    if (!arg.empty() && arg[0] != '-' && arg.find("://") != std::string::npos) {
+      return arg;
+    }
+  }
+  return {};
+}
 
 }  // namespace
 
@@ -90,6 +108,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     }
     HWND existing = ::FindWindowW(Win32Window::kWindowClassName, nullptr);
     if (existing != nullptr) {
+      const std::string deep_link = ExtractDeepLinkArg(command_line_arguments);
+      if (!deep_link.empty() && deep_link.size() <= 32768) {
+        COPYDATASTRUCT cds = {};
+        cds.dwData = kDeepLinkCopyDataId;
+        cds.cbData = static_cast<DWORD>(deep_link.size());
+        cds.lpData = const_cast<char*>(deep_link.data());
+        ::SendMessageW(existing, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&cds));
+      }
       if (!::IsWindowVisible(existing)) {
         ::ShowWindow(existing, SW_SHOW);
       }

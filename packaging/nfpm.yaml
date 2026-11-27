@@ -1,0 +1,56 @@
+# nfpm packaging manifest for Niko Desktop (.deb and .rpm).
+# Expects env vars:
+#   NIKO_VERSION      e.g. 0.1.0
+#   NIKO_ARCH         amd64 or arm64
+#   NIKO_STAGE_DIR    path to staged Linux release bundle (from tool/package_linux.sh)
+name: niko-desktop
+arch: "${NIKO_ARCH}"
+platform: linux
+version: "${NIKO_VERSION}"
+section: net
+priority: optional
+maintainer: "Niko Authors <maintainers@niko.invalid>"
+description: |
+  Niko Desktop VPN & Proxy client (Flutter UI + bundled niko-daemon).
+  Supports user-mode Proxy out of the box and 1-click system service
+  installation for full VPN (TUN) mode.
+homepage: "https://github.com/arngory/niko-desktop"
+license: "GPL-3.0-or-later"
+
+overrides:
+  deb:
+    depends:
+      - libgtk-3-0
+      - libglib2.0-0
+    recommends:
+      - libayatana-appindicator3-1
+  rpm:
+    depends:
+      - gtk3
+      - glib2
+    recommends:
+      - libayatana-appindicator-gtk3
+
+contents:
+  - src: "${NIKO_STAGE_DIR}/"
+    dst: /opt/niko
+    type: tree
+    file_info:
+      owner: root
+      group: root
+      mode: 0755
+  - src: /opt/niko/niko
+    dst: /usr/bin/niko
+    type: symlink
+  - src: packaging/io.niko.niko_desktop.desktop
+    dst: /usr/share/applications/io.niko.niko_desktop.desktop
+    file_info:
+      mode: 0644
+  - src: packaging/niko.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/niko.svg
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: packaging/scripts/postinstall.sh
+  postremove: packaging/scripts/postremove.sh

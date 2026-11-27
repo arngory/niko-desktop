@@ -5919,6 +5919,512 @@ class SetNodeLanRequest extends $pb.GeneratedMessage {
   void clearShow() => $_clearField(2);
 }
 
+class CheckUpdateRequest extends $pb.GeneratedMessage {
+  factory CheckUpdateRequest({
+    $core.String? currentVersion,
+    $core.String? nodeId,
+    $core.String? preferredFormat,
+  }) {
+    final result = CheckUpdateRequest._();
+    if (currentVersion != null) result.currentVersion = currentVersion;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (preferredFormat != null) result.preferredFormat = preferredFormat;
+    return result;
+  }
+
+  CheckUpdateRequest._();
+
+  factory CheckUpdateRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      CheckUpdateRequest()..mergeFromBuffer(data, registry);
+  factory CheckUpdateRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      CheckUpdateRequest()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CheckUpdateRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: CheckUpdateRequest.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'currentVersion')
+    ..aOS(2, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(3, _omitFieldNames ? '' : 'preferredFormat')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CheckUpdateRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CheckUpdateRequest copyWith(void Function(CheckUpdateRequest) updates) =>
+      super.copyWith((message) => updates(message as CheckUpdateRequest))
+          as CheckUpdateRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use CheckUpdateRequest() / CheckUpdateRequest.new instead')
+  static CheckUpdateRequest create() => CheckUpdateRequest._();
+  static $pb.GeneratedMessage $_createMessage() => CheckUpdateRequest._();
+  @$core.override
+  CheckUpdateRequest createEmptyInstance() => CheckUpdateRequest._();
+  @$core.pragma('dart2js:noInline')
+  static CheckUpdateRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CheckUpdateRequest>(
+          CheckUpdateRequest.$_createMessage);
+  static CheckUpdateRequest? _defaultInstance;
+
+  /// Optional current version override (empty uses daemon Version).
+  @$pb.TagNumber(1)
+  $core.String get currentVersion => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set currentVersion($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasCurrentVersion() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearCurrentVersion() => $_clearField(1);
+
+  /// Optional raycontrol node ID to use as app-mirror fallback when GitHub is unreachable.
+  @$pb.TagNumber(2)
+  $core.String get nodeId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nodeId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNodeId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNodeId() => $_clearField(2);
+
+  /// Optional preferred package format ("appimage", "tar.gz", "deb", "rpm", "zip", "exe").
+  @$pb.TagNumber(3)
+  $core.String get preferredFormat => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set preferredFormat($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasPreferredFormat() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearPreferredFormat() => $_clearField(3);
+}
+
+class UpdateInfo extends $pb.GeneratedMessage {
+  factory UpdateInfo({
+    $core.String? currentVersion,
+    $core.String? latestVersion,
+    $core.String? tag,
+    $core.bool? updateAvailable,
+    $core.String? assetName,
+    $core.String? assetSha256,
+    $core.String? releaseUrl,
+    $core.String? notes,
+    $core.String? source,
+    $core.bool? verified,
+  }) {
+    final result = UpdateInfo._();
+    if (currentVersion != null) result.currentVersion = currentVersion;
+    if (latestVersion != null) result.latestVersion = latestVersion;
+    if (tag != null) result.tag = tag;
+    if (updateAvailable != null) result.updateAvailable = updateAvailable;
+    if (assetName != null) result.assetName = assetName;
+    if (assetSha256 != null) result.assetSha256 = assetSha256;
+    if (releaseUrl != null) result.releaseUrl = releaseUrl;
+    if (notes != null) result.notes = notes;
+    if (source != null) result.source = source;
+    if (verified != null) result.verified = verified;
+    return result;
+  }
+
+  UpdateInfo._();
+
+  factory UpdateInfo.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      UpdateInfo()..mergeFromBuffer(data, registry);
+  factory UpdateInfo.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      UpdateInfo()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateInfo',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: UpdateInfo.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'currentVersion')
+    ..aOS(2, _omitFieldNames ? '' : 'latestVersion')
+    ..aOS(3, _omitFieldNames ? '' : 'tag')
+    ..aOB(4, _omitFieldNames ? '' : 'updateAvailable')
+    ..aOS(5, _omitFieldNames ? '' : 'assetName')
+    ..aOS(6, _omitFieldNames ? '' : 'assetSha256')
+    ..aOS(7, _omitFieldNames ? '' : 'releaseUrl')
+    ..aOS(8, _omitFieldNames ? '' : 'notes')
+    ..aOS(9, _omitFieldNames ? '' : 'source')
+    ..aOB(10, _omitFieldNames ? '' : 'verified')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateInfo clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateInfo copyWith(void Function(UpdateInfo) updates) =>
+      super.copyWith((message) => updates(message as UpdateInfo)) as UpdateInfo;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use UpdateInfo() / UpdateInfo.new instead')
+  static UpdateInfo create() => UpdateInfo._();
+  static $pb.GeneratedMessage $_createMessage() => UpdateInfo._();
+  @$core.override
+  UpdateInfo createEmptyInstance() => UpdateInfo._();
+  @$core.pragma('dart2js:noInline')
+  static UpdateInfo getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateInfo>(UpdateInfo.$_createMessage);
+  static UpdateInfo? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get currentVersion => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set currentVersion($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasCurrentVersion() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearCurrentVersion() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get latestVersion => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set latestVersion($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasLatestVersion() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearLatestVersion() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get tag => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set tag($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasTag() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearTag() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get updateAvailable => $_getBF(3);
+  @$pb.TagNumber(4)
+  set updateAvailable($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasUpdateAvailable() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearUpdateAvailable() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get assetName => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set assetName($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAssetName() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAssetName() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get assetSha256 => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set assetSha256($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasAssetSha256() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearAssetSha256() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get releaseUrl => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set releaseUrl($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasReleaseUrl() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearReleaseUrl() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get notes => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set notes($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasNotes() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearNotes() => $_clearField(8);
+
+  /// Source that served the metadata: "github", "mirror", or "".
+  @$pb.TagNumber(9)
+  $core.String get source => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set source($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasSource() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearSource() => $_clearField(9);
+
+  /// True when SHA256SUMS + SHA256SUMS.minisig verified under the embedded minisign key.
+  @$pb.TagNumber(10)
+  $core.bool get verified => $_getBF(9);
+  @$pb.TagNumber(10)
+  set verified($core.bool value) => $_setBool(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasVerified() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearVerified() => $_clearField(10);
+}
+
+class DownloadUpdateRequest extends $pb.GeneratedMessage {
+  factory DownloadUpdateRequest({
+    $core.String? tag,
+    $core.String? nodeId,
+    $core.String? currentVersion,
+    $core.String? preferredFormat,
+    $core.bool? allowDowngrade,
+  }) {
+    final result = DownloadUpdateRequest._();
+    if (tag != null) result.tag = tag;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (currentVersion != null) result.currentVersion = currentVersion;
+    if (preferredFormat != null) result.preferredFormat = preferredFormat;
+    if (allowDowngrade != null) result.allowDowngrade = allowDowngrade;
+    return result;
+  }
+
+  DownloadUpdateRequest._();
+
+  factory DownloadUpdateRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      DownloadUpdateRequest()..mergeFromBuffer(data, registry);
+  factory DownloadUpdateRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      DownloadUpdateRequest()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DownloadUpdateRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: DownloadUpdateRequest.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'tag')
+    ..aOS(2, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(3, _omitFieldNames ? '' : 'currentVersion')
+    ..aOS(4, _omitFieldNames ? '' : 'preferredFormat')
+    ..aOB(5, _omitFieldNames ? '' : 'allowDowngrade')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DownloadUpdateRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DownloadUpdateRequest copyWith(
+          void Function(DownloadUpdateRequest) updates) =>
+      super.copyWith((message) => updates(message as DownloadUpdateRequest))
+          as DownloadUpdateRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated(
+      'Use DownloadUpdateRequest() / DownloadUpdateRequest.new instead')
+  static DownloadUpdateRequest create() => DownloadUpdateRequest._();
+  static $pb.GeneratedMessage $_createMessage() => DownloadUpdateRequest._();
+  @$core.override
+  DownloadUpdateRequest createEmptyInstance() => DownloadUpdateRequest._();
+  @$core.pragma('dart2js:noInline')
+  static DownloadUpdateRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DownloadUpdateRequest>(
+          DownloadUpdateRequest.$_createMessage);
+  static DownloadUpdateRequest? _defaultInstance;
+
+  /// Release tag to download (e.g. "v0.2.0"); empty checks latest first.
+  @$pb.TagNumber(1)
+  $core.String get tag => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tag($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTag() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTag() => $_clearField(1);
+
+  /// Optional raycontrol node ID for app-mirror fallback.
+  @$pb.TagNumber(2)
+  $core.String get nodeId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nodeId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNodeId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNodeId() => $_clearField(2);
+
+  /// Optional current version for server-side downgrade check (empty uses daemon Version).
+  @$pb.TagNumber(3)
+  $core.String get currentVersion => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set currentVersion($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCurrentVersion() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCurrentVersion() => $_clearField(3);
+
+  /// Optional preferred package format ("appimage", "tar.gz", "deb", "rpm", "zip", "exe").
+  @$pb.TagNumber(4)
+  $core.String get preferredFormat => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set preferredFormat($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPreferredFormat() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPreferredFormat() => $_clearField(4);
+
+  /// Explicit opt-in to allow downloading a version <= current_version.
+  @$pb.TagNumber(5)
+  $core.bool get allowDowngrade => $_getBF(4);
+  @$pb.TagNumber(5)
+  set allowDowngrade($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAllowDowngrade() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAllowDowngrade() => $_clearField(5);
+}
+
+class DownloadUpdateEvent extends $pb.GeneratedMessage {
+  factory DownloadUpdateEvent({
+    $core.String? tag,
+    $core.String? assetName,
+    $core.String? sha256,
+    $fixnum.Int64? size,
+    $core.String? source,
+    $core.bool? verified,
+    $core.List<$core.int>? chunk,
+    $core.bool? done,
+  }) {
+    final result = DownloadUpdateEvent._();
+    if (tag != null) result.tag = tag;
+    if (assetName != null) result.assetName = assetName;
+    if (sha256 != null) result.sha256 = sha256;
+    if (size != null) result.size = size;
+    if (source != null) result.source = source;
+    if (verified != null) result.verified = verified;
+    if (chunk != null) result.chunk = chunk;
+    if (done != null) result.done = done;
+    return result;
+  }
+
+  DownloadUpdateEvent._();
+
+  factory DownloadUpdateEvent.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      DownloadUpdateEvent()..mergeFromBuffer(data, registry);
+  factory DownloadUpdateEvent.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      DownloadUpdateEvent()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DownloadUpdateEvent',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'niko.v1'),
+      createEmptyInstance: DownloadUpdateEvent.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'tag')
+    ..aOS(2, _omitFieldNames ? '' : 'assetName')
+    ..aOS(3, _omitFieldNames ? '' : 'sha256')
+    ..aInt64(4, _omitFieldNames ? '' : 'size')
+    ..aOS(5, _omitFieldNames ? '' : 'source')
+    ..aOB(6, _omitFieldNames ? '' : 'verified')
+    ..a<$core.List<$core.int>>(
+        7, _omitFieldNames ? '' : 'chunk', $pb.PbFieldType.OY)
+    ..aOB(8, _omitFieldNames ? '' : 'done')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DownloadUpdateEvent clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DownloadUpdateEvent copyWith(void Function(DownloadUpdateEvent) updates) =>
+      super.copyWith((message) => updates(message as DownloadUpdateEvent))
+          as DownloadUpdateEvent;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core
+      .Deprecated('Use DownloadUpdateEvent() / DownloadUpdateEvent.new instead')
+  static DownloadUpdateEvent create() => DownloadUpdateEvent._();
+  static $pb.GeneratedMessage $_createMessage() => DownloadUpdateEvent._();
+  @$core.override
+  DownloadUpdateEvent createEmptyInstance() => DownloadUpdateEvent._();
+  @$core.pragma('dart2js:noInline')
+  static DownloadUpdateEvent getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DownloadUpdateEvent>(
+          DownloadUpdateEvent.$_createMessage);
+  static DownloadUpdateEvent? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tag => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tag($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTag() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTag() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get assetName => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set assetName($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAssetName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAssetName() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get sha256 => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set sha256($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasSha256() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearSha256() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $fixnum.Int64 get size => $_getI64(3);
+  @$pb.TagNumber(4)
+  set size($fixnum.Int64 value) => $_setInt64(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasSize() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearSize() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get source => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set source($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasSource() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearSource() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.bool get verified => $_getBF(5);
+  @$pb.TagNumber(6)
+  set verified($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasVerified() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearVerified() => $_clearField(6);
+
+  /// Verified archive bytes chunk (streamed only after minisign + SHA-256 verification succeeds).
+  @$pb.TagNumber(7)
+  $core.List<$core.int> get chunk => $_getN(6);
+  @$pb.TagNumber(7)
+  set chunk($core.List<$core.int> value) => $_setBytes(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasChunk() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearChunk() => $_clearField(7);
+
+  /// True on the final event once all verified bytes have been streamed.
+  @$pb.TagNumber(8)
+  $core.bool get done => $_getBF(7);
+  @$pb.TagNumber(8)
+  set done($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasDone() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearDone() => $_clearField(8);
+}
+
 const $core.bool _omitFieldNames =
     $core.bool.fromEnvironment('protobuf.omit_field_names');
 const $core.bool _omitMessageNames =

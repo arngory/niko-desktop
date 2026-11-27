@@ -446,12 +446,48 @@ class MemoryDaemon implements Daemon {
   ];
 
   @override
-  Future<PresetApplied> applyRussiaPreset({required String blockedName, required String directName}) async {
-    final blocked = await saveRule(RuleRow(name: blockedName, domains: russiaLists[0], ip: russiaLists[1]));
-    final direct = await saveRule(RuleRow(name: directName, domains: 'domain:ru', outbound: RuleOutbound.direct));
-    ruleSetRows = [for (final item in russiaLists) RuleSetRow(item: item, url: item.substring(4), enabled: true)];
-    _changed(StoreKind.ruleSets, const []);
-    return PresetApplied(rules: [blocked, direct], ruleSets: russiaLists);
+  Future<PresetApplied> applyRussiaPreset({required String blockedName, required String directName}) =>
+      applyPreset(RoutePreset.russia, blockedName: blockedName, directName: directName);
+
+  final appliedPresets = <RoutePreset>[];
+
+  @override
+  Future<PresetApplied> applyPreset(RoutePreset preset, {String blockedName = '', String directName = ''}) async {
+    appliedPresets.add(preset);
+    switch (preset) {
+      case RoutePreset.russia:
+        final blocked = await saveRule(RuleRow(name: blockedName, domains: russiaLists[0], ip: russiaLists[1]));
+        final direct = await saveRule(RuleRow(name: directName, domains: 'domain:ru', outbound: RuleOutbound.direct));
+        ruleSetRows = [for (final item in russiaLists) RuleSetRow(item: item, url: item.substring(4), enabled: true)];
+        _changed(StoreKind.ruleSets, const []);
+        return PresetApplied(rules: [blocked, direct], ruleSets: russiaLists);
+      case RoutePreset.china:
+        const cn = [
+          'srs:https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-!cn.srs',
+          'srs:https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs',
+          'srs:https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs',
+        ];
+        final p = await saveRule(RuleRow(name: blockedName, domains: cn[0]));
+        final d = await saveRule(RuleRow(name: directName, domains: '${cn[1]}\ndomain:cn', ip: cn[2], outbound: RuleOutbound.direct));
+        ruleSetRows = [for (final item in cn) RuleSetRow(item: item, url: item.substring(4), enabled: true)];
+        _changed(StoreKind.ruleSets, const []);
+        return PresetApplied(rules: [p, d], ruleSets: cn);
+      case RoutePreset.iran:
+        const ir = [
+          'srs:https://raw.githubusercontent.com/chocolate4u/Iran-sing-box-rules/rule-set/geosite-ir.srs',
+          'srs:https://raw.githubusercontent.com/chocolate4u/Iran-sing-box-rules/rule-set/geoip-ir.srs',
+        ];
+        final d = await saveRule(RuleRow(name: directName, domains: '${ir[0]}\ndomain:ir', ip: ir[1], outbound: RuleOutbound.direct));
+        ruleSetRows = [for (final item in ir) RuleSetRow(item: item, url: item.substring(4), enabled: true)];
+        _changed(StoreKind.ruleSets, const []);
+        return PresetApplied(rules: [d], ruleSets: ir);
+      case RoutePreset.ads:
+        const ads = ['srs:https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs'];
+        final b = await saveRule(RuleRow(name: blockedName, domains: ads[0], outbound: RuleOutbound.block));
+        ruleSetRows = [RuleSetRow(item: ads[0], url: ads[0].substring(4), enabled: true)];
+        _changed(StoreKind.ruleSets, const []);
+        return PresetApplied(rules: [b], ruleSets: ads);
+    }
   }
 
   @override
@@ -657,14 +693,57 @@ class MemoryDaemon implements Daemon {
   Future<String> nodeAdminCall(String nodeId, String method, {String bodyJson = '{}'}) async {
     if (onNodeAdminCall != null) return onNodeAdminCall!(nodeId, method, bodyJson);
     return switch (method) {
-      'GetStatus' => '{"version":"0.36.0","hostname":"node-1","uptimeSeconds":3600,"warnings":["Check Brutal"]}',
+      'GetStatus' => '{"version":"0.36.0","host":"node-1","uptimeSeconds":3600,"warnings":["Check Brutal"]}',
       'ListUsers' => '{"users":[{"name":"alice","trafficUsed":1048576,"trafficLimit":1073741824}]}',
       'ListDevices' => '{"devices":[{"id":"dev1","name":"Laptop","role":"user"}]}',
-      'CreateInvite' => '{"invite":"rcinv3:generated-token"}',
+      'CreateInvite' => '{"inviteCodeShort":"rcinv2:generated-token"}',
       'ListServices' => '{"services":[{"name":"hy2","kind":"hysteria2","port":443,"enabled":true}]}',
-      'GetAudit' => '{"entries":[{"action":"create_invite","target":"alice","actor":"admin","result":"ok"}]}',
+      'ListAudit' => '{"entries":[{"action":"create_invite","target":"alice","actor":"admin","result":"ok"}]}',
       _ => '{}',
     };
+  }
+
+  Future<UpdateCheckResult> Function(String currentVersion, String nodeId)? onCheckUpdate;
+  Future<UpdateDownloadResult> Function(String tag, String nodeId)? onDownloadUpdate;
+
+  @override
+  Future<UpdateCheckResult> checkUpdate({
+    String currentVersion = '',
+    String nodeId = '',
+    String preferredFormat = '',
+  }) async {
+    if (onCheckUpdate != null) return onCheckUpdate!(currentVersion, nodeId);
+    return const UpdateCheckResult(
+      currentVersion: '0.1.0',
+      latestVersion: '0.2.0',
+      tag: 'v0.2.0',
+      updateAvailable: true,
+      assetName: 'niko-0.2.0-linux-amd64.tar.gz',
+      assetSha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      source: 'github',
+      verified: true,
+      notes: 'Bug fixes and speed improvements',
+    );
+  }
+
+  @override
+  Future<UpdateDownloadResult> downloadUpdate({
+    String tag = '',
+    String nodeId = '',
+    String currentVersion = '',
+    String preferredFormat = '',
+    Directory? destDir,
+  }) async {
+    if (onDownloadUpdate != null) return onDownloadUpdate!(tag, nodeId);
+    return UpdateDownloadResult(
+      tag: tag.isEmpty ? 'v0.2.0' : tag,
+      assetName: 'niko-0.2.0-linux-amd64.tar.gz',
+      filePath: '${destDir?.path ?? '/tmp/updates'}/niko-0.2.0-linux-amd64.tar.gz',
+      sha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      size: 12345678,
+      source: 'github',
+      verified: true,
+    );
   }
 
   @override

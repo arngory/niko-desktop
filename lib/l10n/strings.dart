@@ -605,4 +605,88 @@ class NikoStrings {
   String get adminEnable => _ru ? 'Включить' : 'Enable';
   String get adminDisable => _ru ? 'Выключить' : 'Disable';
   String get adminNoItems => _ru ? 'Пусто' : 'Empty';
+
+  // Phase P7: Presets (China, Iran, Ads), Verified Updater (D-SET-12/33), Built-in FAQ (D-SET-31)
+  String get presetChina => _ru ? 'Пресет Китай' : 'China preset';
+  String get presetChinaProxy => _ru ? 'Некитайские сайты: через прокси' : 'Non-China sites: through the proxy';
+  String get presetChinaDirect => _ru ? 'Китайские сервисы: напрямую' : 'China services: directly';
+  String get presetIran => _ru ? 'Пресет Иран' : 'Iran preset';
+  String get presetIranDirect => _ru ? 'Иранские сервисы: напрямую' : 'Iranian services: directly';
+  String get presetAds => _ru ? 'Блокировка рекламы' : 'Block ads';
+  String get presetAdsBlock => _ru ? 'Реклама и трекеры: блокировать' : 'Block ads and trackers';
+
+  String get updateCheck => _ru ? 'Проверить обновления' : 'Check for updates';
+  String get updateChecking => _ru ? 'Проверка…' : 'Checking…';
+  String get updateDownload => _ru ? 'Скачать проверенное обновление' : 'Download verified update';
+  String get updateDownloading => _ru ? 'Загрузка и проверка…' : 'Downloading & verifying…';
+  String get updateUpToDate => _ru ? 'Установлена актуальная версия' : 'You are up to date';
+  String updateAvailable(String version, String source) => _ru
+      ? 'Доступна версия $version ($source)'
+      : 'Version $version available ($source)';
+  String get updateVerifiedBadge => _ru ? 'Подпись minisign проверена' : 'minisign signature verified';
+  String get updateUnverifiedMirror =>
+      _ru ? 'Из зеркала узла — подпись будет проверена при загрузке' : 'From node mirror — signature will be verified on download';
+  String updateDownloaded(String path, String sha) => _ru
+      ? 'Проверено и сохранено: $path (SHA-256 ${sha.length > 12 ? sha.substring(0, 12) : sha}…)'
+      : 'Verified and saved: $path (SHA-256 ${sha.length > 12 ? sha.substring(0, 12) : sha}…)';
+
+  String get faqOpen => _ru ? 'Справка и FAQ' : 'Help & FAQ';
+  String get faqTitle => _ru ? 'Справка и частые вопросы' : 'Help & FAQ';
+  String get faqSubtitle => _ru
+      ? 'Работает полностью офлайн · краткое руководство по Niko Desktop'
+      : 'Available offline · quick guide to Niko Desktop';
+
+  List<(String, String)> get faqEntries => _ru
+      ? const [
+          (
+            'Прокси или VPN (TUN)?',
+            'Режим Прокси запускает локальный mixed-прокси (по умолчанию 127.0.0.1:2080) и при включении «Системный прокси» настраивает систему без прав администратора. Режим VPN (TUN) перехватывает весь системный трафик через виртуальный интерфейс и требует установленной системной службы niko-daemon.',
+          ),
+          (
+            'User-mode и системная служба',
+            'Без установки службы Niko автоматически запускает пользовательский демон (--user-mode) для режима Прокси. При переходе на системную службу (в 1 клик через pkexec на Linux или UAC на Windows) профили, правила и ключи узлов raycontrol переносятся однократно и безопасно перешифровываются.',
+          ),
+          (
+            'Узлы raycontrol, инвайты и сторож',
+            'Инвайт (rcinv1/2/3) регистрирует компьютер на узле с отдельным ключом устройства; если узел требует PIN, введите 6 цифр от администратора. Сторож периодически проверяет связность и при включённом автопереключении переводит подключение на рабочий профиль узла.',
+          ),
+          (
+            'Диагностика «Почему не работает?»',
+            'Откройте карточку узла raycontrol и нажмите «Почему не работает?». Niko проверит прямой SPA-путь, UDP MTU, подписку и каждый профиль (включая ретрансляторы) и сформирует обезличенный отчёт без адресов узлов и ключей.',
+          ),
+          (
+            'Проверка обновлений (minisign)',
+            'Все официальные релизы Niko подписываются ключом minisign (D5D2D2E799D74D8D). Перед сохранением обновления демон проверяет подпись файла SHA256SUMS, комментарий релиза и SHA-256 скачанного архива. При недоступности GitHub используется зеркало узла raycontrol с той же криптографической проверкой.',
+          ),
+          (
+            'Ссылки niko://, sn:// и clash://',
+            'Установленный пакет регистрирует обработчики URL-схем. Переход по ссылке niko://, sn:// или clash:// открывает экран добавления с уже заполненным полем и предпросмотром до сохранения.',
+          ),
+        ]
+      : const [
+          (
+            'Proxy vs VPN (TUN) mode',
+            'Proxy mode runs a local mixed proxy (127.0.0.1:2080 by default) and optionally configures the desktop system proxy without administrator privileges. VPN (TUN) mode captures all system traffic through a virtual interface and requires the installed niko-daemon system service.',
+          ),
+          (
+            'User-mode vs System Service',
+            'Without installing a service, Niko starts an unprivileged user-mode daemon (--user-mode) for Proxy mode. When you install the system service (1-click pkexec on Linux or UAC on Windows), profiles, rules, and raycontrol keys migrate cleanly and are re-sealed under the service identity.',
+          ),
+          (
+            'raycontrol Nodes, Invites & Watchdog',
+            'An invite (rcinv1/2/3) registers this machine with its own sealed device key; enter the 6-digit PIN if required. When auto-switch is enabled, the watchdog recovers from network failures by refreshing the subscription, trying alternate credentials, or failing over to a working profile.',
+          ),
+          (
+            '“Why isn’t it working?” Diagnostics',
+            'Open a raycontrol node card and click “Why isn’t it working?”. Niko tests direct SPA reachability, UDP MTU, subscription refresh, and every profile (including relays), producing a redacted diagnostic log safe to share.',
+          ),
+          (
+            'Verified Updates (minisign)',
+            'Official releases are signed with minisign key D5D2D2E799D74D8D. The daemon verifies SHA256SUMS against SHA256SUMS.minisig, checks the release tag trusted comment, and validates the archive SHA-256 before saving. raycontrol node mirrors follow the exact same verification.',
+          ),
+          (
+            'URL Schemes (niko://, sn://, clash://)',
+            'Installed desktop packages register OS URL handlers. Opening a niko://, sn://, or clash:// link launches Niko directly into the Add screen prefilled with a safe preview before importing.',
+          ),
+        ];
 }

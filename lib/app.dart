@@ -29,6 +29,7 @@ class NikoApp extends StatefulWidget {
     this.serviceInstall,
     this.userMigration,
     this.desktop,
+    this.initialImportLink,
   });
 
   final ConnectionController controller;
@@ -48,6 +49,9 @@ class NikoApp extends StatefulWidget {
   final ServiceController? serviceInstall;
   final UserStoreMigrationController? userMigration;
   final DesktopIntegration? desktop;
+
+  /// Deep-link URL passed at launch (`niko://`, `sn://`, `clash://`, etc.) to prefill AddScreen (D-ADD-11).
+  final String? initialImportLink;
 
   @override
   State<NikoApp> createState() => _NikoAppState();
@@ -123,6 +127,7 @@ class _NikoAppState extends State<NikoApp> {
                     serviceInstall: widget.serviceInstall,
                     userMigration: widget.userMigration,
                     desktop: widget.desktop,
+                    initialImportLink: widget.initialImportLink,
                   ),
                 ),
               );

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../app_info.dart';
+import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
 import '../platform/autostart.dart';
 import '../platform/desktop_integration.dart';
@@ -32,6 +33,9 @@ class SettingsScreen extends StatefulWidget {
     this.notice,
     this.autostart,
     this.pickDirectory,
+    this.onCheckUpdate,
+    this.onDownloadUpdate,
+    this.onOpenFaq,
   });
 
   /// The settings by the app's names (SettingsFeed: the daemon's).
@@ -57,6 +61,13 @@ class SettingsScreen extends StatefulWidget {
 
   /// Optional native directory picker override (used for save folder selection).
   final Future<String?> Function()? pickDirectory;
+
+  /// Optional verified updater callbacks (D-SET-12/33, BG-12).
+  final Future<UpdateCheckResult> Function()? onCheckUpdate;
+  final Future<UpdateDownloadResult> Function(String tag)? onDownloadUpdate;
+
+  /// Optional built-in offline FAQ navigation callback (D-SET-31).
+  final VoidCallback? onOpenFaq;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -88,8 +99,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
   _Dialog? _dialog;
   bool _autostartEnabled = false;
   late final DesktopAutostart _autostart = widget.autostart ?? DesktopAutostart();
+  bool _checkingUpdate = false;
+  bool _downloadingUpdate = false;
+  UpdateCheckResult? _updateInfo;
+  UpdateDownloadResult? _updateDownload;
+  String _updateError = '';
 
   WindowSettings get _window => widget.window ?? (_ownedWindow ??= WindowSettings.memory());
+
+  Future<void> _checkUpdate() async {
+    final fn = widget.onCheckUpdate;
+    if (fn == null || _checkingUpdate) return;
+    setState(() {
+      _checkingUpdate = true;
+      _updateError = '';
+      _updateInfo = null;
+      _updateDownload = null;
+    });
+    try {
+      final info = await fn();
+      if (mounted) setState(() => _updateInfo = info);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _updateInfo = null;
+          _updateError = daemonError(e);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
+    }
+  }
+
+  Future<void> _downloadUpdate(String tag) async {
+    final fn = widget.onDownloadUpdate;
+    if (fn == null || _downloadingUpdate) return;
+    setState(() {
+      _downloadingUpdate = true;
+      _updateError = '';
+    });
+    try {
+      final dl = await fn(tag);
+      if (mounted) setState(() => _updateDownload = dl);
+    } catch (e) {
+      if (mounted) setState(() => _updateError = daemonError(e));
+    } finally {
+      if (mounted) setState(() => _downloadingUpdate = false);
+    }
+  }
 
   @override
   void initState() {
@@ -431,6 +488,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
           foregroundPainter: _AboutHairline(colors.line),
           child: NikoInfoRow(title: _s.setUpdateKey, value: updateSigningKey),
         ),
+        if (widget.onCheckUpdate != null)
+          CustomPaint(
+            foregroundPainter: _AboutHairline(colors.line),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: NikoSpace.s4, vertical: NikoSpace.s3),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    spacing: NikoSpace.s3,
+                    runSpacing: NikoSpace.s2,
+                    children: [
+                      NikoTonalButton(
+                        label: _checkingUpdate ? _s.updateChecking : _s.updateCheck,
+                        onPressed: _checkingUpdate || _downloadingUpdate ? null : () => unawaited(_checkUpdate()),
+                      ),
+                      if (_updateInfo != null &&
+                          _updateInfo!.updateAvailable &&
+                          widget.onDownloadUpdate != null)
+                        NikoPrimaryButton(
+                          label: _downloadingUpdate ? _s.updateDownloading : _s.updateDownload,
+                          onPressed: _downloadingUpdate ? null : () => unawaited(_downloadUpdate(_updateInfo!.tag)),
+                        ),
+                    ],
+                  ),
+                  if (_updateError.isNotEmpty) ...[
+                    const SizedBox(height: NikoSpace.s3),
+                    NikoBanner(icon: NikoIcons.alert, title: _s.errorTitle, text: _updateError, danger: true),
+                  ] else if (_updateDownload case final dl?) ...[
+                    const SizedBox(height: NikoSpace.s3),
+                    NikoBanner(
+                      icon: NikoIcons.copy,
+                      title: _s.updateVerifiedBadge,
+                      text: _s.updateDownloaded(dl.filePath, dl.sha256),
+                    ),
+                  ] else if (_updateInfo case final info?) ...[
+                    const SizedBox(height: NikoSpace.s3),
+                    NikoBanner(
+                      icon: NikoIcons.rotateCw,
+                      title: info.updateAvailable
+                          ? _s.updateAvailable(info.latestVersion, info.source.isEmpty ? 'github' : info.source)
+                          : _s.updateUpToDate,
+                      text: [
+                        if (info.verified)
+                          _s.updateVerifiedBadge
+                        else if (info.updateAvailable)
+                          _s.updateUnverifiedMirror,
+                        if (info.assetName.isNotEmpty) info.assetName,
+                        if (info.notes.isNotEmpty) info.notes,
+                      ].join('\n'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        if (widget.onOpenFaq != null)
+          NikoLinkRow(
+            title: _s.faqOpen,
+            value: '',
+            divider: true,
+            onPressed: widget.onOpenFaq!,
+          ),
       ]);
 
   @override

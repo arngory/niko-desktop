@@ -153,14 +153,23 @@ class RulesFeed extends ChangeNotifier {
   }
 
   /// The Russian preset (D-RULES-05): its rules in place of its earlier ones, then its lists downloaded.
-  Future<void> applyRussia({required String blockedName, required String directName}) async {
+  Future<void> applyRussia({required String blockedName, required String directName}) =>
+      applyPreset(RoutePreset.russia, blockedName: blockedName, directName: directName);
+
+  /// Applies a built-in route preset (Russia, China, Iran, Ads) and downloads its `srs:` rule-sets.
+  Future<void> applyPreset(RoutePreset preset, {String blockedName = '', String directName = ''}) async {
     final daemon = _link.daemon;
     if (daemon == null || updating) return;
     // busy from the press: a second one while the preset is applied starts no second preset and update
     updating = true;
     if (!_disposed) notifyListeners();
     PresetApplied? applied;
-    if (!await _ask((d) async => applied = await d.applyRussiaPreset(blockedName: blockedName, directName: directName))) {
+    final ok = await _ask((d) async {
+      applied = preset == RoutePreset.russia
+          ? await d.applyRussiaPreset(blockedName: blockedName, directName: directName)
+          : await d.applyPreset(preset, blockedName: blockedName, directName: directName);
+    });
+    if (!ok) {
       updating = false;
       if (!_disposed) notifyListeners();
       return;

@@ -12,18 +12,32 @@ class DesktopIntegration {
   DesktopIntegration({MethodChannel? channel}) : _channel = channel ?? const MethodChannel('niko/window');
 
   final MethodChannel _channel;
+  void Function(String action)? _trayHandler;
+  void Function(String url)? _deepLinkHandler;
 
-  void setTrayActionHandler(void Function(String action)? handler) {
-    if (handler == null) {
+  void _syncHandler() {
+    if (_trayHandler == null && _deepLinkHandler == null) {
       _channel.setMethodCallHandler(null);
       return;
     }
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'trayAction' && call.arguments is String) {
-        handler(call.arguments as String);
+        _trayHandler?.call(call.arguments as String);
+      } else if (call.method == 'deepLink' && call.arguments is String) {
+        _deepLinkHandler?.call(call.arguments as String);
       }
       return null;
     });
+  }
+
+  void setTrayActionHandler(void Function(String action)? handler) {
+    _trayHandler = handler;
+    _syncHandler();
+  }
+
+  void setDeepLinkHandler(void Function(String url)? handler) {
+    _deepLinkHandler = handler;
+    _syncHandler();
   }
 
   Future<void> updateTray({

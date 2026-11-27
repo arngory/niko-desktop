@@ -10,6 +10,7 @@ import 'daemon/endpoint.dart';
 import 'daemon/locator.dart';
 import 'daemon/user_mode_daemon.dart';
 import 'daemon/worker_process.dart';
+import 'platform/deep_link.dart';
 import 'platform/linux_service_install.dart';
 import 'platform/places.dart';
 import 'platform/service_install.dart';
@@ -207,6 +208,7 @@ Future<void> main(List<String> arguments) async {
 
   // the view chosen last time, before the first frame: the window does not open in one view and turn to the other
   final settings = await WindowSettings.load(settingsFile());
+  final initialImportLink = extractDeepLink(arguments);
   runApp(NikoApp(
     controller: controller,
     settings: settings,
@@ -214,5 +216,6 @@ Future<void> main(List<String> arguments) async {
     configName: file == null ? '' : file.uri.pathSegments.last,
     serviceInstall: serviceInstall,
     userMigration: userMigration,
+    initialImportLink: initialImportLink,
   ));
 }

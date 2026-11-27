@@ -17,7 +17,13 @@ import '../ui/pressable.dart';
 /// programs, where it goes, «Обход DPI» on a direct one) or deleted; a new one; the Russian preset; and the rule-sets
 /// the rules name, with when each was fetched and the update on demand.
 class RulesScreen extends StatefulWidget {
-  const RulesScreen({super.key, required this.feed, required this.linked, this.profiles = const []});
+  const RulesScreen({
+    super.key,
+    required this.feed,
+    required this.linked,
+    this.profiles = const [],
+    this.extendedPresets = true,
+  });
 
   final RulesFeed feed;
 
@@ -26,6 +32,9 @@ class RulesScreen extends StatefulWidget {
 
   /// Available profiles for routing a rule to a specific profile outbound.
   final List<ProfileRow> profiles;
+
+  /// True when connected daemon supports API >= 16 (China, Iran, Ads presets).
+  final bool extendedPresets;
 
   @override
   State<RulesScreen> createState() => _RulesScreenState();
@@ -77,6 +86,36 @@ class _RulesScreenState extends State<RulesScreen> {
                         directName: strings.presetRussiaDirect,
                       ),
             ),
+            if (widget.extendedPresets) ...[
+              NikoTonalButton(
+                label: strings.presetChina,
+                onPressed: feed.updating
+                    ? null
+                    : () => feed.applyPreset(
+                          RoutePreset.china,
+                          blockedName: strings.presetChinaProxy,
+                          directName: strings.presetChinaDirect,
+                        ),
+              ),
+              NikoTonalButton(
+                label: strings.presetIran,
+                onPressed: feed.updating
+                    ? null
+                    : () => feed.applyPreset(
+                          RoutePreset.iran,
+                          directName: strings.presetIranDirect,
+                        ),
+              ),
+              NikoTonalButton(
+                label: strings.presetAds,
+                onPressed: feed.updating
+                    ? null
+                    : () => feed.applyPreset(
+                          RoutePreset.ads,
+                          blockedName: strings.presetAdsBlock,
+                        ),
+              ),
+            ],
             if (feed.rules.isNotEmpty)
               NikoGhostButton(
                 label: strings.rulesReset,

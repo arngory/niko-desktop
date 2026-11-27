@@ -132,13 +132,28 @@ class PresetRequest_Preset extends $pb.ProtobufEnum {
   static const PresetRequest_Preset RUSSIA =
       PresetRequest_Preset._(1, _omitEnumNames ? '' : 'RUSSIA');
 
+  /// non-China sites through the proxy, China domains and IPs directly (SagerNet sing-geosite/sing-geoip)
+  static const PresetRequest_Preset CHINA =
+      PresetRequest_Preset._(2, _omitEnumNames ? '' : 'CHINA');
+
+  /// Iran domains and IPs directly (Iran-sing-box-rules)
+  static const PresetRequest_Preset IRAN =
+      PresetRequest_Preset._(3, _omitEnumNames ? '' : 'IRAN');
+
+  /// block ads and trackers via srs rule-set (geosite-category-ads-all)
+  static const PresetRequest_Preset ADS =
+      PresetRequest_Preset._(4, _omitEnumNames ? '' : 'ADS');
+
   static const $core.List<PresetRequest_Preset> values = <PresetRequest_Preset>[
     PRESET_UNSPECIFIED,
     RUSSIA,
+    CHINA,
+    IRAN,
+    ADS,
   ];
 
   static final $core.List<PresetRequest_Preset?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 1);
+      $pb.ProtobufEnum.$_initByValueList(values, 4);
   static PresetRequest_Preset? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 

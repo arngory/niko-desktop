@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Niko
+GenericName=VPN & Proxy Client
+Comment=Desktop client for Niko (sing-box + raycontrol)
+Exec=niko --url %u
+Icon=niko
+Terminal=false
+Categories=Network;Utility;
+StartupNotify=true
+StartupWMClass=io.niko.niko_desktop
+MimeType=x-scheme-handler/niko;x-scheme-handler/sn;x-scheme-handler/clash;

@@ -406,25 +406,52 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
 
-// Implements GApplication::local_command_line.
-static gboolean my_application_local_command_line(GApplication* application,
-                                                  gchar*** arguments,
-                                                  int* exit_status) {
+// Implements GApplication::command_line so second-instance deep links (--url <uri> or <uri>)
+// are forwarded directly to the running Flutter instance instead of being dropped.
+static int my_application_command_line(GApplication* application,
+                                       GApplicationCommandLine* command_line) {
   MyApplication* self = MY_APPLICATION(application);
-  g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
-  self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
+  int argc = 0;
+  gchar** argv = g_application_command_line_get_arguments(command_line, &argc);
 
-  g_autoptr(GError) error = nullptr;
-  if (!g_application_register(application, nullptr, &error)) {
-    g_warning("Failed to register: %s", error->message);
-    *exit_status = 1;
-    return TRUE;
+  if (self->window == nullptr) {
+    g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+    if (argc > 1) {
+      self->dart_entrypoint_arguments = g_strdupv(argv + 1);
+    }
+    g_application_activate(application);
+    g_strfreev(argv);
+    return 0;
   }
 
-  g_application_activate(application);
-  *exit_status = 0;
+  // Existing instance: raise window and forward any deep-link argument over niko/window.
+  gtk_widget_show(GTK_WIDGET(self->window));
+  gtk_window_present(self->window);
 
-  return TRUE;
+  if (self->window_channel != nullptr && argc > 1) {
+    const gchar* link = nullptr;
+    for (int i = 1; i < argc; ++i) {
+      if (g_strcmp0(argv[i], "--url") == 0 && i + 1 < argc) {
+        link = argv[i + 1];
+        break;
+      }
+      if (g_str_has_prefix(argv[i], "--url=")) {
+        link = argv[i] + 6;
+        break;
+      }
+      if (argv[i][0] != '-' && strstr(argv[i], "://") != nullptr) {
+        link = argv[i];
+      }
+    }
+    if (link != nullptr && link[0] != '\0') {
+      g_autoptr(FlValue) arg = fl_value_new_string(link);
+      fl_method_channel_invoke_method(self->window_channel, "deepLink", arg,
+                                      nullptr, nullptr, nullptr);
+    }
+  }
+
+  g_strfreev(argv);
+  return 0;
 }
 
 static void my_application_startup(GApplication* application) {
@@ -444,8 +471,7 @@ static void my_application_dispose(GObject* object) {
 
 static void my_application_class_init(MyApplicationClass* klass) {
   G_APPLICATION_CLASS(klass)->activate = my_application_activate;
-  G_APPLICATION_CLASS(klass)->local_command_line =
-      my_application_local_command_line;
+  G_APPLICATION_CLASS(klass)->command_line = my_application_command_line;
   G_APPLICATION_CLASS(klass)->startup = my_application_startup;
   G_APPLICATION_CLASS(klass)->shutdown = my_application_shutdown;
   G_OBJECT_CLASS(klass)->dispose = my_application_dispose;
@@ -469,6 +495,6 @@ MyApplication* my_application_new() {
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", NIKO_APPLICATION_ID,
-                                     "flags", G_APPLICATION_DEFAULT_FLAGS,
+                                     "flags", G_APPLICATION_HANDLES_COMMAND_LINE,
                                      nullptr));
 }

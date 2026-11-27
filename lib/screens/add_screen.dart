@@ -22,7 +22,7 @@ import 'nodes_screen.dart' show typeLabel;
 /// its PIN asked for where the invite needs one (before the first try, again after a wrong one), and the node's
 /// group is shown once its subscription came. QR codes come with their slice.
 class AddScreen extends StatefulWidget {
-  const AddScreen({super.key, required this.feed, required this.onDone, this.pickFile});
+  const AddScreen({super.key, required this.feed, required this.onDone, this.pickFile, this.initialText = ''});
 
   final ProfilesFeed feed;
 
@@ -31,6 +31,9 @@ class AddScreen extends StatefulWidget {
 
   /// Optional file picker override for tests; defaults to native [DesktopIntegration.pickFile].
   final Future<String?> Function()? pickFile;
+
+  /// Optional deep-link URL or text prefilled when opened from a URL scheme (D-ADD-11).
+  final String initialText;
 
   @override
   State<AddScreen> createState() => _AddScreenState();
@@ -55,6 +58,9 @@ class _AddScreenState extends State<AddScreen> {
     super.initState();
     _text.addListener(_changed);
     _pin.addListener(() => setState(() {}));
+    if (widget.initialText.trim().isNotEmpty) {
+      _text.text = widget.initialText.trim();
+    }
   }
 
   @override

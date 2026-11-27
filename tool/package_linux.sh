@@ -10,7 +10,8 @@
 #
 # Usage:
 #   tool/package_linux.sh [--window-dir <dir>] [--arch amd64|arm64] [--version <ver>] \
-#     [--out <dir>] [--minisign-key <file>] [--minisign-pass <pass>]
+#     [--out <dir>] [--minisign-key <file>]
+#   (Optional minisign passphrase is read from NIKO_MINISIGN_PASS env var.)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,7 +20,6 @@ ARCH="amd64"
 VERSION=""
 OUT_DIR="$ROOT/build/dist"
 MINISIGN_KEY=""
-MINISIGN_PASS=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -28,7 +28,6 @@ while [ $# -gt 0 ]; do
     --version) VERSION="$2"; shift 2 ;;
     --out) OUT_DIR="$2"; shift 2 ;;
     --minisign-key) MINISIGN_KEY="$2"; shift 2 ;;
-    --minisign-pass) MINISIGN_PASS="$2"; shift 2 ;;
     -h|--help)
       sed -n '2,15p' "$0"
       exit 0
@@ -128,15 +127,11 @@ tar -C "$TMP_DIR" -czf "$TAR_PATH" "$PKG_NAME"
 
 (
   cd "$OUT_DIR"
-  sha256sum "${PKG_NAME}.tar.gz" > SHA256SUMS
-  if [ -n "$MINISIGN_KEY" ]; then
-    if [ -n "$MINISIGN_PASS" ]; then
-      printf '%s\n' "$MINISIGN_PASS" | minisign -S -s "$MINISIGN_KEY" -m SHA256SUMS -x SHA256SUMS.minisig >/dev/null
-    else
-      minisign -S -s "$MINISIGN_KEY" -m SHA256SUMS -x SHA256SUMS.minisig >/dev/null
-    fi
-  fi
+  sha256sum "${PKG_NAME}.tar.gz" > "SHA256SUMS.linux-${ARCH}-tar"
 )
+if [ -n "$MINISIGN_KEY" ]; then
+  "$ROOT/tool/sign_release.sh" --dir "$OUT_DIR" --version "$VERSION" --minisign-key "$MINISIGN_KEY"
+fi
 
 echo "Packaged: $TAR_PATH ($(du -h "$TAR_PATH" | cut -f1))"
-cat "$OUT_DIR/SHA256SUMS"
+cat "$OUT_DIR/SHA256SUMS.linux-${ARCH}-tar"

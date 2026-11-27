@@ -433,6 +433,17 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     }
   }
 
+  if (message == WM_COPYDATA && lparam != 0) {
+    const auto* cds = reinterpret_cast<const COPYDATASTRUCT*>(lparam);
+    if (cds->dwData == 0x4E494B4F && cds->lpData != nullptr &&
+        cds->cbData > 0 && cds->cbData <= 32768 && window_channel_) {
+      std::string link(reinterpret_cast<const char*>(cds->lpData), cds->cbData);
+      window_channel_->InvokeMethod(
+          "deepLink", std::make_unique<flutter::EncodableValue>(link));
+      return TRUE;
+    }
+  }
+
   if (message == WM_CLOSE && close_to_tray_ && !quitting_ && tray_added_) {
     ::ShowWindow(hwnd, SW_HIDE);
     return 0;

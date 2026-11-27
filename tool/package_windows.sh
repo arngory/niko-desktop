@@ -245,15 +245,15 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
 
 (
   cd "$OUT_DIR"
-  sha256sum "${PKG_NAME}.zip" > SHA256SUMS
-  if [ -n "$MINISIGN_KEY" ]; then
-    if [ -n "$MINISIGN_PASS" ]; then
-      printf '%s\n' "$MINISIGN_PASS" | minisign -S -s "$MINISIGN_KEY" -m SHA256SUMS -x SHA256SUMS.minisig >/dev/null
-    else
-      minisign -S -s "$MINISIGN_KEY" -m SHA256SUMS -x SHA256SUMS.minisig >/dev/null
-    fi
-  fi
+  sha256sum "${PKG_NAME}.zip" > "SHA256SUMS.windows-${ARCH}-zip"
 )
+if [ -n "$MINISIGN_KEY" ]; then
+  if [ -n "$MINISIGN_PASS" ]; then
+    NIKO_MINISIGN_PASS="$MINISIGN_PASS" "$ROOT/tool/sign_release.sh" --dir "$OUT_DIR" --version "$VERSION" --minisign-key "$MINISIGN_KEY"
+  else
+    "$ROOT/tool/sign_release.sh" --dir "$OUT_DIR" --version "$VERSION" --minisign-key "$MINISIGN_KEY"
+  fi
+fi
 
 echo "Packaged: $ZIP_PATH ($(du -h "$ZIP_PATH" | cut -f1))"
-cat "$OUT_DIR/SHA256SUMS"
+cat "$OUT_DIR/SHA256SUMS.windows-${ARCH}-zip"

@@ -141,3 +141,49 @@ jobs:
           name: release-linux-amd64
           path: ${{ runner.temp }}/dist-linux
           retention-days: 14
+
+  publish:
+    name: Aggregate SHA256SUMS and sign release
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout niko-desktop
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: niko-desktop
+          persist-credentials: false
+
+      - name: Download Windows and Linux artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/all-dist
+          merge-multiple: true
+
+      - name: Aggregate SHA256SUMS and sign with minisign
+        working-directory: niko-desktop
+        env:
+          MINISIGN_KEY_B64: ${{ secrets.MINISIGN_SECRET_KEY_BASE64 }}
+          NIKO_MINISIGN_PASS: ${{ secrets.MINISIGN_SECRET_KEY_PASSWORD }}
+        run: |
+          version="${{ inputs.version }}"
+          if [ -z "$version" ]; then
+            version="$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)"
+          fi
+          rm -f "$RUNNER_TEMP/all-dist"/SHA256SUMS*
+          args=(--dir "$RUNNER_TEMP/all-dist" --version "$version")
+          if [ -n "$MINISIGN_KEY_B64" ]; then
+            sudo apt-get update -q && sudo apt-get install -y -q minisign > /dev/null
+            printf '%s' "$MINISIGN_KEY_B64" | base64 -d > "$RUNNER_TEMP/minisign.key"
+            chmod 0600 "$RUNNER_TEMP/minisign.key"
+            args+=(--minisign-key "$RUNNER_TEMP/minisign.key")
+          fi
+          ./tool/sign_release.sh "${args[@]}"
+          rm -f "$RUNNER_TEMP/minisign.key"
+
+      - name: Upload combined signed release artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-signed-all
+          path: ${{ runner.temp }}/all-dist
+          retention-days: 14

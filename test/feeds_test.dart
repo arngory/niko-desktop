@@ -152,6 +152,31 @@ class TracedDaemon implements Daemon {
   Future<PresetApplied> applyRussiaPreset({required String blockedName, required String directName}) =>
       _inner.applyRussiaPreset(blockedName: blockedName, directName: directName);
   @override
+  Future<PresetApplied> applyPreset(RoutePreset preset, {String blockedName = '', String directName = ''}) =>
+      _inner.applyPreset(preset, blockedName: blockedName, directName: directName);
+  @override
+  Future<UpdateCheckResult> checkUpdate({
+    String currentVersion = '',
+    String nodeId = '',
+    String preferredFormat = '',
+  }) =>
+      _inner.checkUpdate(currentVersion: currentVersion, nodeId: nodeId, preferredFormat: preferredFormat);
+  @override
+  Future<UpdateDownloadResult> downloadUpdate({
+    String tag = '',
+    String nodeId = '',
+    String currentVersion = '',
+    String preferredFormat = '',
+    Directory? destDir,
+  }) =>
+      _inner.downloadUpdate(
+        tag: tag,
+        nodeId: nodeId,
+        currentVersion: currentVersion,
+        preferredFormat: preferredFormat,
+        destDir: destDir,
+      );
+  @override
   Future<RuleSetStatus> ruleSets() => _inner.ruleSets();
   @override
   Future<TaskResult> updateRuleSets({List<String> items = const [], bool force = false}) =>

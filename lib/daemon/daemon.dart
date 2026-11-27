@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:fixnum/fixnum.dart';
 import 'package:grpc/grpc.dart';
 import 'package:grpc/grpc_connection_interface.dart' show ClientChannelBase;
@@ -800,12 +801,63 @@ class RuleRow {
       );
 }
 
+/// Built-in route rule presets (NikoService.ApplyPreset, D-RULES-05).
+enum RoutePreset { russia, china, iran, ads }
+
 /// What applying a preset added (NikoService.ApplyPreset): its rules, and the rule-sets they name, to download.
 class PresetApplied {
   const PresetApplied({this.rules = const [], this.ruleSets = const []});
 
   final List<RuleRow> rules;
   final List<String> ruleSets;
+}
+
+/// Verified update check result (NikoService.CheckUpdate, D-SET-12/33, BG-12).
+class UpdateCheckResult {
+  const UpdateCheckResult({
+    this.currentVersion = '',
+    this.latestVersion = '',
+    this.tag = '',
+    this.updateAvailable = false,
+    this.assetName = '',
+    this.assetSha256 = '',
+    this.releaseUrl = '',
+    this.notes = '',
+    this.source = '',
+    this.verified = false,
+  });
+
+  final String currentVersion;
+  final String latestVersion;
+  final String tag;
+  final bool updateAvailable;
+  final String assetName;
+  final String assetSha256;
+  final String releaseUrl;
+  final String notes;
+  final String source;
+  final bool verified;
+}
+
+/// Verified downloaded release artifact (NikoService.DownloadUpdate, D-SET-12/33, BG-12).
+class UpdateDownloadResult {
+  const UpdateDownloadResult({
+    this.tag = '',
+    this.assetName = '',
+    this.filePath = '',
+    this.sha256 = '',
+    this.size = 0,
+    this.source = '',
+    this.verified = false,
+  });
+
+  final String tag;
+  final String assetName;
+  final String filePath;
+  final String sha256;
+  final int size;
+  final String source;
+  final bool verified;
 }
 
 /// A rule-set the daemon downloads, as a rule names it (NikoService's RuleSet, BG-09).
@@ -1011,6 +1063,9 @@ abstract interface class Daemon {
   /// window's language.
   Future<PresetApplied> applyRussiaPreset({required String blockedName, required String directName});
 
+  /// Applies a built-in route preset (Russia, China, Iran, Ads) via NikoService.ApplyPreset.
+  Future<PresetApplied> applyPreset(RoutePreset preset, {String blockedName = '', String directName = ''});
+
   /// The rule-sets the rules name (NikoService.ListRuleSets, D-RULES-03).
   Future<RuleSetStatus> ruleSets();
 
@@ -1070,6 +1125,18 @@ abstract interface class Daemon {
 
   /// Toggles lan-v1 visibility for this device on a raycontrol node.
   Future<void> setNodeLan(String nodeId, bool show);
+
+  /// Checks for a signed Niko Desktop release via GitHub / raycontrol app-mirror (NikoService.CheckUpdate).
+  Future<UpdateCheckResult> checkUpdate({String currentVersion = '', String nodeId = '', String preferredFormat = ''});
+
+  /// Downloads and verifies a signed Niko Desktop release archive, streaming verified bytes into [destDir].
+  Future<UpdateDownloadResult> downloadUpdate({
+    String tag = '',
+    String nodeId = '',
+    String currentVersion = '',
+    String preferredFormat = '',
+    Directory? destDir,
+  });
 
   Future<void> close();
 }
@@ -1975,6 +2042,139 @@ class GrpcDaemon implements Daemon {
       _niko.setNodeLan(niko.SetNodeLanRequest(nodeId: nodeId, show: show), options: _short);
 
   @override
+  Future<PresetApplied> applyPreset(RoutePreset preset, {String blockedName = '', String directName = ''}) async {
+    final pbPreset = switch (preset) {
+      RoutePreset.russia => niko.PresetRequest_Preset.RUSSIA,
+      RoutePreset.china => niko.PresetRequest_Preset.CHINA,
+      RoutePreset.iran => niko.PresetRequest_Preset.IRAN,
+      RoutePreset.ads => niko.PresetRequest_Preset.ADS,
+    };
+    final result = await _niko.applyPreset(
+      niko.PresetRequest(preset: pbPreset, blockedName: blockedName, directName: directName),
+      options: _short,
+    );
+    return PresetApplied(
+      rules: List.unmodifiable(result.rules.map(_rule)),
+      ruleSets: List.unmodifiable(result.ruleSets),
+    );
+  }
+
+  @override
+  Future<UpdateCheckResult> checkUpdate({
+    String currentVersion = '',
+    String nodeId = '',
+    String preferredFormat = '',
+  }) async {
+    final res = await _niko.checkUpdate(
+      niko.CheckUpdateRequest(
+        currentVersion: currentVersion,
+        nodeId: nodeId,
+        preferredFormat: preferredFormat,
+      ),
+      options: CallOptions(timeout: const Duration(seconds: 40)),
+    );
+    return UpdateCheckResult(
+      currentVersion: res.currentVersion,
+      latestVersion: res.latestVersion,
+      tag: res.tag,
+      updateAvailable: res.updateAvailable,
+      assetName: res.assetName,
+      assetSha256: res.assetSha256,
+      releaseUrl: res.releaseUrl,
+      notes: res.notes,
+      source: res.source,
+      verified: res.verified,
+    );
+  }
+
+  static final _safeAssetPattern = RegExp(r'^[A-Za-z0-9._-]{1,128}$');
+
+  @override
+  Future<UpdateDownloadResult> downloadUpdate({
+    String tag = '',
+    String nodeId = '',
+    String currentVersion = '',
+    String preferredFormat = '',
+    Directory? destDir,
+  }) async {
+    final dir = destDir ?? Directory.systemTemp;
+    dir.createSync(recursive: true);
+    final stream = _niko.downloadUpdate(
+      niko.DownloadUpdateRequest(
+        tag: tag,
+        nodeId: nodeId,
+        currentVersion: currentVersion,
+        preferredFormat: preferredFormat,
+      ),
+      options: CallOptions(timeout: const Duration(minutes: 15)),
+    );
+    File? partFile;
+    IOSink? sink;
+    final hashOut = _DigestSink();
+    final hashIn = crypto.sha256.startChunkedConversion(hashOut);
+    var resTag = tag;
+    var assetName = '';
+    var expectedSha = '';
+    var source = '';
+    var verified = false;
+    var written = 0;
+    try {
+      await for (final ev in stream) {
+        if (ev.tag.isNotEmpty) resTag = ev.tag;
+        if (ev.assetName.isNotEmpty) assetName = ev.assetName;
+        if (ev.sha256.isNotEmpty) expectedSha = ev.sha256.toLowerCase();
+        if (ev.source.isNotEmpty) source = ev.source;
+        if (ev.verified) verified = true;
+        if (ev.chunk.isNotEmpty) {
+          if (partFile == null) {
+            if (!_safeAssetPattern.hasMatch(assetName) || assetName.replaceAll('.', '').isEmpty) {
+              throw StateError('invalid update asset name: $assetName');
+            }
+            partFile = File('${dir.path}${Platform.pathSeparator}$assetName.part');
+            sink = partFile.openWrite();
+          }
+          sink!.add(ev.chunk);
+          hashIn.add(ev.chunk);
+          written += ev.chunk.length;
+        }
+      }
+      hashIn.close();
+      await sink?.flush();
+      await sink?.close();
+      sink = null;
+      if (partFile == null || !verified || expectedSha.isEmpty) {
+        throw StateError('incomplete or unverified update stream');
+      }
+      final actualSha = hashOut.value.toString().toLowerCase();
+      if (actualSha != expectedSha) {
+        throw StateError('downloaded update SHA-256 mismatch');
+      }
+      final finalPath = '${dir.path}${Platform.pathSeparator}$assetName';
+      final target = File(finalPath);
+      if (target.existsSync()) target.deleteSync();
+      partFile.renameSync(finalPath);
+      partFile = null;
+      return UpdateDownloadResult(
+        tag: resTag,
+        assetName: assetName,
+        filePath: finalPath,
+        sha256: expectedSha,
+        size: written,
+        source: source,
+        verified: true,
+      );
+    } catch (_) {
+      try {
+        await sink?.close();
+      } catch (_) {}
+      try {
+        if (partFile != null && partFile.existsSync()) partFile.deleteSync();
+      } catch (_) {}
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> close() async {
     try {
       await _channel.shutdown();
@@ -1989,3 +2189,14 @@ final _terminalColours = RegExp('\x1b\\[[0-9;]*m');
 
 /// A log line without the colour codes the core writes for a terminal.
 String plainLogText(String line) => line.replaceAll(_terminalColours, '');
+
+class _DigestSink implements Sink<crypto.Digest> {
+  crypto.Digest? _value;
+  crypto.Digest get value => _value!;
+
+  @override
+  void add(crypto.Digest data) => _value = data;
+
+  @override
+  void close() {}
+}

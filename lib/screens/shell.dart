@@ -4,8 +4,10 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/widgets.dart';
 
+import '../app_info.dart';
 import '../daemon/daemon.dart';
 import '../l10n/strings.dart';
+import '../platform/deep_link.dart';
 import '../platform/desktop_integration.dart';
 import '../platform/places.dart' as places;
 import '../platform/service_install.dart';
@@ -26,6 +28,7 @@ import 'add_screen.dart';
 import 'admin_screen.dart';
 import 'check_screen.dart';
 import 'connections_screen.dart';
+import 'faq_screen.dart';
 import 'log_screen.dart';
 import 'main_screen.dart';
 import 'nodes_screen.dart';
@@ -51,6 +54,7 @@ class NikoShell extends StatefulWidget {
     this.serviceInstall,
     this.userMigration,
     this.desktop,
+    this.initialImportLink,
   });
 
   final ConnectionController controller;
@@ -66,6 +70,7 @@ class NikoShell extends StatefulWidget {
   final ServiceController? serviceInstall;
   final UserStoreMigrationController? userMigration;
   final DesktopIntegration? desktop;
+  final String? initialImportLink;
 
   @override
   State<NikoShell> createState() => _NikoShellState();
@@ -82,6 +87,9 @@ class _NikoShellState extends State<NikoShell> {
   late SettingsFeed _settings;
   late RouteCheckController _routeCheck;
   bool _adding = false;
+  int _addSession = 0;
+  String _initialImportLink = '';
+  bool _showingFaq = false;
   NodeRow? _whyNode;
   NodeRow? _adminNode;
   AppSection _section = AppSection.home;
@@ -98,16 +106,37 @@ class _NikoShellState extends State<NikoShell> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialImportLink != null && widget.initialImportLink!.trim().isNotEmpty) {
+      _initialImportLink = widget.initialImportLink!.trim();
+      _section = AppSection.nodes;
+      _adding = true;
+    }
     _desktop = widget.desktop ?? DesktopIntegration();
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
     _lastLink = widget.controller.link;
     _lastPhase = widget.controller.service.phase;
     widget.settings.addListener(_onWindowSettings);
     _desktop.setTrayActionHandler(_onTrayAction);
+    _desktop.setDeepLinkHandler(_onDeepLink);
     unawaited(_desktop.setCloseToTray(widget.settings.closeToTray));
     _attach();
     _read();
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncTray());
+  }
+
+  void _onDeepLink(String raw) {
+    final normalized = normalizeDeepLink(raw);
+    if (normalized == null || !mounted) return;
+    setState(() {
+      _section = AppSection.nodes;
+      _adding = true;
+      _addSession++;
+      _initialImportLink = normalized;
+      _whyNode = null;
+      _adminNode = null;
+      _showingFaq = false;
+    });
+    _read();
   }
 
   @override
@@ -263,6 +292,7 @@ class _NikoShellState extends State<NikoShell> {
   void dispose() {
     _networkRestoredTimer?.cancel();
     _desktop.setTrayActionHandler(null);
+    _desktop.setDeepLinkHandler(null);
     widget.settings.removeListener(_onWindowSettings);
     _lifecycle.dispose();
     _detach(widget.controller);
@@ -349,6 +379,8 @@ class _NikoShellState extends State<NikoShell> {
     setState(() {
       _section = section;
       _adding = false;
+      _initialImportLink = '';
+      _showingFaq = false;
       _whyNode = null;
       _adminNode = null;
     });
@@ -474,11 +506,23 @@ class _NikoShellState extends State<NikoShell> {
                     );
                   }
                   return _adding
-                      ? AddScreen(feed: _profiles, onDone: (_) => setState(() => _adding = false))
+                      ? AddScreen(
+                          key: ValueKey('add-$_addSession'),
+                          feed: _profiles,
+                          initialText: _initialImportLink,
+                          onDone: (_) => setState(() {
+                            _adding = false;
+                            _initialImportLink = '';
+                          }),
+                        )
                       : NodesScreen(
                           feed: _profiles,
                           linked: state.link == LinkPhase.ready,
-                          onAdd: () => setState(() => _adding = true),
+                          onAdd: () => setState(() {
+                            _initialImportLink = '';
+                            _addSession++;
+                            _adding = true;
+                          }),
                           onWhy: state.nikoApi >= 15 ? (n) => setState(() => _whyNode = n) : null,
                           onAdmin: state.nikoApi >= 15 ? (n) => setState(() => _adminNode = n) : null,
                         );
@@ -490,34 +534,56 @@ class _NikoShellState extends State<NikoShell> {
                   feed: _rules,
                   linked: state.link == LinkPhase.ready,
                   profiles: _profiles.profiles,
+                  extendedPresets: state.nikoApi >= 16,
                 ),
               ),
               AppSection.log => LogScreen(feed: _log, stun: _stun),
-              AppSection.settings => ListenableBuilder(
-                listenable: _settings,
-                builder: (context, _) => SettingsScreen(
-                  values: _settings,
-                  window: widget.settings,
-                  strings: strings,
-                  coreVersion: state.link == LinkPhase.ready ? state.coreVersion : '',
-                  nikoVersion: state.link == LinkPhase.ready ? state.nikoVersion : '',
-                  onLanguage: (lang) {
-                    final daemon = state.daemon;
-                    if (daemon != null && state.link == LinkPhase.ready) {
-                      unawaited(daemon.setLocale(lang == 'system' ? '' : lang).catchError((Object _) {}));
-                    }
-                  },
-                  notice: switch (state.link) {
-                    LinkPhase.ready when _settings.loaded => null,
-                    LinkPhase.ready when _settings.readError.isNotEmpty => (
-                      strings.settingsUnread,
-                      _settings.readError,
-                    ),
-                    // read in a moment: nothing to say yet
-                    LinkPhase.ready => ('', ''),
-                    _ => (strings.storeNoLink, ''),
-                  },
-                ),
+              AppSection.settings => IndexedStack(
+                index: _showingFaq ? 1 : 0,
+                children: [
+                  ListenableBuilder(
+                    listenable: _settings,
+                    builder: (context, _) {
+                      final daemon = state.daemon;
+                      final canUpdate = daemon != null && state.link == LinkPhase.ready && state.nikoApi >= 16;
+                      return SettingsScreen(
+                        values: _settings,
+                        window: widget.settings,
+                        strings: strings,
+                        coreVersion: state.link == LinkPhase.ready ? state.coreVersion : '',
+                        nikoVersion: state.link == LinkPhase.ready ? state.nikoVersion : '',
+                        onCheckUpdate: canUpdate
+                            ? () => daemon.checkUpdate(currentVersion: windowVersion)
+                            : null,
+                        onDownloadUpdate: canUpdate
+                            ? (tag) => daemon.downloadUpdate(
+                                  tag: tag,
+                                  currentVersion: windowVersion,
+                                  destDir: (widget.saveTo ?? _resolvedSaveDirectory)(),
+                                )
+                            : null,
+                        onOpenFaq: () => setState(() => _showingFaq = true),
+                        onLanguage: (lang) {
+                          final d = state.daemon;
+                          if (d != null && state.link == LinkPhase.ready) {
+                            unawaited(d.setLocale(lang == 'system' ? '' : lang).catchError((Object _) {}));
+                          }
+                        },
+                        notice: switch (state.link) {
+                          LinkPhase.ready when _settings.loaded => null,
+                          LinkPhase.ready when _settings.readError.isNotEmpty => (
+                            strings.settingsUnread,
+                            _settings.readError,
+                          ),
+                          // read in a moment: nothing to say yet
+                          LinkPhase.ready => ('', ''),
+                          _ => (strings.storeNoLink, ''),
+                        },
+                      );
+                    },
+                  ),
+                  FaqScreen(onBack: () => setState(() => _showingFaq = false)),
+                ],
               ),
             },
           ),

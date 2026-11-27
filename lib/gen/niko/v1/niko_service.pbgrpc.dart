@@ -408,6 +408,27 @@ class NikoServiceClient extends $grpc.Client {
     return $createUnaryCall(_$setNodeLan, request, options: options);
   }
 
+  /// Checks GitHub Releases (with optional raycontrol node app-mirror fallback) for a newer Niko Desktop release
+  /// and verifies its SHA256SUMS signature under the embedded minisign public key (D-SET-12/33, BG-12).
+  $grpc.ResponseFuture<$0.UpdateInfo> checkUpdate(
+    $0.CheckUpdateRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$checkUpdate, request, options: options);
+  }
+
+  /// Downloads and verifies the platform release archive from GitHub or a raycontrol node app-mirror inside the
+  /// daemon's private staging directory, then streams the cryptographically verified bytes to the caller so the
+  /// unprivileged desktop window can save them directly into the user's Downloads folder.
+  $grpc.ResponseStream<$0.DownloadUpdateEvent> downloadUpdate(
+    $0.DownloadUpdateRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createStreamingCall(
+        _$downloadUpdate, $async.Stream.fromIterable([request]),
+        options: options);
+  }
+
   // method descriptors
 
   static final _$getInfo = $grpc.ClientMethod<$0.GetInfoRequest, $0.Info>(
@@ -577,6 +598,16 @@ class NikoServiceClient extends $grpc.Client {
           '/niko.v1.NikoService/SetNodeLan',
           ($0.SetNodeLanRequest value) => value.writeToBuffer(),
           $0.Empty.fromBuffer);
+  static final _$checkUpdate =
+      $grpc.ClientMethod<$0.CheckUpdateRequest, $0.UpdateInfo>(
+          '/niko.v1.NikoService/CheckUpdate',
+          ($0.CheckUpdateRequest value) => value.writeToBuffer(),
+          $0.UpdateInfo.fromBuffer);
+  static final _$downloadUpdate =
+      $grpc.ClientMethod<$0.DownloadUpdateRequest, $0.DownloadUpdateEvent>(
+          '/niko.v1.NikoService/DownloadUpdate',
+          ($0.DownloadUpdateRequest value) => value.writeToBuffer(),
+          $0.DownloadUpdateEvent.fromBuffer);
 }
 
 @$pb.GrpcServiceName('niko.v1.NikoService')
@@ -858,6 +889,23 @@ abstract class NikoServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.SetNodeLanRequest.fromBuffer(value),
         ($0.Empty value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CheckUpdateRequest, $0.UpdateInfo>(
+        'CheckUpdate',
+        checkUpdate_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CheckUpdateRequest.fromBuffer(value),
+        ($0.UpdateInfo value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.DownloadUpdateRequest, $0.DownloadUpdateEvent>(
+            'DownloadUpdate',
+            downloadUpdate_Pre,
+            false,
+            true,
+            ($core.List<$core.int> value) =>
+                $0.DownloadUpdateRequest.fromBuffer(value),
+            ($0.DownloadUpdateEvent value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.Info> getInfo_Pre($grpc.ServiceCall $call,
@@ -1161,4 +1209,21 @@ abstract class NikoServiceBase extends $grpc.Service {
 
   $async.Future<$0.Empty> setNodeLan(
       $grpc.ServiceCall call, $0.SetNodeLanRequest request);
+
+  $async.Future<$0.UpdateInfo> checkUpdate_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.CheckUpdateRequest> $request) async {
+    return checkUpdate($call, await $request);
+  }
+
+  $async.Future<$0.UpdateInfo> checkUpdate(
+      $grpc.ServiceCall call, $0.CheckUpdateRequest request);
+
+  $async.Stream<$0.DownloadUpdateEvent> downloadUpdate_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DownloadUpdateRequest> $request) async* {
+    yield* downloadUpdate($call, await $request);
+  }
+
+  $async.Stream<$0.DownloadUpdateEvent> downloadUpdate(
+      $grpc.ServiceCall call, $0.DownloadUpdateRequest request);
 }
