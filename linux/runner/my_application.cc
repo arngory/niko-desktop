@@ -85,6 +85,8 @@ static void handle_tray_action(MyApplication* self, const gchar* action) {
     emit_tray_action(self, "show");
   } else if (g_strcmp0(action, "toggle") == 0) {
     emit_tray_action(self, "toggle");
+  } else if (g_strcmp0(action, "toggleMode") == 0) {
+    emit_tray_action(self, "toggleMode");
   } else if (g_strcmp0(action, "quit") == 0) {
     request_graceful_quit(self);
   }
@@ -95,6 +97,7 @@ static void ensure_linux_tray(MyApplication* self,
                               const gchar* status_label,
                               const gchar* profile_name,
                               const gchar* toggle_label,
+                              const gchar* mode_label,
                               const gchar* open_label,
                               const gchar* quit_label) {
   if (self->tray == nullptr) {
@@ -107,6 +110,7 @@ static void ensure_linux_tray(MyApplication* self,
       status_label ? status_label : "Niko",
       profile_name ? profile_name : "",
       toggle_label ? toggle_label : "Connect",
+      mode_label ? mode_label : "",
       open_label ? open_label : "Open Niko",
       quit_label ? quit_label : "Quit");
 }
@@ -177,6 +181,7 @@ static void window_method_call_cb(FlMethodChannel* /*channel*/,
         MapGetString(args, "status", "Niko"),
         MapGetString(args, "profile", ""),
         MapGetString(args, "toggleLabel", "Connect"),
+        MapGetString(args, "modeLabel", ""),
         MapGetString(args, "openLabel", "Open Niko"),
         MapGetString(args, "quitLabel", "Quit"));
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));

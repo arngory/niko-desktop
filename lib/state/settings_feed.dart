@@ -177,6 +177,31 @@ class SettingsFeed extends ChangeNotifier implements SettingValues {
   }
 
   @override
+  Future<String?> reset() {
+    final done = Completer<String?>();
+    _then(() async {
+      final daemon = _link.daemon;
+      if (daemon == null || _link.link != LinkPhase.ready) {
+        done.complete('daemon unavailable');
+        return;
+      }
+      try {
+        _values = await daemon.resetSettings();
+        error = '';
+        onMutated?.call(_values.keys);
+        if (!_disposed) notifyListeners();
+        done.complete(null);
+      } catch (e) {
+        final msg = daemonError(e);
+        error = msg;
+        if (!_disposed) notifyListeners();
+        done.complete(msg);
+      }
+    });
+    return done.future;
+  }
+
+  @override
   void dispose() {
     _disposed = true;
     hide();

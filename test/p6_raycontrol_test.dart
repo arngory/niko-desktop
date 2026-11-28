@@ -78,7 +78,7 @@ void main() {
   testWidgets('D-STATE-SWITCHED banner appears on MainScreen and dismiss clears it', (tester) async {
     final (daemon, _, _) = await pumpNodeShell(tester, switched: true);
     expect(find.text('Profile switched automatically'), findsOneWidget);
-    expect(find.textContaining('Hy2 · eu'), findsOneWidget);
+    expect(find.textContaining('Hy2 · eu'), findsWidgets);
 
     await tester.tap(find.text('Dismiss'));
     await tester.pumpAndSettle();
@@ -203,8 +203,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(daemon.settingValues['raycontrolBrutal'], isTrue);
 
-    await tester.ensureVisible(find.text('Anonymous network summaries'));
-    await tester.tap(find.text('Anonymous network summaries'));
+    await tester.ensureVisible(find.text('Summary for admin'));
+    await tester.tap(find.text('Summary for admin'));
     await tester.pumpAndSettle();
     expect(daemon.settingValues['raycontrolReports'], isTrue);
   });

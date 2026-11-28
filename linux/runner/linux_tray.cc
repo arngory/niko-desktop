@@ -18,6 +18,7 @@ constexpr gint32 kMenuRoot = 0;
 constexpr gint32 kMenuStatus = 1;
 constexpr gint32 kMenuSep1 = 2;
 constexpr gint32 kMenuToggle = 3;
+constexpr gint32 kMenuMode = 7;
 constexpr gint32 kMenuOpen = 4;
 constexpr gint32 kMenuSep2 = 5;
 constexpr gint32 kMenuQuit = 6;
@@ -169,6 +170,7 @@ void LinuxTray::Update(bool connected,
                        const std::string& status_label,
                        const std::string& profile_name,
                        const std::string& toggle_label,
+                       const std::string& mode_label,
                        const std::string& open_label,
                        const std::string& quit_label) {
   std::string next_header = status_label.empty() ? "Niko" : status_label;
@@ -180,12 +182,14 @@ void LinuxTray::Update(bool connected,
       (connected_ != connected) || (header_label_ != next_header);
   const bool menu_changed = icon_or_title_changed ||
                             (toggle_label_ != toggle_label) ||
+                            (mode_label_ != mode_label) ||
                             (open_label_ != open_label) ||
                             (quit_label_ != quit_label);
 
   connected_ = connected;
   header_label_ = std::move(next_header);
   toggle_label_ = toggle_label;
+  mode_label_ = mode_label;
   open_label_ = open_label;
   quit_label_ = quit_label;
 
@@ -333,6 +337,11 @@ GVariant* LinuxTray::BuildMenuItemProps(gint32 id) const {
       g_variant_builder_add(&props, "{sv}", "enabled", g_variant_new_boolean(TRUE));
       g_variant_builder_add(&props, "{sv}", "visible", g_variant_new_boolean(TRUE));
       break;
+    case kMenuMode:
+      g_variant_builder_add(&props, "{sv}", "label", g_variant_new_string(mode_label_.c_str()));
+      g_variant_builder_add(&props, "{sv}", "enabled", g_variant_new_boolean(TRUE));
+      g_variant_builder_add(&props, "{sv}", "visible", g_variant_new_boolean(!mode_label_.empty()));
+      break;
     case kMenuOpen:
       g_variant_builder_add(&props, "{sv}", "label", g_variant_new_string(open_label_.c_str()));
       g_variant_builder_add(&props, "{sv}", "enabled", g_variant_new_boolean(TRUE));
@@ -355,7 +364,7 @@ GVariant* LinuxTray::BuildMenuLayoutNode(gint32 id, gint32 depth) const {
   g_variant_builder_init(&children, G_VARIANT_TYPE("av"));
   if (id == kMenuRoot && (depth < 0 || depth > 0)) {
     const gint32 next_depth = depth < 0 ? -1 : depth - 1;
-    const gint32 child_ids[] = {kMenuStatus, kMenuSep1, kMenuToggle,
+    const gint32 child_ids[] = {kMenuStatus, kMenuSep1, kMenuToggle, kMenuMode,
                                 kMenuOpen,   kMenuSep2, kMenuQuit};
     for (gint32 child_id : child_ids) {
       g_variant_builder_add(&children, "v", BuildMenuLayoutNode(child_id, next_depth));
@@ -476,23 +485,29 @@ void LinuxTray::MenuMethodCall(GDBusConnection* /*conn*/,
     const gchar* name = nullptr;
     g_variant_get(parameters, "(i&s)", &id, &name);
     g_autoptr(GVariant) props = g_variant_ref_sink(self->BuildMenuItemProps(id));
-    GVariant* val = g_variant_lookup_value(props, name, nullptr);
+    g_autoptr(GVariant) val = g_variant_lookup_value(props, name, nullptr);
     if (val == nullptr) {
-      val = g_variant_new_string("");
+      val = g_variant_ref_sink(g_variant_new_string(""));
     }
     g_dbus_method_invocation_return_value(invocation, g_variant_new("(v)", val));
     return;
   }
+
+  auto dispatch_click = [self](gint32 id) {
+    if (!self->on_action_) return;
+    if (id == kMenuToggle) self->on_action_("toggle");
+    if (id == kMenuMode) self->on_action_("toggleMode");
+    if (id == kMenuOpen) self->on_action_("show");
+    if (id == kMenuQuit) self->on_action_("quit");
+  };
 
   if (g_strcmp0(method_name, "Event") == 0) {
     gint32 id = 0;
     const gchar* event_id = nullptr;
     guint32 timestamp = 0;
     g_variant_get(parameters, "(i&svu)", &id, &event_id, nullptr, &timestamp);
-    if (g_strcmp0(event_id, "clicked") == 0 && self->on_action_) {
-      if (id == kMenuToggle) self->on_action_("toggle");
-      if (id == kMenuOpen) self->on_action_("show");
-      if (id == kMenuQuit) self->on_action_("quit");
+    if (g_strcmp0(event_id, "clicked") == 0) {
+      dispatch_click(id);
     }
     g_dbus_method_invocation_return_value(invocation, nullptr);
     return;
@@ -506,10 +521,8 @@ void LinuxTray::MenuMethodCall(GDBusConnection* /*conn*/,
     GVariant* data = nullptr;
     guint32 timestamp = 0;
     while (g_variant_iter_loop(events, "(i&svu)", &id, &event_id, &data, &timestamp)) {
-      if (g_strcmp0(event_id, "clicked") == 0 && self->on_action_) {
-        if (id == kMenuToggle) self->on_action_("toggle");
-        if (id == kMenuOpen) self->on_action_("show");
-        if (id == kMenuQuit) self->on_action_("quit");
+      if (g_strcmp0(event_id, "clicked") == 0) {
+        dispatch_click(id);
       }
     }
     GVariantBuilder errors;

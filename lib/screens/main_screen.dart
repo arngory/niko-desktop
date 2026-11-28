@@ -13,6 +13,7 @@ import '../theme/niko_theme.dart';
 import '../ui/banner.dart';
 import '../ui/connect_button.dart';
 import '../ui/controls.dart';
+import '../ui/fields.dart';
 import '../ui/format.dart';
 import '../ui/icons.dart';
 import '../ui/list.dart';
@@ -41,6 +42,9 @@ class MainScreen extends StatefulWidget {
     this.onReconnect,
     this.networkRestored = false,
     this.onClearSwitched,
+    this.selectedProfile,
+    this.onOpenNodes,
+    this.onWhyNode,
   });
 
   final ConnectionController controller;
@@ -63,6 +67,15 @@ class MainScreen extends StatefulWidget {
 
   /// Dismisses the D-STATE-SWITCHED notice banner on the active raycontrol node.
   final ValueChanged<String>? onClearSwitched;
+
+  /// Selected profile summary shown as the active connection method row (D-MAIN-11).
+  final ProfileRow? selectedProfile;
+
+  /// Opens the Nodes section to switch the active profile/method.
+  final VoidCallback? onOpenNodes;
+
+  /// Opens the "Why isn't it working?" diagnostic runner for a raycontrol node.
+  final ValueChanged<NodeRow>? onWhyNode;
 
   /// The raycontrol node of the selected profile, for its term, traffic and last update (D-MAIN-13); null for none.
   final NodeRow? node;
@@ -90,7 +103,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _checkingExit = false;
   bool _confirmExit = false;
   bool _exitConfirmedSession = false;
-  String _exitProvider = 'cloudflare';
+  late String _exitProvider = widget.windowSettings?.exitAddressService ?? 'cloudflare';
   ExitAddressInfo? _exitInfo;
   String _exitError = '';
 
@@ -379,6 +392,10 @@ class _MainScreenState extends State<MainScreen> {
                                           ? null
                                           : () {
                                               setState(() => _exitProvider = id);
+                                              if (widget.windowSettings case final ws?) {
+                                                ws.exitAddressService = id;
+                                                unawaited(ws.save());
+                                              }
                                               unawaited(_runExitAddress());
                                             },
                                     ),
@@ -430,6 +447,22 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ),
                 ],
+                // D-MAIN-11: active profile / connection method row with quick switch to Nodes
+                if (widget.selectedProfile case final prof? when ready) ...[
+                  const SizedBox(height: NikoSpace.s6),
+                  NikoSection(
+                    overline: strings.mainActiveMethod,
+                    rows: [
+                      NikoLinkRow(
+                        title: prof.name,
+                        value: prof.kind.isNotEmpty ? prof.kind : prof.type,
+                        mono: false,
+                        divider: false,
+                        onPressed: widget.onOpenNodes ?? () {},
+                      ),
+                    ],
+                  ),
+                ],
                 // D-MAIN-13: the node of the selected profile, its term and traffic, when it was updated
                 if (widget.node case final node? when ready) ...[
                   const SizedBox(height: NikoSpace.s6),
@@ -440,6 +473,13 @@ class _MainScreenState extends State<MainScreen> {
                         title: node.name,
                         value: [nodeUsage(node, strings), nodeUpdates(node, strings)].where((p) => p.isNotEmpty).join(' · '),
                       ),
+                      if (widget.onWhyNode != null && !node.unreadable)
+                        NikoLinkRow(
+                          title: strings.nodeWhy,
+                          value: '',
+                          divider: true,
+                          onPressed: () => widget.onWhyNode!(node),
+                        ),
                     ],
                   ),
                 ],

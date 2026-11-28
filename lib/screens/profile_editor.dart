@@ -21,6 +21,7 @@ class ProfileEditor extends StatefulWidget {
     this.groupId = 0,
     this.initialType = 'vless',
     this.initialBeanJson = '',
+    this.availableProfiles = const [],
     this.onCheck,
     required this.onSave,
     required this.onCancel,
@@ -31,6 +32,7 @@ class ProfileEditor extends StatefulWidget {
   final int groupId;
   final String initialType;
   final String initialBeanJson;
+  final List<ProfileRow> availableProfiles;
   final Future<ProfileCheckResult> Function({required String type, required String beanJson})? onCheck;
   final Future<String?> Function({required int id, required int groupId, required String type, required String beanJson})
       onSave;
@@ -55,6 +57,7 @@ const _profileTypes = <(String, String)>[
   ('ssh', 'SSH'),
   ('socks', 'SOCKS5'),
   ('http', 'HTTP'),
+  ('chain', 'Chain'),
 ];
 
 class _ProfileEditorState extends State<ProfileEditor> {
@@ -92,7 +95,16 @@ class _ProfileEditorState extends State<ProfileEditor> {
 
   // naive fields
   String _naiveProto = 'https';
+  bool _sUoT = false;
   bool _nikoUdp = false;
+  bool _nikoAck = false;
+  bool _nikoIcmp = false;
+  String _naiveExtraHeaders = '';
+  String _naiveInsecureConcurrency = '';
+  String _naiveCertificates = '';
+
+  // ChainBean hops (D-PROFILE-04)
+  List<int> _chainProxies = [];
 
   // TUIC fields
   String _congestionControl = 'bbr';
@@ -117,9 +129,13 @@ class _ProfileEditorState extends State<ProfileEditor> {
   String _dnsTunnelSeal = '';
   String _dnsTunnelTls = '';
   String _dnsTunnelAuth = '';
+  String _dnsTunnelMethod = '';
+  bool _dnsTunnelFixedUpstream = false;
+  String _dnsTunnelSpare = '';
   String _knockSequence = '';
   String _udpPrelude = '';
   String _udpPreludeSni = '';
+  String _udpPreludeTtl = '';
   bool _udpReorderInitial = false;
   String _yggPeer = '';
 
@@ -197,7 +213,22 @@ class _ProfileEditorState extends State<ProfileEditor> {
       _downMbps = bean['downloadMbps'] != null && bean['downloadMbps'] != 0 ? '${bean['downloadMbps']}' : '';
       _hopInterval = bean['hopInterval'] != null && bean['hopInterval'] != 0 ? '${bean['hopInterval']}' : '';
       _naiveProto = _s(bean, 'proto', 'https');
+      _sUoT = bean['sUoT'] == true;
       _nikoUdp = bean['nikoUdp'] == true;
+      _nikoAck = bean['nikoAck'] == true;
+      _nikoIcmp = bean['nikoIcmp'] == true;
+      _naiveExtraHeaders = _s(bean, 'extraHeaders');
+      _naiveInsecureConcurrency =
+          bean['insecureConcurrency'] != null && bean['insecureConcurrency'] != 0 ? '${bean['insecureConcurrency']}' : '';
+      _naiveCertificates = _s(bean, 'certificates');
+      if (bean['proxies'] is List) {
+        _chainProxies = [
+          for (final item in bean['proxies'] as List)
+            if (item is num) item.toInt(),
+        ];
+      } else {
+        _chainProxies = [];
+      }
       _congestionControl = _s(bean, 'congestionController', 'bbr');
       _udpRelayMode = _s(bean, 'udpRelayMode', 'native');
       _localAddress = _s(bean, 'localAddress', '10.0.0.2/32');
@@ -216,9 +247,14 @@ class _ProfileEditorState extends State<ProfileEditor> {
       _dnsTunnelSeal = _s(bean, 'dnsTunnelSeal');
       _dnsTunnelTls = _s(bean, 'dnsTunnelTls');
       _dnsTunnelAuth = _s(bean, 'dnsTunnelAuth');
+      _dnsTunnelMethod =
+          bean['dnsTunnelMethod'] is num && (bean['dnsTunnelMethod'] as num) > 0 ? '${(bean['dnsTunnelMethod'] as num).toInt()}' : '';
+      _dnsTunnelFixedUpstream = bean['dnsTunnelFixedUpstream'] == true;
+      _dnsTunnelSpare = _s(bean, 'dnsTunnelSpare');
       _knockSequence = _s(bean, 'knockSequence');
       _udpPrelude = bean['udpPrelude'] != null && bean['udpPrelude'] != 0 ? '${bean['udpPrelude']}' : '';
       _udpPreludeSni = _s(bean, 'udpPreludeSni');
+      _udpPreludeTtl = bean['udpPreludeTtl'] != null && bean['udpPreludeTtl'] != 0 ? '${bean['udpPreludeTtl']}' : '';
       _udpReorderInitial = bean['udpReorderInitial'] == true;
       _yggPeer = _s(bean, 'yggPeer');
       return true;
@@ -267,7 +303,11 @@ class _ProfileEditorState extends State<ProfileEditor> {
       _setInt(bean, 'uploadMbps', _upMbps);
       _setInt(bean, 'downloadMbps', _downMbps);
       _setInt(bean, 'hopInterval', _hopInterval);
-      if (_allowInsecure) bean['allowInsecure'] = true;
+      if (_allowInsecure) {
+        bean['allowInsecure'] = true;
+      } else {
+        bean.remove('allowInsecure');
+      }
     } else {
       bean['serverPort'] = port;
       switch (_type) {
@@ -289,7 +329,11 @@ class _ProfileEditorState extends State<ProfileEditor> {
           _setStr(bean, 'vlessEncryption', _vlessEncryption);
           if (_transport == 'xhttp') _setStr(bean, 'xhttpMode', _xhttpMode);
           _setStr(bean, 'alpn', _alpn);
-          if (_allowInsecure) bean['allowInsecure'] = true;
+          if (_allowInsecure) {
+            bean['allowInsecure'] = true;
+          } else {
+            bean.remove('allowInsecure');
+          }
         case 'vmess':
           if (bean['alterId'] == -1) bean['alterId'] = 0;
           bean['uuid'] = _password;
@@ -345,13 +389,34 @@ class _ProfileEditorState extends State<ProfileEditor> {
           bean['username'] = _username;
           bean['password'] = _password;
           _setStr(bean, 'sni', _sni);
+          _setStr(bean, 'extraHeaders', _naiveExtraHeaders);
+          _setInt(bean, 'insecureConcurrency', _naiveInsecureConcurrency);
+          _setStr(bean, 'certificates', _naiveCertificates);
           if (_nikoUdp) {
             bean['nikoUdp'] = true;
             bean['sUoT'] = true;
           } else {
             bean.remove('nikoUdp');
-            bean.remove('sUoT');
+            if (_sUoT) {
+              bean['sUoT'] = true;
+            } else {
+              bean.remove('sUoT');
+            }
           }
+          if (_nikoAck) {
+            bean['nikoAck'] = true;
+          } else {
+            bean.remove('nikoAck');
+          }
+          if (_nikoIcmp) {
+            bean['nikoIcmp'] = true;
+          } else {
+            bean.remove('nikoIcmp');
+          }
+        case 'chain':
+          bean.remove('serverAddress');
+          bean.remove('serverPort');
+          bean['proxies'] = _chainProxies;
         case 'wg':
           bean['privateKey'] = _password;
           _setStr(bean, 'peerPublicKey', _username);
@@ -382,9 +447,17 @@ class _ProfileEditorState extends State<ProfileEditor> {
     _setStr(bean, 'dnsTunnelSeal', _dnsTunnelSeal);
     _setStr(bean, 'dnsTunnelTls', _dnsTunnelTls);
     _setStr(bean, 'dnsTunnelAuth', _dnsTunnelAuth);
+    _setInt(bean, 'dnsTunnelMethod', _dnsTunnelMethod);
+    if (_dnsTunnelFixedUpstream) {
+      bean['dnsTunnelFixedUpstream'] = true;
+    } else {
+      bean.remove('dnsTunnelFixedUpstream');
+    }
+    _setStr(bean, 'dnsTunnelSpare', _dnsTunnelSpare);
     _setStr(bean, 'knockSequence', _knockSequence);
     _setInt(bean, 'udpPrelude', _udpPrelude);
     _setStr(bean, 'udpPreludeSni', _udpPreludeSni);
+    _setInt(bean, 'udpPreludeTtl', _udpPreludeTtl);
     if (_udpReorderInitial) {
       bean['udpReorderInitial'] = true;
     } else {
@@ -432,6 +505,10 @@ class _ProfileEditorState extends State<ProfileEditor> {
   }
 
   Future<void> _save() async {
+    if (!_rawMode && _type == 'chain' && _chainProxies.isEmpty) {
+      setState(() => _error = 'Chain requires at least one hop');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -520,21 +597,63 @@ class _ProfileEditorState extends State<ProfileEditor> {
                 )
               else ...[
                 NikoField(label: strings.profileName, value: _name, onChanged: (v) => setState(() => _name = v)),
-                const SizedBox(height: NikoSpace.s3),
-                NikoField(
-                  label: strings.profileServer,
-                  value: _server,
-                  mono: true,
-                  onChanged: (v) => setState(() => _server = v),
-                ),
-                const SizedBox(height: NikoSpace.s3),
-                NikoField(
-                  label: _type == 'hysteria' ? '${strings.profilePort} (443 / 443,5000-6000)' : strings.profilePort,
-                  value: _port,
-                  input: _type == 'hysteria' ? FieldInput.text : FieldInput.port,
-                  mono: true,
-                  onChanged: (v) => setState(() => _port = v),
-                ),
+                if (_type != 'chain') ...[
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: strings.profileServer,
+                    value: _server,
+                    mono: true,
+                    onChanged: (v) => setState(() => _server = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: _type == 'hysteria' ? '${strings.profilePort} (443 / 443,5000-6000)' : strings.profilePort,
+                    value: _port,
+                    input: _type == 'hysteria' ? FieldInput.text : FieldInput.port,
+                    mono: true,
+                    onChanged: (v) => setState(() => _port = v),
+                  ),
+                ] else ...[
+                  const SizedBox(height: NikoSpace.s4),
+                  Text(strings.profileChainHops, style: NikoType.bodySm.style(colors.ink2)),
+                  const SizedBox(height: NikoSpace.s2),
+                  for (var i = 0; i < _chainProxies.length; i++) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            () {
+                              final hopId = _chainProxies[i];
+                              final found = widget.availableProfiles.where((p) => p.id == hopId).firstOrNull;
+                              return '${i + 1}. ${found?.name ?? 'Profile #$hopId'}';
+                            }(),
+                            style: NikoType.body.style(colors.ink),
+                          ),
+                        ),
+                        NikoGhostButton(
+                          label: '×',
+                          onPressed: () => setState(() => _chainProxies.removeAt(i)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: NikoSpace.s1),
+                  ],
+                  if (widget.availableProfiles.isNotEmpty) ...[
+                    const SizedBox(height: NikoSpace.s2),
+                    Wrap(
+                      spacing: NikoSpace.s2,
+                      runSpacing: NikoSpace.s2,
+                      children: [
+                        for (final p in widget.availableProfiles)
+                          if (p.id != widget.profileId && p.type != 'chain')
+                            NikoTonalButton(
+                              label: '+ ${p.name}',
+                              onPressed: () => setState(() => _chainProxies.add(p.id)),
+                            ),
+                      ],
+                    ),
+                  ],
+                ],
                 if (showUser) ...[
                   const SizedBox(height: NikoSpace.s3),
                   NikoField(
@@ -549,19 +668,21 @@ class _ProfileEditorState extends State<ProfileEditor> {
                     onChanged: (v) => setState(() => _username = v),
                   ),
                 ],
-                const SizedBox(height: NikoSpace.s3),
-                NikoField(
-                  label: switch (_type) {
-                    'vless' || 'vmess' => 'UUID',
-                    'wg' => 'Private Key',
-                    'tuic' => 'Token',
-                    _ => strings.profilePassword,
-                  },
-                  value: _password,
-                  input: FieldInput.secret,
-                  mono: true,
-                  onChanged: (v) => setState(() => _password = v),
-                ),
+                if (_type != 'chain') ...[
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: switch (_type) {
+                      'vless' || 'vmess' => 'UUID',
+                      'wg' => 'Private Key',
+                      'tuic' => 'Token',
+                      _ => strings.profilePassword,
+                    },
+                    value: _password,
+                    input: FieldInput.secret,
+                    mono: true,
+                    onChanged: (v) => setState(() => _password = v),
+                  ),
+                ],
                 if (showSni) ...[
                   const SizedBox(height: NikoSpace.s3),
                   NikoField(
@@ -671,10 +792,57 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   ),
                   const SizedBox(height: NikoSpace.s2),
                   NikoSwitchRow(
+                    title: 'UDP over TCP (sUoT)',
+                    on: _sUoT || _nikoUdp,
+                    divider: true,
+                    onChanged: (v) => setState(() {
+                      _sUoT = v;
+                      if (!v) _nikoUdp = false;
+                    }),
+                  ),
+                  NikoSwitchRow(
                     title: 'UDP over HTTP/3 (niko-udp)',
                     on: _nikoUdp,
+                    divider: true,
+                    onChanged: (v) => setState(() {
+                      _nikoUdp = v;
+                      if (v) _sUoT = true;
+                    }),
+                  ),
+                  NikoSwitchRow(
+                    title: 'Honest connect (niko-ack)',
+                    on: _nikoAck,
+                    divider: true,
+                    onChanged: (v) => setState(() => _nikoAck = v),
+                  ),
+                  NikoSwitchRow(
+                    title: 'ICMP through node (niko-icmp)',
+                    on: _nikoIcmp,
                     divider: false,
-                    onChanged: (v) => setState(() => _nikoUdp = v),
+                    onChanged: (v) => setState(() => _nikoIcmp = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: 'Extra Headers (Key: Value)',
+                    value: _naiveExtraHeaders,
+                    input: FieldInput.lines,
+                    mono: true,
+                    onChanged: (v) => setState(() => _naiveExtraHeaders = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: 'Insecure Concurrency',
+                    value: _naiveInsecureConcurrency,
+                    mono: true,
+                    onChanged: (v) => setState(() => _naiveInsecureConcurrency = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: 'Custom Server Certificate (PEM)',
+                    value: _naiveCertificates,
+                    input: FieldInput.lines,
+                    mono: true,
+                    onChanged: (v) => setState(() => _naiveCertificates = v),
                   ),
                 ],
 
@@ -797,6 +965,35 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   ),
                   const SizedBox(height: NikoSpace.s3),
                   NikoField(
+                    label: 'DNS Tunnel Method (1=dot, 2=doh)',
+                    value: _dnsTunnelMethod,
+                    input: FieldInput.port,
+                    mono: true,
+                    onChanged: (v) => setState(() => _dnsTunnelMethod = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _dnsTunnelFixedUpstream = !_dnsTunnelFixedUpstream),
+                        child: NikoSwitch(on: _dnsTunnelFixedUpstream),
+                      ),
+                      const SizedBox(width: NikoSpace.s3),
+                      Expanded(
+                        child: Text('DNS Tunnel Fixed Upstream', style: NikoType.body.style(colors.ink)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: 'DNS Tunnel Spare Zones',
+                    value: _dnsTunnelSpare,
+                    mono: true,
+                    onChanged: (v) => setState(() => _dnsTunnelSpare = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
                     label: 'Port Knocking Sequence',
                     value: _knockSequence,
                     mono: true,
@@ -808,6 +1005,13 @@ class _ProfileEditorState extends State<ProfileEditor> {
                     value: _udpPrelude,
                     mono: true,
                     onChanged: (v) => setState(() => _udpPrelude = v),
+                  ),
+                  const SizedBox(height: NikoSpace.s3),
+                  NikoField(
+                    label: 'UDP Prelude TTL',
+                    value: _udpPreludeTtl,
+                    mono: true,
+                    onChanged: (v) => setState(() => _udpPreludeTtl = v),
                   ),
                   const SizedBox(height: NikoSpace.s3),
                   NikoField(

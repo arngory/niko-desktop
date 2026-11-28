@@ -24,6 +24,7 @@ class WhyScreen extends StatefulWidget {
     required this.onBack,
     this.saveTo,
     this.now = DateTime.now,
+    this.onSwitchToName,
   });
 
   final Daemon daemon;
@@ -31,6 +32,9 @@ class WhyScreen extends StatefulWidget {
   final VoidCallback onBack;
   final Directory? Function()? saveTo;
   final DateTime Function() now;
+
+  /// Optional callback invoked when the user clicks the top recommendation to switch to a working profile.
+  final ValueChanged<String>? onSwitchToName;
 
   @override
   State<WhyScreen> createState() => _WhyScreenState();
@@ -182,6 +186,21 @@ class _WhyScreenState extends State<WhyScreen> {
                   NikoBanner(icon: NikoIcons.alert, title: strings.errorTitle, text: _error, danger: true),
                 ],
                 if (findings != null) ...[
+                  if (working.isNotEmpty && failing.isNotEmpty) ...[
+                    const SizedBox(height: NikoSpace.s5),
+                    Builder(builder: (context) {
+                      final sorted = [...working]..sort((a, b) => a.firstByteMs.compareTo(b.firstByteMs));
+                      final best = sorted.first;
+                      final broken = failing.first;
+                      return NikoBanner(
+                        icon: NikoIcons.rotateCw,
+                        title: strings.whyRecommendTitle,
+                        text: '${broken.name} (${strings.whyCause(broken.cause)}) · ${best.name} (${best.firstByteMs} ms)',
+                        action: widget.onSwitchToName != null ? strings.whyRecommendSwitch(best.name) : null,
+                        onAction: widget.onSwitchToName != null ? () => widget.onSwitchToName!(best.name) : null,
+                      );
+                    }),
+                  ],
                   if (findings.notes.isNotEmpty) ...[
                     const SizedBox(height: NikoSpace.s6),
                     NikoSection(

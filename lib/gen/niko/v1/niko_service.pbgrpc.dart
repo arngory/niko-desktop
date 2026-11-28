@@ -203,6 +203,15 @@ class NikoServiceClient extends $grpc.Client {
     return $createUnaryCall(_$updateSettings, request, options: options);
   }
 
+  /// Resets all user-modified settings back to desktop defaults while preserving profiles, groups, rules, nodes,
+  /// and the device's persistent Yggdrasil key. Watch says SETTINGS.
+  $grpc.ResponseFuture<$0.Settings> resetSettings(
+    $0.Empty request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$resetSettings, request, options: options);
+  }
+
   /// What an input is and what its import would add; nothing is written, and no store is needed.
   $grpc.ResponseFuture<$0.ImportPreview> recognize(
     $0.ImportInput request, {
@@ -515,6 +524,10 @@ class NikoServiceClient extends $grpc.Client {
           '/niko.v1.NikoService/UpdateSettings',
           ($0.SettingsUpdate value) => value.writeToBuffer(),
           $0.Settings.fromBuffer);
+  static final _$resetSettings = $grpc.ClientMethod<$0.Empty, $0.Settings>(
+      '/niko.v1.NikoService/ResetSettings',
+      ($0.Empty value) => value.writeToBuffer(),
+      $0.Settings.fromBuffer);
   static final _$recognize =
       $grpc.ClientMethod<$0.ImportInput, $0.ImportPreview>(
           '/niko.v1.NikoService/Recognize',
@@ -754,6 +767,13 @@ abstract class NikoServiceBase extends $grpc.Service {
         false,
         false,
         ($core.List<$core.int> value) => $0.SettingsUpdate.fromBuffer(value),
+        ($0.Settings value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.Empty, $0.Settings>(
+        'ResetSettings',
+        resetSettings_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.Empty.fromBuffer(value),
         ($0.Settings value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ImportInput, $0.ImportPreview>(
         'Recognize',
@@ -1069,6 +1089,14 @@ abstract class NikoServiceBase extends $grpc.Service {
 
   $async.Future<$0.Settings> updateSettings(
       $grpc.ServiceCall call, $0.SettingsUpdate request);
+
+  $async.Future<$0.Settings> resetSettings_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.Empty> $request) async {
+    return resetSettings($call, await $request);
+  }
+
+  $async.Future<$0.Settings> resetSettings(
+      $grpc.ServiceCall call, $0.Empty request);
 
   $async.Future<$0.ImportPreview> recognize_Pre(
       $grpc.ServiceCall $call, $async.Future<$0.ImportInput> $request) async {

@@ -310,7 +310,7 @@ void main() {
       // Create custom group
       await tester.tap(find.text('New group'));
       await tester.pumpAndSettle();
-      final groupField = find.byType(EditableText).first;
+      final groupField = find.byType(EditableText).last;
       await tester.enterText(groupField, 'Work');
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();

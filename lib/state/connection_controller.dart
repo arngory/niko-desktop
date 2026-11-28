@@ -57,6 +57,9 @@ class ConnectionController extends ChangeNotifier {
   /// True when VPN (TUN) mode is supported by the connected daemon.
   bool tunAvailable = true;
 
+  /// Persistent Yggdrasil 200::/7 address reported by the daemon (API 18).
+  String yggdrasilAddress = '';
+
   /// True when connected to an unprivileged user-mode daemon (proxy-only, no TUN).
   bool get isUserMode => link == LinkPhase.ready && !tunAvailable;
 
@@ -156,6 +159,7 @@ class ConnectionController extends ChangeNotifier {
       coreVersion = (info != null && info.coreVersion.isNotEmpty) ? info.coreVersion : version;
       privileged = info?.privileged ?? true;
       tunAvailable = info?.tun ?? true;
+      yggdrasilAddress = info?.yggdrasilAddress ?? '';
       link = LinkPhase.ready;
       linkError = '';
       notifyListeners();
@@ -224,6 +228,15 @@ class ConnectionController extends ChangeNotifier {
           startedAt = value;
           notifyListeners();
         }, onError: (Object _) {}));
+        if (yggdrasilAddress.isEmpty) {
+          unawaited(_daemon!.nikoInfo().then((info) {
+            if (_stale(generation)) return;
+            if (info.yggdrasilAddress.isNotEmpty && info.yggdrasilAddress != yggdrasilAddress) {
+              yggdrasilAddress = info.yggdrasilAddress;
+              notifyListeners();
+            }
+          }, onError: (Object _) {}));
+        }
       }
     } else {
       _dropTraffic();

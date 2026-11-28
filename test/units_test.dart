@@ -500,6 +500,18 @@ class _DelayedSaveSettings extends ChangeNotifier implements WindowSettings {
   bool exitAddressConfirmed = false;
 
   @override
+  int speedIntervalMs = 1000;
+
+  @override
+  bool showServerAddress = false;
+
+  @override
+  bool autoCheckUpdates = true;
+
+  @override
+  String exitAddressService = 'cloudflare';
+
+  @override
   List<RecentRouteCheck> get recentChecks => const [];
 
   @override

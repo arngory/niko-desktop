@@ -140,8 +140,8 @@ void main() {
     expect(find.textContaining('signature will be verified on download'), findsOneWidget);
 
     // Opening and closing FAQ preserves the update banner (SettingsScreen is not disposed).
-    await tester.ensureVisible(find.text('Help & FAQ'));
-    await tester.tap(find.text('Help & FAQ'));
+    await tester.ensureVisible(find.text('Help & what values mean'));
+    await tester.tap(find.text('Help & what values mean'));
     await tester.pumpAndSettle();
     expect(find.text('PROXY VS VPN (TUN) MODE'), findsOneWidget);
     await tester.tap(find.text('Back'));
@@ -175,8 +175,8 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Help & FAQ'));
-    await tester.tap(find.text('Help & FAQ'));
+    await tester.ensureVisible(find.text('Help & what values mean'));
+    await tester.tap(find.text('Help & what values mean'));
     await tester.pumpAndSettle();
 
     expect(find.text('PROXY VS VPN (TUN) MODE'), findsOneWidget);
@@ -184,7 +184,7 @@ void main() {
 
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
-    expect(find.text('Help & FAQ'), findsOneWidget);
+    expect(find.text('Help & what values mean'), findsOneWidget);
   });
 
   testWidgets('SettingsScreen offers 1-click system service uninstall with confirmation and polkit fallback', (

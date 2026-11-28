@@ -156,6 +156,13 @@ class _NikoShellState extends State<NikoShell> {
         if (widget.controller.link == LinkPhase.ready && !widget.controller.busy) {
           unawaited(widget.controller.toggle(mode: _mode()));
         }
+      case 'toggleMode':
+        if (widget.controller.link == LinkPhase.ready && !widget.controller.busy) {
+          final current = _mode() ?? ConnectMode.proxy;
+          final next = current == ConnectMode.vpn ? ConnectMode.proxy : ConnectMode.vpn;
+          if (next == ConnectMode.vpn && !widget.controller.tunAvailable) return;
+          _setMode(next);
+        }
       case 'show':
         unawaited(_desktop.showWindow());
       case 'quit':
@@ -215,7 +222,13 @@ class _NikoShellState extends State<NikoShell> {
             : strings.statusOff;
     final profileName = _profiles.selectedProfile?.name ?? '';
     final toggleLabel = connected ? strings.disconnect : strings.connect;
-    final sig = '$connected|$statusLabel|$profileName|$toggleLabel|${strings.trayOpen}|${strings.trayQuit}';
+    final currentMode = _mode();
+    final modeLabel = currentMode == null
+        ? ''
+        : currentMode == ConnectMode.vpn
+            ? strings.trayModeVpn
+            : strings.trayModeProxy;
+    final sig = '$connected|$statusLabel|$profileName|$toggleLabel|$modeLabel|${strings.trayOpen}|${strings.trayQuit}';
     if (sig == _lastTraySig) return;
     _lastTraySig = sig;
     unawaited(_desktop.updateTray(
@@ -223,6 +236,7 @@ class _NikoShellState extends State<NikoShell> {
       statusLabel: statusLabel,
       profileName: profileName,
       toggleLabel: toggleLabel,
+      modeLabel: modeLabel,
       openLabel: strings.trayOpen,
       quitLabel: strings.trayQuit,
     ));
@@ -374,9 +388,10 @@ class _NikoShellState extends State<NikoShell> {
         ? _profiles.show()
         : _profiles.hide();
     _section == AppSection.rules || _section == AppSection.check ? _rules.show() : _rules.hide();
-    // main screen (D-NAV-02) and route check (serviceMode -> inbound/resolve) read settings too
+    // main screen (D-NAV-02), route check (serviceMode -> inbound/resolve), and log (Clash API card) read settings too
     _section == AppSection.settings ||
             _section == AppSection.check ||
+            _section == AppSection.log ||
             (_section == AppSection.home && widget.controller.connectsProfile)
         ? _settings.show()
         : _settings.hide();
@@ -457,6 +472,19 @@ class _NikoShellState extends State<NikoShell> {
                 builder: (context, _) => MainScreen(
                   controller: state,
                   node: _profiles.selectedNode,
+                  selectedProfile: _profiles.selectedProfile,
+                  onOpenNodes: () => _show(AppSection.nodes),
+                  onWhyNode: state.nikoApi >= 15
+                      ? (n) {
+                          setState(() {
+                            _section = AppSection.nodes;
+                            _whyNode = n;
+                            _adminNode = null;
+                            _adding = false;
+                          });
+                          _read();
+                        }
+                      : null,
                   daemonAddress: widget.daemonAddress,
                   configName: widget.configName,
                   now: widget.now,
@@ -503,6 +531,18 @@ class _NikoShellState extends State<NikoShell> {
                       node: node,
                       saveTo: widget.saveTo ?? _resolvedSaveDirectory,
                       now: widget.now,
+                      onSwitchToName: (name) {
+                        unawaited(() async {
+                          final list = _profiles.groupId == node.groupId
+                              ? _profiles.profiles
+                              : await daemon.profiles(groupId: node.groupId);
+                          final target = list.where((p) => p.groupId == node.groupId && p.name == name).firstOrNull;
+                          if (target != null && mounted) {
+                            await _profiles.select(target.id);
+                            if (mounted) setState(() => _whyNode = null);
+                          }
+                        }());
+                      },
                       onBack: () => setState(() => _whyNode = null),
                     );
                   }
@@ -545,7 +585,14 @@ class _NikoShellState extends State<NikoShell> {
                   extendedPresets: state.nikoApi >= 16,
                 ),
               ),
-              AppSection.log => LogScreen(feed: _log, stun: _stun),
+              AppSection.log => ListenableBuilder(
+                listenable: _settings,
+                builder: (context, _) => LogScreen(
+                  feed: _log,
+                  stun: _stun,
+                  clashApiEnabled: _settings.flag('enableClashAPI') && _settings.text('clashApi').trim().isNotEmpty,
+                ),
+              ),
               AppSection.settings => IndexedStack(
                 index: _showingFaq ? 1 : 0,
                 children: [
@@ -557,6 +604,9 @@ class _NikoShellState extends State<NikoShell> {
                       return SettingsScreen(
                         values: _settings,
                         window: widget.settings,
+                        advanced: _advanced,
+                        nikoApi: state.link == LinkPhase.ready ? state.nikoApi : 18,
+                        yggdrasilAddress: state.link == LinkPhase.ready ? state.yggdrasilAddress : '',
                         strings: strings,
                         coreVersion: state.link == LinkPhase.ready ? state.coreVersion : '',
                         nikoVersion: state.link == LinkPhase.ready ? state.nikoVersion : '',

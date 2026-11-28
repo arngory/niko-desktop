@@ -312,13 +312,18 @@ class _AddScreenState extends State<AddScreen> {
                   )
                 else if (rows.isEmpty)
                   Text(strings.addNothing, style: NikoType.body.style(colors.ink2))
-                else
+                else ...[
+                  if (rows.any((r) => r.type == 'config')) ...[
+                    NikoBanner(icon: NikoIcons.alert, title: strings.addFullConfigWarning),
+                    const SizedBox(height: NikoSpace.s3),
+                  ],
                   NikoSection(
                     overline: strings.addFound(rows.length),
                     rows: [
                       for (final row in rows) NikoInfoRow(title: row.name, value: '${typeLabel(row.type)} · ${row.address}'),
                     ],
                   ),
+                ],
                 const SizedBox(height: NikoSpace.s6),
               ],
               Row(

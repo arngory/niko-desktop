@@ -15,10 +15,11 @@ import 'tools_panel.dart';
 /// The core's log (D-LOG-01): its lines as the core writes them, the newest at the bottom and in view until the
 /// user scrolls up; a button empties the daemon's log. The tools stand beside it, or under it in a narrow window.
 class LogScreen extends StatefulWidget {
-  const LogScreen({super.key, required this.feed, this.stun});
+  const LogScreen({super.key, required this.feed, this.stun, this.clashApiEnabled = false});
 
   final LogFeed feed;
   final StunTool? stun;
+  final bool clashApiEnabled;
 
   /// The content's width from which the tools stand beside the log.
   static const double aside = 760;
@@ -40,6 +41,7 @@ class _LogScreenState extends State<LogScreen> {
   // the end is kept in view while the user is at it
   bool _follow = true;
   int _resets = 0;
+  LogSeverity? _filter;
 
   @override
   void initState() {
@@ -114,7 +116,13 @@ class _LogScreenState extends State<LogScreen> {
     final colors = NikoTheme.of(context);
     final strings = NikoStrings.of(Localizations.localeOf(context));
     final feed = widget.feed;
-    final lines = feed.lines;
+    final allLines = feed.lines;
+    final lines = _filter == null
+        ? allLines
+        : [
+            for (final l in allLines)
+              if (l.level.index <= _filter!.index) l,
+          ];
     final report = feed.unread.isEmpty ? null : feed.unread.first;
     final notice = switch (feed.notice) {
       LogNotice.none => null,
@@ -137,25 +145,51 @@ class _LogScreenState extends State<LogScreen> {
             icon: NikoIcons.trash,
             label: strings.logClear,
             muted: true,
-            onPressed: lines.isEmpty ? null : feed.clear,
+            onPressed: allLines.isEmpty ? null : feed.clear,
           ),
           const SizedBox(width: NikoSpace.s2),
           NikoIconButton(
             icon: NikoIcons.copy,
             label: strings.logCopy,
             tonal: true,
-            onPressed: lines.isEmpty ? null : _copy,
+            onPressed: allLines.isEmpty ? null : _copy,
           ),
           const SizedBox(width: NikoSpace.s2),
           NikoIconButton(
             icon: NikoIcons.export,
             label: strings.logSave,
             tonal: true,
-            onPressed: lines.isEmpty || feed.busy ? null : feed.saveLog,
+            onPressed: allLines.isEmpty || feed.busy ? null : feed.saveLog,
           ),
         ],
       ),
-      const SizedBox(height: NikoSpace.s4),
+      const SizedBox(height: NikoSpace.s3),
+      if (allLines.isNotEmpty) ...[
+        Wrap(
+          spacing: NikoSpace.s2,
+          runSpacing: NikoSpace.s1,
+          children: [
+            for (final (sev, label) in [
+              (null, strings.logFilterAll),
+              (LogSeverity.error, 'error'),
+              (LogSeverity.warn, 'warn'),
+              (LogSeverity.info, 'info'),
+              (LogSeverity.debug, 'debug'),
+            ])
+              _filter == sev
+                  ? NikoTonalButton(label: label, onPressed: () {})
+                  : NikoGhostButton(
+                      label: label,
+                      onPressed: () {
+                        setState(() => _filter = sev);
+                        _follow = true;
+                        _toEnd();
+                      },
+                    ),
+          ],
+        ),
+        const SizedBox(height: NikoSpace.s3),
+      ],
       // D-LOG-02: the newest report nobody saved yet
       if (report != null) ...[
         NikoBanner(
@@ -235,7 +269,9 @@ class _LogScreenState extends State<LogScreen> {
                         const SizedBox(width: NikoSpace.s6),
                         SizedBox(
                           width: LogScreen.asideWidth,
-                          child: SingleChildScrollView(child: ToolsPanel(key: _toolsKey, stun: stun)),
+                          child: SingleChildScrollView(
+                            child: ToolsPanel(key: _toolsKey, stun: stun, clashApiEnabled: widget.clashApiEnabled),
+                          ),
                         ),
                       ],
                     )
@@ -247,7 +283,12 @@ class _LogScreenState extends State<LogScreen> {
                         ...head,
                         Expanded(flex: 3, child: box),
                         const SizedBox(height: NikoSpace.s4),
-                        Flexible(flex: 2, child: SingleChildScrollView(child: ToolsPanel(key: _toolsKey, stun: stun))),
+                        Flexible(
+                          flex: 2,
+                          child: SingleChildScrollView(
+                            child: ToolsPanel(key: _toolsKey, stun: stun, clashApiEnabled: widget.clashApiEnabled),
+                          ),
+                        ),
                       ],
                     ),
             ),

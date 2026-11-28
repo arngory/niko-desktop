@@ -109,6 +109,7 @@ class Info extends $pb.GeneratedMessage {
     $core.int? api,
     $core.bool? privileged,
     $core.bool? tun,
+    $core.String? yggdrasilAddress,
   }) {
     final result = Info._();
     if (nikoVersion != null) result.nikoVersion = nikoVersion;
@@ -117,6 +118,7 @@ class Info extends $pb.GeneratedMessage {
     if (api != null) result.api = api;
     if (privileged != null) result.privileged = privileged;
     if (tun != null) result.tun = tun;
+    if (yggdrasilAddress != null) result.yggdrasilAddress = yggdrasilAddress;
     return result;
   }
 
@@ -139,6 +141,7 @@ class Info extends $pb.GeneratedMessage {
     ..aI(4, _omitFieldNames ? '' : 'api')
     ..aOB(5, _omitFieldNames ? '' : 'privileged')
     ..aOB(6, _omitFieldNames ? '' : 'tun')
+    ..aOS(7, _omitFieldNames ? '' : 'yggdrasilAddress')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -226,6 +229,16 @@ class Info extends $pb.GeneratedMessage {
   $core.bool hasTun() => $_has(5);
   @$pb.TagNumber(6)
   void clearTun() => $_clearField(6);
+
+  /// Persistent Yggdrasil 200::/7 address derived from this user's stored device key, empty if not initialized.
+  @$pb.TagNumber(7)
+  $core.String get yggdrasilAddress => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set yggdrasilAddress($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasYggdrasilAddress() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearYggdrasilAddress() => $_clearField(7);
 }
 
 class UserStoreSnapshot extends $pb.GeneratedMessage {
@@ -1639,6 +1652,11 @@ class Group extends $pb.GeneratedMessage {
     $core.int? profiles,
     Subscription? subscription,
     $core.String? nodeId,
+    $core.bool? isSelector,
+    $core.bool? autoSelect,
+    $fixnum.Int64? frontProxy,
+    $fixnum.Int64? landingProxy,
+    $core.int? sortOrder,
   }) {
     final result = Group._();
     if (id != null) result.id = id;
@@ -1649,6 +1667,11 @@ class Group extends $pb.GeneratedMessage {
     if (profiles != null) result.profiles = profiles;
     if (subscription != null) result.subscription = subscription;
     if (nodeId != null) result.nodeId = nodeId;
+    if (isSelector != null) result.isSelector = isSelector;
+    if (autoSelect != null) result.autoSelect = autoSelect;
+    if (frontProxy != null) result.frontProxy = frontProxy;
+    if (landingProxy != null) result.landingProxy = landingProxy;
+    if (sortOrder != null) result.sortOrder = sortOrder;
     return result;
   }
 
@@ -1675,6 +1698,11 @@ class Group extends $pb.GeneratedMessage {
     ..aOM<Subscription>(7, _omitFieldNames ? '' : 'subscription',
         subBuilder: Subscription.$_createMessage)
     ..aOS(8, _omitFieldNames ? '' : 'nodeId')
+    ..aOB(9, _omitFieldNames ? '' : 'isSelector')
+    ..aOB(10, _omitFieldNames ? '' : 'autoSelect')
+    ..aInt64(11, _omitFieldNames ? '' : 'frontProxy')
+    ..aInt64(12, _omitFieldNames ? '' : 'landingProxy')
+    ..aI(13, _omitFieldNames ? '' : 'sortOrder')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1774,6 +1802,52 @@ class Group extends $pb.GeneratedMessage {
   $core.bool hasNodeId() => $_has(7);
   @$pb.TagNumber(8)
   void clearNodeId() => $_clearField(8);
+
+  /// API 18 group routing & display options (B-GroupSettings).
+  @$pb.TagNumber(9)
+  $core.bool get isSelector => $_getBF(8);
+  @$pb.TagNumber(9)
+  set isSelector($core.bool value) => $_setBool(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasIsSelector() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearIsSelector() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.bool get autoSelect => $_getBF(9);
+  @$pb.TagNumber(10)
+  set autoSelect($core.bool value) => $_setBool(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasAutoSelect() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearAutoSelect() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $fixnum.Int64 get frontProxy => $_getI64(10);
+  @$pb.TagNumber(11)
+  set frontProxy($fixnum.Int64 value) => $_setInt64(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasFrontProxy() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearFrontProxy() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $fixnum.Int64 get landingProxy => $_getI64(11);
+  @$pb.TagNumber(12)
+  set landingProxy($fixnum.Int64 value) => $_setInt64(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasLandingProxy() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearLandingProxy() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $core.int get sortOrder => $_getIZ(12);
+  @$pb.TagNumber(13)
+  set sortOrder($core.int value) => $_setSignedInt32(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasSortOrder() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearSortOrder() => $_clearField(13);
 }
 
 /// A group's subscription (the app's SubscriptionBean). The settings are the user's; what an update says is read only.
@@ -2775,6 +2849,20 @@ class Settings extends $pb.GeneratedMessage {
     $core.bool? yggdrasilPeersViaProxy,
     $core.String? connectionTestUrl,
     $core.String? clashApi,
+    $core.bool? naiveQuicPhoneRoots,
+    $core.bool? honestConnect,
+    $core.bool? icmpThroughNode,
+    $core.bool? networkChangeResetConnections,
+    $core.bool? wakeResetConnections,
+    $core.bool? insecureSubscription,
+    $core.String? subscriptionMinTls,
+    $core.String? globalCustomConfig,
+    $core.int? connectionTestConcurrency,
+    $core.int? logBufferSize,
+    $core.bool? profileTrafficStats,
+    $core.bool? directSpeed,
+    $core.bool? includePrerelease,
+    $core.bool? enableClashApi,
   }) {
     final result = Settings._();
     if (serviceMode != null) result.serviceMode = serviceMode;
@@ -2836,6 +2924,28 @@ class Settings extends $pb.GeneratedMessage {
       result.yggdrasilPeersViaProxy = yggdrasilPeersViaProxy;
     if (connectionTestUrl != null) result.connectionTestUrl = connectionTestUrl;
     if (clashApi != null) result.clashApi = clashApi;
+    if (naiveQuicPhoneRoots != null)
+      result.naiveQuicPhoneRoots = naiveQuicPhoneRoots;
+    if (honestConnect != null) result.honestConnect = honestConnect;
+    if (icmpThroughNode != null) result.icmpThroughNode = icmpThroughNode;
+    if (networkChangeResetConnections != null)
+      result.networkChangeResetConnections = networkChangeResetConnections;
+    if (wakeResetConnections != null)
+      result.wakeResetConnections = wakeResetConnections;
+    if (insecureSubscription != null)
+      result.insecureSubscription = insecureSubscription;
+    if (subscriptionMinTls != null)
+      result.subscriptionMinTls = subscriptionMinTls;
+    if (globalCustomConfig != null)
+      result.globalCustomConfig = globalCustomConfig;
+    if (connectionTestConcurrency != null)
+      result.connectionTestConcurrency = connectionTestConcurrency;
+    if (logBufferSize != null) result.logBufferSize = logBufferSize;
+    if (profileTrafficStats != null)
+      result.profileTrafficStats = profileTrafficStats;
+    if (directSpeed != null) result.directSpeed = directSpeed;
+    if (includePrerelease != null) result.includePrerelease = includePrerelease;
+    if (enableClashApi != null) result.enableClashApi = enableClashApi;
     return result;
   }
 
@@ -2897,6 +3007,21 @@ class Settings extends $pb.GeneratedMessage {
     ..aOS(43, _omitFieldNames ? '' : 'connectionTestURL',
         protoName: 'connection_test_url')
     ..aOS(44, _omitFieldNames ? '' : 'clashApi')
+    ..aOB(45, _omitFieldNames ? '' : 'naiveQuicPhoneRoots')
+    ..aOB(46, _omitFieldNames ? '' : 'honestConnect')
+    ..aOB(47, _omitFieldNames ? '' : 'icmpThroughNode')
+    ..aOB(48, _omitFieldNames ? '' : 'networkChangeResetConnections')
+    ..aOB(49, _omitFieldNames ? '' : 'wakeResetConnections')
+    ..aOB(50, _omitFieldNames ? '' : 'insecureSubscription')
+    ..aOS(51, _omitFieldNames ? '' : 'subscriptionMinTls')
+    ..aOS(52, _omitFieldNames ? '' : 'globalCustomConfig')
+    ..aI(53, _omitFieldNames ? '' : 'connectionTestConcurrency')
+    ..aI(54, _omitFieldNames ? '' : 'logBufferSize')
+    ..aOB(55, _omitFieldNames ? '' : 'profileTrafficStats')
+    ..aOB(56, _omitFieldNames ? '' : 'directSpeed')
+    ..aOB(57, _omitFieldNames ? '' : 'includePrerelease')
+    ..aOB(58, _omitFieldNames ? '' : 'enableClashAPI',
+        protoName: 'enable_clash_api')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3348,6 +3473,133 @@ class Settings extends $pb.GeneratedMessage {
   $core.bool hasClashApi() => $_has(43);
   @$pb.TagNumber(44)
   void clearClashApi() => $_clearField(44);
+
+  /// API 18 settings (B-Settings 12-section parity + naive/experimental/subscription controls).
+  @$pb.TagNumber(45)
+  $core.bool get naiveQuicPhoneRoots => $_getBF(44);
+  @$pb.TagNumber(45)
+  set naiveQuicPhoneRoots($core.bool value) => $_setBool(44, value);
+  @$pb.TagNumber(45)
+  $core.bool hasNaiveQuicPhoneRoots() => $_has(44);
+  @$pb.TagNumber(45)
+  void clearNaiveQuicPhoneRoots() => $_clearField(45);
+
+  @$pb.TagNumber(46)
+  $core.bool get honestConnect => $_getBF(45);
+  @$pb.TagNumber(46)
+  set honestConnect($core.bool value) => $_setBool(45, value);
+  @$pb.TagNumber(46)
+  $core.bool hasHonestConnect() => $_has(45);
+  @$pb.TagNumber(46)
+  void clearHonestConnect() => $_clearField(46);
+
+  @$pb.TagNumber(47)
+  $core.bool get icmpThroughNode => $_getBF(46);
+  @$pb.TagNumber(47)
+  set icmpThroughNode($core.bool value) => $_setBool(46, value);
+  @$pb.TagNumber(47)
+  $core.bool hasIcmpThroughNode() => $_has(46);
+  @$pb.TagNumber(47)
+  void clearIcmpThroughNode() => $_clearField(47);
+
+  @$pb.TagNumber(48)
+  $core.bool get networkChangeResetConnections => $_getBF(47);
+  @$pb.TagNumber(48)
+  set networkChangeResetConnections($core.bool value) => $_setBool(47, value);
+  @$pb.TagNumber(48)
+  $core.bool hasNetworkChangeResetConnections() => $_has(47);
+  @$pb.TagNumber(48)
+  void clearNetworkChangeResetConnections() => $_clearField(48);
+
+  @$pb.TagNumber(49)
+  $core.bool get wakeResetConnections => $_getBF(48);
+  @$pb.TagNumber(49)
+  set wakeResetConnections($core.bool value) => $_setBool(48, value);
+  @$pb.TagNumber(49)
+  $core.bool hasWakeResetConnections() => $_has(48);
+  @$pb.TagNumber(49)
+  void clearWakeResetConnections() => $_clearField(49);
+
+  @$pb.TagNumber(50)
+  $core.bool get insecureSubscription => $_getBF(49);
+  @$pb.TagNumber(50)
+  set insecureSubscription($core.bool value) => $_setBool(49, value);
+  @$pb.TagNumber(50)
+  $core.bool hasInsecureSubscription() => $_has(49);
+  @$pb.TagNumber(50)
+  void clearInsecureSubscription() => $_clearField(50);
+
+  @$pb.TagNumber(51)
+  $core.String get subscriptionMinTls => $_getSZ(50);
+  @$pb.TagNumber(51)
+  set subscriptionMinTls($core.String value) => $_setString(50, value);
+  @$pb.TagNumber(51)
+  $core.bool hasSubscriptionMinTls() => $_has(50);
+  @$pb.TagNumber(51)
+  void clearSubscriptionMinTls() => $_clearField(51);
+
+  @$pb.TagNumber(52)
+  $core.String get globalCustomConfig => $_getSZ(51);
+  @$pb.TagNumber(52)
+  set globalCustomConfig($core.String value) => $_setString(51, value);
+  @$pb.TagNumber(52)
+  $core.bool hasGlobalCustomConfig() => $_has(51);
+  @$pb.TagNumber(52)
+  void clearGlobalCustomConfig() => $_clearField(52);
+
+  @$pb.TagNumber(53)
+  $core.int get connectionTestConcurrency => $_getIZ(52);
+  @$pb.TagNumber(53)
+  set connectionTestConcurrency($core.int value) => $_setSignedInt32(52, value);
+  @$pb.TagNumber(53)
+  $core.bool hasConnectionTestConcurrency() => $_has(52);
+  @$pb.TagNumber(53)
+  void clearConnectionTestConcurrency() => $_clearField(53);
+
+  @$pb.TagNumber(54)
+  $core.int get logBufferSize => $_getIZ(53);
+  @$pb.TagNumber(54)
+  set logBufferSize($core.int value) => $_setSignedInt32(53, value);
+  @$pb.TagNumber(54)
+  $core.bool hasLogBufferSize() => $_has(53);
+  @$pb.TagNumber(54)
+  void clearLogBufferSize() => $_clearField(54);
+
+  @$pb.TagNumber(55)
+  $core.bool get profileTrafficStats => $_getBF(54);
+  @$pb.TagNumber(55)
+  set profileTrafficStats($core.bool value) => $_setBool(54, value);
+  @$pb.TagNumber(55)
+  $core.bool hasProfileTrafficStats() => $_has(54);
+  @$pb.TagNumber(55)
+  void clearProfileTrafficStats() => $_clearField(55);
+
+  @$pb.TagNumber(56)
+  $core.bool get directSpeed => $_getBF(55);
+  @$pb.TagNumber(56)
+  set directSpeed($core.bool value) => $_setBool(55, value);
+  @$pb.TagNumber(56)
+  $core.bool hasDirectSpeed() => $_has(55);
+  @$pb.TagNumber(56)
+  void clearDirectSpeed() => $_clearField(56);
+
+  @$pb.TagNumber(57)
+  $core.bool get includePrerelease => $_getBF(56);
+  @$pb.TagNumber(57)
+  set includePrerelease($core.bool value) => $_setBool(56, value);
+  @$pb.TagNumber(57)
+  $core.bool hasIncludePrerelease() => $_has(56);
+  @$pb.TagNumber(57)
+  void clearIncludePrerelease() => $_clearField(57);
+
+  @$pb.TagNumber(58)
+  $core.bool get enableClashApi => $_getBF(57);
+  @$pb.TagNumber(58)
+  set enableClashApi($core.bool value) => $_setBool(57, value);
+  @$pb.TagNumber(58)
+  $core.bool hasEnableClashApi() => $_has(57);
+  @$pb.TagNumber(58)
+  void clearEnableClashApi() => $_clearField(58);
 }
 
 class SettingsUpdate extends $pb.GeneratedMessage {

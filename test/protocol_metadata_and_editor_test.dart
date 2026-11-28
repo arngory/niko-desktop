@@ -83,7 +83,45 @@ void main() {
     expect(decoded.containsKey('serverPort'), isFalse);
   });
 
-  testWidgets('ProfileEditor sets/clears naive nikoUdp+sUoT and opens unsupported types in raw JSON (H5, M6)', (tester) async {
+  testWidgets('ProfileEditor preserves integer dnsTunnelMethod and bool dnsTunnelFixedUpstream (C1)', (tester) async {
+    String? savedJson;
+    final stored = jsonEncode({
+      'name': 'stored-vless',
+      'serverAddress': 'v.example',
+      'serverPort': 443,
+      'alterId': -1,
+      'uuid': '11111111-1111-1111-1111-111111111111',
+      'dnsTunnelMethod': 2,
+      'dnsTunnelFixedUpstream': false,
+    });
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: NikoTheme(
+          colors: NikoColors.light,
+          child: ProfileEditor(
+            strings: NikoStrings.of(const Locale('en')),
+            profileId: 42,
+            initialType: 'vmess',
+            initialBeanJson: stored,
+            onSave: ({required id, required groupId, required type, required beanJson}) async {
+              savedJson = beanJson;
+              return null;
+            },
+            onCancel: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final out = jsonDecode(savedJson!) as Map<String, dynamic>;
+    expect(out['dnsTunnelMethod'], 2);
+    expect(out.containsKey('dnsTunnelFixedUpstream'), isFalse);
+  });
+
+  testWidgets('ProfileEditor toggles naive nikoUdp/sUoT independently (B5), edits chain hops, and keeps unsupported types in raw JSON', (tester) async {
     String? savedJson;
     await tester.pumpWidget(
       Directionality(
@@ -104,9 +142,20 @@ void main() {
         ),
       ),
     );
-    // Toggle UDP off and verify BOTH nikoUdp and sUoT are removed.
+    // Toggle niko-udp off -> removes nikoUdp while preserving sUoT (B5).
     await tester.ensureVisible(find.text('UDP over HTTP/3 (niko-udp)'));
     await tester.tap(find.text('UDP over HTTP/3 (niko-udp)'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final uotOnlyMap = jsonDecode(savedJson!) as Map<String, dynamic>;
+    expect(uotOnlyMap.containsKey('nikoUdp'), isFalse);
+    expect(uotOnlyMap['sUoT'], isTrue);
+
+    // Toggle sUoT off as well -> both nikoUdp and sUoT are removed.
+    await tester.ensureVisible(find.text('UDP over TCP (sUoT)'));
+    await tester.tap(find.text('UDP over TCP (sUoT)'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
@@ -115,7 +164,7 @@ void main() {
     expect(offMap.containsKey('nikoUdp'), isFalse);
     expect(offMap.containsKey('sUoT'), isFalse);
 
-    // Editing a chain profile opens directly in raw JSON mode and preserves the exact JSON.
+    // Chain profiles use structured hop editor and round-trip nikofmt ChainBean's "proxies" list.
     String? chainJson;
     const rawChain = '{"name":"c","proxies":[1,2]}';
     await tester.pumpWidget(
@@ -141,7 +190,37 @@ void main() {
     await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
-    expect(chainJson, rawChain);
+    final decodedChain = jsonDecode(chainJson!) as Map<String, dynamic>;
+    expect(decodedChain['name'], 'c');
+    expect(decodedChain['proxies'], [1, 2]);
+
+    // Editing an unsupported type opens directly in raw JSON mode and preserves the exact JSON.
+    String? unsupportedJson;
+    const rawUnsupported = '{"name":"st","serverAddress":"st.example","serverPort":443,"version":3}';
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: NikoTheme(
+          colors: NikoColors.light,
+          child: ProfileEditor(
+            key: const ValueKey('shadowtls-editor'),
+            strings: NikoStrings.of(const Locale('en')),
+            profileId: 9,
+            initialType: 'shadowtls',
+            initialBeanJson: rawUnsupported,
+            onSave: ({required id, required groupId, required type, required beanJson}) async {
+              unsupportedJson = beanJson;
+              return null;
+            },
+            onCancel: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(unsupportedJson, rawUnsupported);
   });
 
   test('Backup inspection detects settings secrets and import skips sensitive exposure settings by default (M5)', () async {

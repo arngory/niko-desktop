@@ -73,18 +73,16 @@ void main() {
 
   testWidgets('the rows: the values shown, a switch and a choice changed', (tester) async {
     final values = defaults();
-    await show(tester, values);
+    await show(tester, values, size: const Size(1040, 3200));
     expect(find.text('2080'), findsOneWidget);
     expect(find.text('cloudflare-dns.com +1'), findsOneWidget, reason: 'the first server\'s host, and one after it');
     expect(find.text('не заданы'), findsOneWidget);
-    expect(find.text('Авто'), findsOneWidget, reason: 'every domain strategy the core\'s own');
-    // API 17 protocol rows are now shown in Settings
-    expect(find.text('Yggdrasil'), findsOneWidget);
-    expect(find.text('Clash API'), findsOneWidget);
-    // what the window has not yet is not shown
-    for (final missing in ['Узлы raycontrol', 'naive', 'Резервная копия']) {
-      expect(find.text(missing), findsNothing, reason: missing);
+    expect(find.text('Авто'), findsWidgets, reason: 'every domain strategy the core\'s own');
+    // All 12 B-Settings sections are present in Advanced mode
+    for (final section in ['Узлы raycontrol', 'naive', 'Yggdrasil', 'Резервная копия']) {
+      expect(find.text(section), findsWidgets, reason: section);
     }
+    expect(find.text('Clash API'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Пускать из локальной сети'));
     await tester.tap(find.text('Пускать из локальной сети'));
@@ -108,9 +106,34 @@ void main() {
     expect(values.text('logLevel'), '3');
   });
 
+  testWidgets('simple mode hides advanced sections while keeping core settings', (tester) async {
+    final values = defaults();
+    tester.view.physicalSize = const Size(1040, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      frame(
+        Brightness.light,
+        SettingsScreen(
+          values: values,
+          advanced: false,
+          strings: NikoStrings.of(const Locale('ru')),
+        ),
+      ),
+    );
+    expect(find.text('Тема'), findsOneWidget);
+    expect(find.text('Узлы raycontrol'), findsWidgets);
+    expect(find.text('Локальная сеть напрямую'), findsOneWidget);
+    expect(find.text('Сбросить настройки…'), findsOneWidget);
+    expect(find.text('Вход для других программ'), findsNothing);
+    expect(find.text('Опыты'), findsNothing);
+    expect(find.text('naive'), findsNothing);
+  });
+
   testWidgets('a value row\'s dialog: typed, saved, closed; Отмена and Escape keep the value', (tester) async {
     final values = defaults();
-    await show(tester, values);
+    await show(tester, values, size: const Size(1040, 3200));
+    await tester.ensureVisible(find.text('Порт'));
     await tester.tap(find.text('Порт'));
     await tester.pump();
     expect(find.text('Сохранить'), findsOneWidget);
@@ -160,8 +183,9 @@ void main() {
 
   testWidgets('the programs through Niko (D-RULES-06): the choice, and the list a line each', (tester) async {
     final values = defaults();
-    await show(tester, values);
+    await show(tester, values, size: const Size(1040, 3200));
     expect(find.text('не выбраны'), findsOneWidget);
+    await tester.ensureVisible(find.text('Кроме выбранных'));
     await tester.tap(find.text('Кроме выбранных'));
     await tester.pump();
     expect(values.text('programsMode'), '2');
@@ -208,11 +232,11 @@ void main() {
   testWidgets('the menu: a section pressed comes into view, and is the one marked', (tester) async {
     await show(tester, defaults(), size: const Size(1040, 640));
     expect(find.text('Уровень журнала').hitTestable(), findsNothing);
-    await tester.tap(find.text('Журнал'));
+    await tester.tap(find.text('Журнал и вид'));
     await tester.pumpAndSettle();
     expect(find.text('Уровень журнала').hitTestable(), findsOneWidget);
     FontWeight? weight(String item) => tester.widget<Text>(find.text(item)).style?.fontWeight;
-    expect((weight('Журнал'), weight('Общие')), (FontWeight.w600, FontWeight.w400));
+    expect((weight('Журнал и вид'), weight('Общие')), (FontWeight.w600, FontWeight.w400));
   });
 
   testWidgets('narrow: no menu, nothing overflows; English', (tester) async {
@@ -220,7 +244,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Inbound for other programs'.toUpperCase()), findsOneWidget);
     expect(find.text('Experiments'), findsNothing, reason: 'the menu is for a wide window');
-    expect(find.byType(NikoChoiceRow<String>), findsNWidgets(8));
+    expect(find.byType(NikoChoiceRow<String>), findsNWidgets(10));
   });
 
   testWidgets('theme and language rows stay available without daemon; language dialog notifies callback', (tester) async {

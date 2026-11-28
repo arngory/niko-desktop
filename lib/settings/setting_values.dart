@@ -12,6 +12,9 @@ abstract class SettingValues implements Listenable {
   /// words; then none of them is.
   Future<String?> save({Map<String, bool> flags = const {}, Map<String, String> texts = const {}});
 
+  /// Resets all user-modified daemon settings to desktop defaults; null on success, else error message.
+  Future<String?> reset() async => null;
+
   /// Why the last change of a switch or a choice was not kept; empty when it was.
   String get error;
 }
@@ -47,6 +50,14 @@ class MemorySettingValues extends ChangeNotifier implements SettingValues {
   Future<String?> save({Map<String, bool> flags = const {}, Map<String, String> texts = const {}}) async {
     _flags.addAll(flags);
     _texts.addAll(texts);
+    notifyListeners();
+    return null;
+  }
+
+  @override
+  Future<String?> reset() async {
+    _flags.clear();
+    _texts.clear();
     notifyListeners();
     return null;
   }

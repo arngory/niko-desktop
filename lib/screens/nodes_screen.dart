@@ -55,14 +55,68 @@ class _NodesScreenState extends State<NodesScreen> {
   int _editProfileId = 0;
   String _editProfileType = 'socks';
   String _editProfileJson = '';
+  List<ProfileRow> _allProfilesForChain = const [];
+  // Search, sort & bulk-action confirmation state (B-Profiles)
+  final _search = TextEditingController();
+  String _query = '';
+  int _sortMode = 0; // 0 = order, 1 = name, 2 = latency
+  int _lastGroupId = -1;
+  String? _confirmBulkAction; // 'deleteFailed' or 'deduplicate'
+
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(() {
+      if (_search.text != _query) setState(() => _query = _search.text);
+    });
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<ProfileRow> _visibleProfiles(ProfilesFeed feed) {
+    final q = _query.trim().toLowerCase();
+    final filtered = q.isEmpty
+        ? [...feed.profiles]
+        : [
+            for (final p in feed.profiles)
+              if (p.name.toLowerCase().contains(q) ||
+                  p.address.toLowerCase().contains(q) ||
+                  p.type.toLowerCase().contains(q) ||
+                  p.kind.toLowerCase().contains(q))
+                p,
+          ];
+    switch (_sortMode) {
+      case 1:
+        filtered.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      case 2:
+        int rank(ProfileRow p) {
+          final lat = feed.latencies[p.id];
+          if (lat == null) return 1 << 29;
+          return lat.ok ? lat.latencyMs : (1 << 28);
+        }
+        filtered.sort((a, b) => rank(a).compareTo(rank(b)));
+    }
+    return filtered;
+  }
 
   Future<void> _openProfileEditor({ProfileRow? existing}) async {
+    final all = await widget.feed.allProfiles();
+    if (!mounted) return;
+    final chainCandidates = [
+      for (final p in all)
+        if (p.type != 'config' && p.id != (existing?.id ?? 0)) p,
+    ];
     if (existing == null) {
       setState(() {
         _editingProfile = true;
         _editProfileId = 0;
         _editProfileType = 'socks';
         _editProfileJson = '';
+        _allProfilesForChain = chainCandidates;
       });
       return;
     }
@@ -73,6 +127,7 @@ class _NodesScreenState extends State<NodesScreen> {
       _editProfileId = saved.row.id;
       _editProfileType = saved.row.type;
       _editProfileJson = saved.beanJson;
+      _allProfilesForChain = chainCandidates;
     });
   }
 
@@ -81,6 +136,14 @@ class _NodesScreenState extends State<NodesScreen> {
     final colors = NikoTheme.of(context);
     final strings = NikoStrings.of(Localizations.localeOf(context));
     final feed = widget.feed;
+    if (_lastGroupId != feed.groupId) {
+      _lastGroupId = feed.groupId;
+      if (_query.isNotEmpty) {
+        _query = '';
+        _search.clear();
+      }
+      _confirmBulkAction = null;
+    }
     final linked = widget.linked;
     final group = feed.groups.where((g) => g.id == feed.groupId).firstOrNull;
     final hasSubscriptions = feed.groups.any((g) => g.subscription);
@@ -94,6 +157,7 @@ class _NodesScreenState extends State<NodesScreen> {
         groupId: feed.importGroup,
         initialType: _editProfileType,
         initialBeanJson: _editProfileJson,
+        availableProfiles: _allProfilesForChain.isNotEmpty ? _allProfilesForChain : feed.profiles,
         onCheck: ({required String type, required String beanJson}) =>
             feed.checkProfile(type: type, beanJson: beanJson),
         onSave: ({required int id, required int groupId, required String type, required String beanJson}) async {
@@ -107,17 +171,22 @@ class _NodesScreenState extends State<NodesScreen> {
       );
     }
 
+    final visible = _visibleProfiles(feed);
+
     Widget buildProfiles({required bool scrollable}) {
       if (!linked) {
         return NikoBanner(icon: NikoIcons.alert, title: strings.storeNoLink);
       } else if (!feed.loaded) {
         return const SizedBox.shrink();
-      } else if (feed.profiles.isEmpty) {
-        return Text(strings.groupEmpty, style: NikoType.body.style(colors.ink2));
+      } else if (visible.isEmpty) {
+        final msg = _query.trim().isNotEmpty
+            ? (strings.save == 'Сохранить' ? 'Совпадений не найдено' : 'No matching profiles')
+            : strings.groupEmpty;
+        return Text(msg, style: NikoType.body.style(colors.ink2));
       }
       final share = !feed.shownIsNode;
       Widget row(int i) {
-        final p = feed.profiles[i];
+        final p = visible[i];
         return _ProfileRow(
           key: ValueKey(p.id),
           profile: p,
@@ -150,13 +219,13 @@ class _NodesScreenState extends State<NodesScreen> {
                 ? ListView.builder(
                     padding: EdgeInsets.zero,
                     shrinkWrap: true,
-                    itemCount: feed.profiles.length,
+                    itemCount: visible.length,
                     itemBuilder: (context, i) => row(i),
                   )
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [for (var i = 0; i < feed.profiles.length; i++) row(i)],
+                    children: [for (var i = 0; i < visible.length; i++) row(i)],
                   ),
           ),
         ),
@@ -165,7 +234,7 @@ class _NodesScreenState extends State<NodesScreen> {
     }
 
     Widget buildProfilesSliver() {
-      if (feed.profiles.isEmpty) {
+      if (visible.isEmpty) {
         return SliverToBoxAdapter(child: buildProfiles(scrollable: false));
       }
       final share = !feed.shownIsNode;
@@ -175,9 +244,9 @@ class _NodesScreenState extends State<NodesScreen> {
           borderRadius: BorderRadius.circular(NikoRadius.md),
         ),
         sliver: SliverList.builder(
-          itemCount: feed.profiles.length,
+          itemCount: visible.length,
           itemBuilder: (context, i) {
-            final p = feed.profiles[i];
+            final p = visible[i];
             return _ProfileRow(
               key: ValueKey(p.id),
               profile: p,
@@ -312,6 +381,69 @@ class _NodesScreenState extends State<NodesScreen> {
                 ),
               ],
             ),
+          ],
+          if (linked && (feed.profiles.length > 1 || _query.isNotEmpty)) ...[
+            const SizedBox(height: NikoSpace.s3),
+            NikoTextField(controller: _search, label: strings.nodesSearchHint, placeholder: strings.nodesSearchHint),
+            const SizedBox(height: NikoSpace.s2),
+            Wrap(
+              spacing: NikoSpace.s2,
+              runSpacing: NikoSpace.s1,
+              children: [
+                for (final (mode, label) in [
+                  (0, strings.nodesSortOrder),
+                  (1, strings.nodesSortName),
+                  (2, strings.nodesSortLatency),
+                ])
+                  _sortMode == mode
+                      ? NikoTonalButton(label: label, onPressed: () {})
+                      : NikoGhostButton(label: label, onPressed: () => setState(() => _sortMode = mode)),
+                if (feed.latencies.isNotEmpty)
+                  NikoGhostButton(label: strings.nodesMenuClearLatency, onPressed: feed.clearLatencies),
+                if (canAddManual && feed.profiles.any((p) => p.id != feed.selected && (feed.latencies[p.id]?.ok == false)))
+                  NikoGhostButton(
+                    label: strings.nodesMenuDeleteFailed,
+                    onPressed: () => setState(() => _confirmBulkAction = 'deleteFailed'),
+                  ),
+                if (canAddManual)
+                  NikoGhostButton(
+                    label: strings.nodesMenuDeduplicate,
+                    onPressed: () => setState(() => _confirmBulkAction = 'deduplicate'),
+                  ),
+              ],
+            ),
+            if (_confirmBulkAction != null) ...[
+              const SizedBox(height: NikoSpace.s2),
+              NikoBanner(
+                icon: NikoIcons.trash,
+                title: _confirmBulkAction == 'deleteFailed'
+                    ? strings.nodesMenuDeleteFailed
+                    : strings.nodesMenuDeduplicate,
+                danger: true,
+              ),
+              const SizedBox(height: NikoSpace.s2),
+              Row(
+                children: [
+                  NikoPrimaryButton(
+                    label: strings.groupDelete,
+                    onPressed: () {
+                      final action = _confirmBulkAction;
+                      setState(() => _confirmBulkAction = null);
+                      if (action == 'deleteFailed') {
+                        unawaited(feed.deleteFailedProfiles());
+                      } else if (action == 'deduplicate') {
+                        unawaited(feed.deduplicateCurrentGroup());
+                      }
+                    },
+                  ),
+                  const SizedBox(width: NikoSpace.s3),
+                  NikoGhostButton(
+                    label: strings.cancel,
+                    onPressed: () => setState(() => _confirmBulkAction = null),
+                  ),
+                ],
+              ),
+            ],
           ],
           const SizedBox(height: NikoSpace.s4),
           if (feed.error.isNotEmpty) ...[
@@ -478,6 +610,8 @@ class _BasicGroupDialog extends StatefulWidget {
 
 class _BasicGroupDialogState extends State<_BasicGroupDialog> {
   late String _name = widget.group.name;
+  late bool _isSelector = widget.group.isSelector;
+  late bool _autoSelect = widget.group.autoSelect;
   String _error = '';
   bool _saving = false;
 
@@ -486,7 +620,17 @@ class _BasicGroupDialogState extends State<_BasicGroupDialog> {
       _saving = true;
       _error = '';
     });
-    final err = await widget.onSave(GroupRow(id: widget.group.id, name: _name.trim()));
+    final err = await widget.onSave(
+      GroupRow(
+        id: widget.group.id,
+        name: _name.trim(),
+        isSelector: _isSelector,
+        autoSelect: _autoSelect,
+        frontProxy: widget.group.frontProxy,
+        landingProxy: widget.group.landingProxy,
+        sortOrder: widget.group.sortOrder,
+      ),
+    );
     if (!mounted) return;
     if (err != null) {
       setState(() {
@@ -500,7 +644,7 @@ class _BasicGroupDialogState extends State<_BasicGroupDialog> {
   Widget build(BuildContext context) {
     final s = widget.strings;
     return NikoDialog(
-      title: widget.group.id == 0 ? s.groupNew : s.groupRename,
+      title: widget.group.id == 0 ? s.groupNew : s.groupSettingsTitle,
       cancelLabel: s.cancel,
       saveLabel: s.save,
       errorTitle: s.saveFailed,
@@ -511,6 +655,29 @@ class _BasicGroupDialogState extends State<_BasicGroupDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           NikoField(label: s.groupNameField, value: _name, onChanged: (v) => _name = v),
+          const SizedBox(height: NikoSpace.s3),
+          NikoGroup(
+            rows: [
+              NikoSwitchRow(
+                title: s.groupIsSelector,
+                on: _isSelector,
+                divider: false,
+                onChanged: (v) => setState(() {
+                  _isSelector = v;
+                  if (v) _autoSelect = false;
+                }),
+              ),
+              NikoSwitchRow(
+                title: s.groupAutoSelect,
+                on: _autoSelect,
+                divider: true,
+                onChanged: (v) => setState(() {
+                  _autoSelect = v;
+                  if (v) _isSelector = false;
+                }),
+              ),
+            ],
+          ),
           const SizedBox(height: NikoSpace.s4),
         ],
       ),
@@ -545,6 +712,8 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
   late bool _forceResolve = widget.group.info?.forceResolve ?? false;
   late bool _whenConnected = widget.group.info?.updateWhenConnectedOnly ?? false;
   late String _ua = widget.group.info?.customUserAgent ?? '';
+  late bool _isSelector = widget.group.isSelector;
+  late bool _autoSelect = widget.group.autoSelect;
   String _error = '';
   bool _saving = false;
 
@@ -564,7 +733,17 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
       customUserAgent: _ua.trim(),
     );
     final err = await widget.onSave(
-      GroupRow(id: widget.group.id, name: _name.trim(), subscription: true, info: info),
+      GroupRow(
+        id: widget.group.id,
+        name: _name.trim(),
+        subscription: true,
+        info: info,
+        isSelector: _isSelector,
+        autoSelect: _autoSelect,
+        frontProxy: widget.group.frontProxy,
+        landingProxy: widget.group.landingProxy,
+        sortOrder: widget.group.sortOrder,
+      ),
     );
     if (!mounted) return;
     if (err != null) {
@@ -624,6 +803,24 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
                 on: _whenConnected,
                 divider: true,
                 onChanged: (v) => setState(() => _whenConnected = v),
+              ),
+              NikoSwitchRow(
+                title: s.groupIsSelector,
+                on: _isSelector,
+                divider: true,
+                onChanged: (v) => setState(() {
+                  _isSelector = v;
+                  if (v) _autoSelect = false;
+                }),
+              ),
+              NikoSwitchRow(
+                title: s.groupAutoSelect,
+                on: _autoSelect,
+                divider: true,
+                onChanged: (v) => setState(() {
+                  _autoSelect = v;
+                  if (v) _isSelector = false;
+                }),
               ),
             ],
           ),
@@ -735,7 +932,11 @@ class _NodeCardState extends State<NodeCard> {
         if (node.dnsResolver.isNotEmpty)
           Text('DNS: ${node.dnsResolver}', maxLines: 1, style: NikoType.bodySm.style(colors.ink2)),
         if (node.naiveUdpState.isNotEmpty)
-          Text('naive UDP: ${node.naiveUdpState}', maxLines: 1, style: NikoType.bodySm.style(colors.ink2)),
+          Text(
+            'naive UDP: ${strings.naiveUdpStateLabel(node.naiveUdpState)}',
+            maxLines: 1,
+            style: NikoType.bodySm.style(colors.ink2),
+          ),
         if (node.hasLan && widget.onToggleLan != null) ...[
           const SizedBox(height: NikoSpace.s2),
           NikoSwitchRow(

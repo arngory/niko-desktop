@@ -322,6 +322,15 @@ class MemoryDaemon implements Daemon {
   }
 
   @override
+  Future<Map<String, Object>> resetSettings() async {
+    settingValues
+      ..clear()
+      ..addAll(defaultSettings);
+    _changed(StoreKind.settings, const []);
+    return {...settingValues};
+  }
+
+  @override
   Future<SavedProfile> profile(int id) async =>
       SavedProfile(row: profileRows.firstWhere((p) => p.id == id), beanJson: profileBeans[id] ?? '{"id":$id}');
 
@@ -1838,6 +1847,8 @@ void main() {
 
     daemon.settingValues['mixedPort'] = 2081;
     await tester.tap(find.text('Настройки'));
+    await settle();
+    await tester.tap(find.text('Расширенный'));
     await settle();
     expect(find.text('2081'), findsOneWidget);
     expect(find.text('Прокси'), findsOneWidget);

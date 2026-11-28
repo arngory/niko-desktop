@@ -52,6 +52,10 @@ class WindowSettings extends ChangeNotifier {
     bool notifications = true,
     String saveDirectory = '',
     bool exitAddressConfirmed = false,
+    int speedIntervalMs = 1000,
+    bool showServerAddress = false,
+    bool autoCheckUpdates = true,
+    String exitAddressService = 'cloudflare',
     List<RecentRouteCheck> recentChecks = const [],
     Map<String, Object?> extra = const {},
   })  : _theme = normalizeTheme(theme),
@@ -66,6 +70,12 @@ class WindowSettings extends ChangeNotifier {
         _saveDirectory = saveDirectory,
         // ignore: prefer_initializing_formals
         _exitAddressConfirmed = exitAddressConfirmed,
+        _speedIntervalMs = normalizeSpeedInterval(speedIntervalMs),
+        // ignore: prefer_initializing_formals
+        _showServerAddress = showServerAddress,
+        // ignore: prefer_initializing_formals
+        _autoCheckUpdates = autoCheckUpdates,
+        _exitAddressService = normalizeExitService(exitAddressService),
         _recentChecks = List<RecentRouteCheck>.of(recentChecks.take(maxRecentChecks)),
         _extra = Map<String, Object?>.of(extra);
 
@@ -82,6 +92,10 @@ class WindowSettings extends ChangeNotifier {
   bool _notifications;
   String _saveDirectory;
   bool _exitAddressConfirmed;
+  int _speedIntervalMs;
+  bool _showServerAddress;
+  bool _autoCheckUpdates;
+  String _exitAddressService;
   final List<RecentRouteCheck> _recentChecks;
 
   /// The view Расширенный.
@@ -150,6 +164,40 @@ class WindowSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Traffic speed refresh interval in milliseconds (500, 1000, or 2000).
+  int get speedIntervalMs => _speedIntervalMs;
+  set speedIntervalMs(int value) {
+    final normalized = normalizeSpeedInterval(value);
+    if (_speedIntervalMs == normalized) return;
+    _speedIntervalMs = normalized;
+    notifyListeners();
+  }
+
+  /// Show server address beside profile name in the profiles list (B-Settings).
+  bool get showServerAddress => _showServerAddress;
+  set showServerAddress(bool value) {
+    if (_showServerAddress == value) return;
+    _showServerAddress = value;
+    notifyListeners();
+  }
+
+  /// Automatically check for signed Niko updates in the background (B-Settings).
+  bool get autoCheckUpdates => _autoCheckUpdates;
+  set autoCheckUpdates(bool value) {
+    if (_autoCheckUpdates == value) return;
+    _autoCheckUpdates = value;
+    notifyListeners();
+  }
+
+  /// Preferred HTTPS service for exit-IP lookup (cloudflare, ipinfo, ipwho, ipapi-co).
+  String get exitAddressService => _exitAddressService;
+  set exitAddressService(String value) {
+    final normalized = normalizeExitService(value);
+    if (_exitAddressService == normalized) return;
+    _exitAddressService = normalized;
+    notifyListeners();
+  }
+
   /// Recent successful route checks, newest first (at most [maxRecentChecks]).
   List<RecentRouteCheck> get recentChecks => List<RecentRouteCheck>.unmodifiable(_recentChecks);
 
@@ -190,6 +238,16 @@ class WindowSettings extends ChangeNotifier {
         _ => 'system',
       };
 
+  static int normalizeSpeedInterval(Object? value) => switch (value) {
+        500 || 1000 || 2000 => value as int,
+        _ => 1000,
+      };
+
+  static String normalizeExitService(Object? value) => switch (value) {
+        'cloudflare' || 'ipinfo' || 'ipwho' || 'ipapi-co' => value as String,
+        _ => 'cloudflare',
+      };
+
   /// Settings that are kept nowhere: tests, and a system with no home.
   factory WindowSettings.memory({
     bool advanced = false,
@@ -200,6 +258,10 @@ class WindowSettings extends ChangeNotifier {
     bool notifications = true,
     String saveDirectory = '',
     bool exitAddressConfirmed = false,
+    int speedIntervalMs = 1000,
+    bool showServerAddress = false,
+    bool autoCheckUpdates = true,
+    String exitAddressService = 'cloudflare',
     List<RecentRouteCheck> recentChecks = const [],
   }) =>
       WindowSettings._(
@@ -212,6 +274,10 @@ class WindowSettings extends ChangeNotifier {
         notifications: notifications,
         saveDirectory: saveDirectory,
         exitAddressConfirmed: exitAddressConfirmed,
+        speedIntervalMs: speedIntervalMs,
+        showServerAddress: showServerAddress,
+        autoCheckUpdates: autoCheckUpdates,
+        exitAddressService: exitAddressService,
         recentChecks: recentChecks,
       );
 
@@ -234,6 +300,10 @@ class WindowSettings extends ChangeNotifier {
           notifications: extra['notifications'] != false,
           saveDirectory: extra['saveDirectory'] is String ? extra['saveDirectory'] as String : '',
           exitAddressConfirmed: extra['exitAddressConfirmed'] == true,
+          speedIntervalMs: normalizeSpeedInterval(extra['speedIntervalMs']),
+          showServerAddress: extra['showServerAddress'] == true,
+          autoCheckUpdates: extra['autoCheckUpdates'] != false,
+          exitAddressService: normalizeExitService(extra['exitAddressService']),
           recentChecks: _parseRecentChecks(extra['recentChecks']),
           extra: extra,
         );
@@ -270,6 +340,10 @@ class WindowSettings extends ChangeNotifier {
         'notifications': _notifications,
         'saveDirectory': _saveDirectory,
         'exitAddressConfirmed': _exitAddressConfirmed,
+        'speedIntervalMs': _speedIntervalMs,
+        'showServerAddress': _showServerAddress,
+        'autoCheckUpdates': _autoCheckUpdates,
+        'exitAddressService': _exitAddressService,
         if (_recentChecks.isNotEmpty)
           'recentChecks': [for (final item in _recentChecks) item.toJson()]
         else

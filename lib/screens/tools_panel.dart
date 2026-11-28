@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 
 import '../l10n/strings.dart';
@@ -9,11 +12,12 @@ import '../ui/icons.dart';
 import '../ui/list.dart';
 
 /// The tools beside the log (B · Log on the canvas): the NAT behaviour, by a STUN test through the core's default
-/// way out. Its rows say how the network the tunnel leads to maps and lets in UDP: what calls and games care about.
+/// way out, and an optional Clash API panel when enabled in Settings (D-TOOLS-02).
 class ToolsPanel extends StatefulWidget {
-  const ToolsPanel({super.key, required this.stun});
+  const ToolsPanel({super.key, required this.stun, this.clashApiEnabled = false});
 
   final StunTool stun;
+  final bool clashApiEnabled;
 
   @override
   State<ToolsPanel> createState() => _ToolsPanelState();
@@ -112,6 +116,23 @@ class _ToolsPanelState extends State<ToolsPanel> {
                 child: ColoredBox(
                   color: colors.surface0,
                   child: Column(children: rows),
+                ),
+              ),
+            ],
+            if (widget.clashApiEnabled) ...[
+              const SizedBox(height: NikoSpace.s5),
+              Semantics(
+                header: true,
+                child: Text(strings.clashApiCardTitle, style: NikoType.body.style(colors.ink, weight: FontWeight.w600)),
+              ),
+              const SizedBox(height: NikoSpace.s2),
+              Text(strings.clashApiOpenHint, style: NikoType.bodySm.style(colors.ink2)),
+              const SizedBox(height: NikoSpace.s2),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: NikoTonalButton(
+                  label: '127.0.0.1:9090',
+                  onPressed: () => unawaited(Clipboard.setData(const ClipboardData(text: 'http://127.0.0.1:9090'))),
                 ),
               ),
             ],

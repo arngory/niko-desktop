@@ -198,6 +198,7 @@ class NikoInfo {
     required this.api,
     this.privileged = true,
     this.tun = true,
+    this.yggdrasilAddress = '',
   });
 
   final String nikoVersion;
@@ -214,6 +215,9 @@ class NikoInfo {
 
   /// True when VPN (TUN) mode is available; false in unprivileged `--user-mode`.
   final bool tun;
+
+  /// Persistent Yggdrasil 200::/7 address derived from this user's stored key (API 18).
+  final String yggdrasilAddress;
 }
 
 /// Counts of items imported into the system service store from a user-mode snapshot.
@@ -311,6 +315,11 @@ class GroupRow {
     this.profiles = 0,
     this.info,
     this.nodeId = '',
+    this.isSelector = false,
+    this.autoSelect = false,
+    this.frontProxy = 0,
+    this.landingProxy = 0,
+    this.sortOrder = 0,
   });
 
   final int id;
@@ -328,6 +337,13 @@ class GroupRow {
 
   /// A subscription's group's: what its updates said; null for a group of the user's.
   final SubscriptionInfo? info;
+
+  /// API 18 group routing & display options (B-GroupSettings).
+  final bool isSelector;
+  final bool autoSelect;
+  final int frontProxy;
+  final int landingProxy;
+  final int sortOrder;
 }
 
 /// What a subscription's updates said, and whether one runs now (NikoService's Subscription, D-SUB-01…03, -08).
@@ -1053,6 +1069,10 @@ abstract interface class Daemon {
   /// then. Fails with INVALID_ARGUMENT, and the daemon's words for it, where a value is not one the setting may have.
   Future<Map<String, Object>> updateSettings(Map<String, Object> values);
 
+  /// Resets all user-modified daemon settings to desktop defaults while preserving profiles, groups, rules, nodes,
+  /// and the persistent Yggdrasil key (NikoService.ResetSettings, API 18).
+  Future<Map<String, Object>> resetSettings();
+
   /// Puts profiles into a group before one of its profiles, or at its end with [before] 0 (NikoService.MoveProfiles).
   Future<void> moveProfiles(List<int> ids, {required int groupId, int before = 0});
 
@@ -1438,6 +1458,7 @@ class GrpcDaemon implements Daemon {
       api: info.api,
       privileged: hasCaps ? info.privileged : true,
       tun: hasCaps ? info.tun : true,
+      yggdrasilAddress: info.yggdrasilAddress,
     );
   }
 
@@ -1522,35 +1543,7 @@ class GrpcDaemon implements Daemon {
   @override
   Future<List<GroupRow>> groups() async {
     final list = await _niko.listGroups(niko.Empty(), options: _short);
-    return List.unmodifiable(
-      list.groups.map(
-        (g) => GroupRow(
-          id: g.id.toInt(),
-          name: g.name,
-          ungrouped: g.ungrouped,
-          subscription: g.type == niko.Group_Type.SUBSCRIPTION,
-          profiles: g.profiles,
-          nodeId: g.nodeId,
-          info: g.type != niko.Group_Type.SUBSCRIPTION
-              ? null
-              : SubscriptionInfo(
-                  link: g.subscription.link,
-                  deduplication: g.subscription.deduplication,
-                  forceResolve: g.subscription.forceResolve,
-                  updateWhenConnectedOnly: g.subscription.updateWhenConnectedOnly,
-                  customUserAgent: g.subscription.customUserAgent,
-                  autoUpdate: g.subscription.autoUpdate,
-                  autoUpdateDelay: g.subscription.autoUpdateDelay,
-                  used: g.subscription.used.toInt(),
-                  total: g.subscription.total.toInt(),
-                  expire: g.subscription.expire.toInt(),
-                  lastUpdated: g.subscription.lastUpdated.toInt(),
-                  announce: g.subscription.announce,
-                  updating: g.subscription.updating,
-                ),
-        ),
-      ),
-    );
+    return List.unmodifiable(list.groups.map(_group));
   }
 
   @override
@@ -1663,6 +1656,10 @@ class GrpcDaemon implements Daemon {
       await _niko.updateSettings(niko.SettingsUpdate(settings: settings, fields: fields), options: _short),
     );
   }
+
+  @override
+  Future<Map<String, Object>> resetSettings() async =>
+      _settings(await _niko.resetSettings(niko.Empty(), options: _short));
 
   @override
   Future<void> moveProfiles(List<int> ids, {required int groupId, int before = 0}) => _niko.moveProfiles(
@@ -1894,6 +1891,11 @@ class GrpcDaemon implements Daemon {
         subscription: g.type == niko.Group_Type.SUBSCRIPTION,
         profiles: g.profiles,
         nodeId: g.nodeId,
+        isSelector: g.isSelector,
+        autoSelect: g.autoSelect,
+        frontProxy: g.frontProxy.toInt(),
+        landingProxy: g.landingProxy.toInt(),
+        sortOrder: g.sortOrder,
         info: g.type != niko.Group_Type.SUBSCRIPTION
             ? null
             : SubscriptionInfo(
@@ -1919,6 +1921,11 @@ class GrpcDaemon implements Daemon {
       id: Int64(group.id),
       name: group.name,
       type: group.subscription ? niko.Group_Type.SUBSCRIPTION : niko.Group_Type.BASIC,
+      isSelector: group.isSelector,
+      autoSelect: group.autoSelect,
+      frontProxy: Int64(group.frontProxy),
+      landingProxy: Int64(group.landingProxy),
+      sortOrder: group.sortOrder,
       subscription: !group.subscription || group.info == null
           ? null
           : niko.Subscription(

@@ -14,7 +14,7 @@ import '../ui/format.dart';
 import '../ui/icons.dart';
 import '../ui/list.dart';
 
-enum _AdminTab { status, users, services, audit }
+enum _AdminTab { status, users, services, network, policies, audit }
 
 /// Admin panel for a raycontrol node (D-ADMIN), proxied via NikoService.NodeAdminCall
 /// so client private keys never leave the daemon.
@@ -47,6 +47,15 @@ class _AdminScreenState extends State<AdminScreen> {
   List<Map<String, dynamic>> _devices = const [];
   List<Map<String, dynamic>> _services = const [];
   List<Map<String, dynamic>> _audit = const [];
+  Map<String, dynamic>? _dnsInfo;
+  List<Map<String, dynamic>> _relays = const [];
+  Map<String, dynamic>? _adminAccess;
+  Map<String, dynamic>? _summaryPolicy;
+  Map<String, dynamic>? _appMirror;
+  Map<String, dynamic>? _updateStatus;
+
+  bool _creatingUser = false;
+  final _newUserName = TextEditingController();
 
   bool _creatingInvite = false;
   final _inviteUser = TextEditingController();
@@ -71,6 +80,7 @@ class _AdminScreenState extends State<AdminScreen> {
     _inviteUser.dispose();
     _inviteDevice.dispose();
     _inviteTtl.dispose();
+    _newUserName.dispose();
     super.dispose();
   }
 
@@ -107,10 +117,46 @@ class _AdminScreenState extends State<AdminScreen> {
           case _AdminTab.services:
             final res = await _call('ListServices');
             _services = _listOfMaps(res['services']);
+          case _AdminTab.network:
+            _dnsInfo = null;
+            _relays = const [];
+            try {
+              _dnsInfo = await _call('GetDNS');
+            } catch (_) {}
+            try {
+              final rel = await _call('ListRelays');
+              _relays = _listOfMaps(rel['relays']);
+            } catch (_) {}
+          case _AdminTab.policies:
+            _adminAccess = null;
+            _summaryPolicy = null;
+            _appMirror = null;
+            _updateStatus = null;
+            _adminAccess = await _call('GetAdminAccess');
+            try {
+              _summaryPolicy = await _call('GetSummary');
+            } catch (_) {}
+            try {
+              _appMirror = await _call('GetAppMirror');
+            } catch (_) {}
+            try {
+              _updateStatus = await _call('GetUpdateStatus');
+            } catch (_) {}
           case _AdminTab.audit:
             final res = await _call('ListAudit', {'limit': 50});
             _audit = _listOfMaps(res['entries']);
         }
+      });
+
+  Future<void> _submitNewUser() => _run(() async {
+        final name = _newUserName.text.trim();
+        if (name.isEmpty) return;
+        await _call('CreateUser', {'name': name});
+        _newUserName.clear();
+        _creatingUser = false;
+        final res = await _call('ListUsers');
+        _users = _listOfMaps(res['users']);
+        _notice = '$name created';
       });
 
   Future<void> _loadDevicesInner(String user) async {
@@ -225,6 +271,8 @@ class _AdminScreenState extends State<AdminScreen> {
                       (_AdminTab.status, strings.adminTabStatus),
                       (_AdminTab.users, strings.adminTabUsers),
                       (_AdminTab.services, strings.adminTabServices),
+                      (_AdminTab.network, strings.adminTabNetwork),
+                      (_AdminTab.policies, strings.adminTabPolicies),
                       (_AdminTab.audit, strings.adminTabAudit),
                     ])
                       tab == _tab
@@ -255,6 +303,8 @@ class _AdminScreenState extends State<AdminScreen> {
                   _AdminTab.status => _buildStatus(strings),
                   _AdminTab.users => _buildUsers(strings),
                   _AdminTab.services => _buildServices(strings),
+                  _AdminTab.network => _buildNetwork(strings),
+                  _AdminTab.policies => _buildPolicies(strings),
                   _AdminTab.audit => _buildAudit(strings),
                 },
               ],
@@ -303,12 +353,34 @@ class _AdminScreenState extends State<AdminScreen> {
                 ? null
                 : () => setState(() {
                       _creatingInvite = !_creatingInvite;
+                      _creatingUser = false;
                       _createdInvite = '';
                       _createdInvitePin = '';
                     }),
           ),
+          NikoTonalButton(
+            label: strings.adminAddUser,
+            onPressed: _busy
+                ? null
+                : () => setState(() {
+                      _creatingUser = !_creatingUser;
+                      _creatingInvite = false;
+                    }),
+          ),
         ],
       ),
+      if (_creatingUser) ...[
+        const SizedBox(height: NikoSpace.s4),
+        NikoTextField(controller: _newUserName, label: strings.adminCreateUserName),
+        const SizedBox(height: NikoSpace.s3),
+        Row(
+          children: [
+            NikoPrimaryButton(label: strings.ruleSave, onPressed: _busy ? null : () => unawaited(_submitNewUser())),
+            const SizedBox(width: NikoSpace.s3),
+            NikoGhostButton(label: strings.cancel, onPressed: () => setState(() => _creatingUser = false)),
+          ],
+        ),
+      ],
       if (_createdInvite.isNotEmpty) ...[
         const SizedBox(height: NikoSpace.s4),
         NikoBanner(
@@ -473,6 +545,96 @@ class _AdminScreenState extends State<AdminScreen> {
                 ],
               ),
             ),
+        ],
+      ),
+    ];
+  }
+
+  static bool _isNewerVersion(String latest, String installed) {
+    List<int> parse(String v) =>
+        v.trim().replaceFirst(RegExp(r'^v'), '').split('.').map((p) => int.tryParse(p.split('-').first) ?? 0).toList();
+    final a = parse(latest);
+    final b = parse(installed);
+    final n = a.length > b.length ? a.length : b.length;
+    for (var i = 0; i < n; i++) {
+      final av = i < a.length ? a[i] : 0;
+      final bv = i < b.length ? b[i] : 0;
+      if (av != bv) return av > bv;
+    }
+    return false;
+  }
+
+  List<Widget> _buildNetwork(NikoStrings strings) {
+    final dnsStatus = _dnsInfo?['status'] is Map<String, dynamic>
+        ? _dnsInfo!['status'] as Map<String, dynamic>
+        : _dnsInfo;
+    final provider = dnsStatus == null ? '' : _str(dnsStatus['provider']);
+    final zone = dnsStatus == null ? '' : _str(dnsStatus['zone']);
+    final records = dnsStatus?['records'] is List ? (dnsStatus!['records'] as List).length : 0;
+    final problems = dnsStatus?['problems'] is List
+        ? [for (final p in dnsStatus!['problems'] as List) '$p']
+        : const <String>[];
+    return [
+      if (dnsStatus != null)
+        NikoSection(
+          overline: 'DNS',
+          rows: [
+            NikoInfoRow(title: 'Provider', value: provider.isEmpty ? '—' : provider),
+            if (zone.isNotEmpty) NikoInfoRow(title: 'Zone', value: zone),
+            if (records > 0) NikoInfoRow(title: 'Records', value: '$records'),
+            for (final p in problems) NikoInfoRow(title: 'Problem', value: p),
+          ],
+        )
+      else if (_relays.isEmpty)
+        NikoBanner(icon: NikoIcons.rotateCw, title: strings.adminNoItems),
+      if (_relays.isNotEmpty) ...[
+        if (dnsStatus != null) const SizedBox(height: NikoSpace.s4),
+        NikoSection(
+          overline: 'Relays (${_relays.length})',
+          rows: [
+            for (final r in _relays)
+              NikoInfoRow(
+                title: _str(r['name']).isNotEmpty ? _str(r['name']) : _str(r['id']),
+                value: () {
+                  final addr = _str(r['address']).isNotEmpty ? _str(r['address']) : _str(r['host']);
+                  final probe = r['probePort'] is num && (r['probePort'] as num) > 0 ? ' · probe ${r['probePort']}' : '';
+                  return addr.isEmpty ? '—' : '$addr$probe';
+                }(),
+              ),
+          ],
+        ),
+      ],
+    ];
+  }
+
+  List<Widget> _buildPolicies(NikoStrings strings) {
+    final cidrs = _adminAccess?['cidrs'] is List
+        ? [for (final c in _adminAccess!['cidrs'] as List) '$c']
+        : const <String>[];
+    final adminAccessVal = _adminAccess == null
+        ? '—'
+        : cidrs.isEmpty
+            ? 'restricted (no CIDRs)'
+            : cidrs.join(', ');
+    final installed = _updateStatus == null ? '' : _str(_updateStatus!['installed']);
+    final latest = _updateStatus == null ? '' : _str(_updateStatus!['latest']);
+    final updateVal = latest.isNotEmpty && _isNewerVersion(latest, installed)
+        ? '$installed → $latest'
+        : (installed.isNotEmpty ? '$installed (up to date)' : 'up to date');
+    return [
+      NikoSection(
+        overline: strings.adminTabPolicies,
+        rows: [
+          NikoInfoRow(title: 'Admin access', value: adminAccessVal),
+          NikoInfoRow(
+            title: 'Anonymous summaries',
+            value: _summaryPolicy == null ? '—' : (_summaryPolicy!['enabled'] == true ? 'enabled' : 'disabled'),
+          ),
+          NikoInfoRow(
+            title: 'App mirror',
+            value: _appMirror == null ? '—' : (_appMirror!['enabled'] == true ? 'enabled' : 'disabled'),
+          ),
+          if (_updateStatus != null) NikoInfoRow(title: 'Node update', value: updateVal),
         ],
       ),
     ];

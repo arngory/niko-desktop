@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -311,6 +312,96 @@ class ProfilesFeed extends ChangeNotifier {
     try {
       await daemon.setNodeLan(nodeId, show);
       nodes = await daemon.nodes();
+      error = '';
+    } catch (e) {
+      error = daemonError(e);
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Clears all cached per-profile latency results.
+  void clearLatencies() {
+    if (latencies.isEmpty) return;
+    latencies.clear();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Lists profiles across all groups (groupId 0), used by the Chain hop editor.
+  Future<List<ProfileRow>> allProfiles() async {
+    final daemon = _link.daemon;
+    if (daemon == null) return profiles;
+    try {
+      return await daemon.profiles(groupId: 0);
+    } catch (_) {
+      return profiles;
+    }
+  }
+
+  /// Deletes every non-selected profile in the currently shown manual group whose last latency check failed.
+  Future<void> deleteFailedProfiles() async {
+    final daemon = _link.daemon;
+    if (daemon == null || shownIsNode) return;
+    final ids = [
+      for (final p in profiles)
+        if (p.id != selected && (latencies[p.id]?.ok == false)) p.id,
+    ];
+    if (ids.isEmpty) return;
+    try {
+      await daemon.deleteProfiles(ids);
+      for (final id in ids) {
+        latencies.remove(id);
+      }
+      error = '';
+    } catch (e) {
+      error = daemonError(e);
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Removes true duplicate profiles in the currently shown manual group by comparing the full
+  /// saved bean minus its display name. Skips chains and raw configs, and never deletes the selected profile.
+  Future<void> deduplicateCurrentGroup() async {
+    final daemon = _link.daemon;
+    if (daemon == null || shownIsNode) return;
+    String canonicalJson(Object? value) {
+      if (value is Map) {
+        final keys = value.keys.map((k) => '$k').toList()..sort();
+        final ordered = <String, Object?>{for (final k in keys) k: canonicalJson(value[k])};
+        return jsonEncode(ordered);
+      }
+      if (value is List) {
+        return jsonEncode([for (final item in value) canonicalJson(item)]);
+      }
+      return jsonEncode(value);
+    }
+
+    // Group by canonical signature (type + full bean without 'name').
+    final bySignature = <String, List<ProfileRow>>{};
+    for (final p in profiles) {
+      if (p.type == 'chain' || p.type == 'config') continue;
+      try {
+        final saved = await daemon.profile(p.id);
+        final decoded = jsonDecode(saved.beanJson);
+        if (decoded is! Map) continue;
+        final copy = <String, Object?>{for (final e in decoded.entries) '${e.key}': e.value}..remove('name');
+        final sig = '${p.type}|${canonicalJson(copy)}';
+        bySignature.putIfAbsent(sig, () => []).add(p);
+      } catch (_) {
+        continue;
+      }
+    }
+    final dupIds = <int>[];
+    for (final bucket in bySignature.values) {
+      if (bucket.length < 2) continue;
+      // Preserve the currently selected profile if it's in this duplicate group; otherwise keep the first.
+      final keepId = bucket.any((p) => p.id == selected) ? selected : bucket.first.id;
+      for (final p in bucket) {
+        if (p.id != keepId) dupIds.add(p.id);
+      }
+    }
+    if (dupIds.isEmpty) return;
+    try {
+      await daemon.deleteProfiles(dupIds);
       error = '';
     } catch (e) {
       error = daemonError(e);

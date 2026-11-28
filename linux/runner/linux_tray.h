@@ -23,6 +23,7 @@ class LinuxTray {
               const std::string& status_label,
               const std::string& profile_name,
               const std::string& toggle_label,
+              const std::string& mode_label,
               const std::string& open_label,
               const std::string& quit_label);
 
@@ -97,6 +98,7 @@ class LinuxTray {
   bool connected_ = false;
   std::string header_label_ = "Niko";
   std::string toggle_label_ = "Connect";
+  std::string mode_label_;
   std::string open_label_ = "Open Niko";
   std::string quit_label_ = "Quit";
 };

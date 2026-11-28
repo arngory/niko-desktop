@@ -45,6 +45,7 @@ class DesktopIntegration {
     required String statusLabel,
     required String profileName,
     required String toggleLabel,
+    String modeLabel = '',
     required String openLabel,
     required String quitLabel,
   }) async {
@@ -54,6 +55,7 @@ class DesktopIntegration {
         'status': statusLabel,
         'profile': profileName,
         'toggleLabel': toggleLabel,
+        'modeLabel': modeLabel,
         'openLabel': openLabel,
         'quitLabel': quitLabel,
       });

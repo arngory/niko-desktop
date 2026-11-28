@@ -211,6 +211,8 @@ class TracedDaemon implements Daemon {
   Future<Map<String, Object>> settings() => _inner.settings();
   @override
   Future<Map<String, Object>> updateSettings(Map<String, Object> values) => _inner.updateSettings(values);
+  @override
+  Future<Map<String, Object>> resetSettings() => _inner.resetSettings();
 
   @override
   Future<void> moveProfiles(List<int> ids, {required int groupId, int before = 0}) =>

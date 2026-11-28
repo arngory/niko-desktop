@@ -667,6 +667,117 @@ class NikoStrings {
       : 'Imported: $groups groups, $profiles profiles, $rules rules';
   String get backupFailed => _ru ? 'Ошибка резервной копии' : 'Backup failed';
 
+  // API 18: 12-section B-Settings parity + localized NaiveProxy/Yggdrasil/Admin/Nodes/Main labels
+  String get setRaycontrolNodes => _ru ? 'Узлы raycontrol' : 'raycontrol nodes';
+  String get setNaiveSection => 'naive';
+  String get setYggdrasilSection => 'Yggdrasil';
+  String get setBackupSection => _ru ? 'Резервная копия' : 'Backup';
+  String get setHelpSection => _ru ? 'Справка' : 'Help';
+  String get setConnectLastMethod => _ru ? 'Последним выбранным способом' : 'With the last chosen method';
+  String get setRayDnsttResolver => _ru ? 'Резолвер dnstt' : 'dnstt resolver';
+  String get setRayMasterDnsResolvers => _ru ? 'Резолверы MasterDnsVPN' : 'MasterDnsVPN resolvers';
+  String get setRayReportsShort => _ru ? 'Сводка для админа' : 'Summary for admin';
+  String get setRayReportsNoAddr => _ru ? 'Без адресов и идентификаторов, не чаще раза в сутки' : 'No addresses or identifiers, at most once a day';
+  String get setConnTestUrl => _ru ? 'URL проверки соединения' : 'Connection test URL';
+  String get setConnTestConcurrency => _ru ? 'Параллельность проверки' : 'Test concurrency';
+  String get setExitService => _ru ? 'Сервис для адреса выхода' : 'Exit address service';
+  String get setNetworkChangeReset => _ru ? 'Сбрасывать соединения при смене сети' : 'Reset connections on network change';
+  String get setWakeReset => _ru ? 'Сбрасывать соединения после сна' : 'Reset connections after sleep';
+  String get setEnableClashApi => 'Clash API';
+  String get setClashApiSecret => _ru ? 'Секрет Clash API' : 'Clash API secret';
+  String get setClashApiHint => _ru ? 'Слушает на 127.0.0.1:9090' : 'Listens on 127.0.0.1:9090';
+  String get setInsecureSubscription => _ru ? 'Не проверять сертификаты подписок' : 'Skip TLS verification for subscriptions';
+  String get setSubscriptionMinTls => _ru ? 'Наименьший TLS у подписок' : 'Minimum TLS for subscriptions';
+  String get setTlsAuto => _ru ? 'Авто' : 'Auto';
+  String get setNaiveRoots => _ru ? 'Корневые сертификаты' : 'Root certificates';
+  String get setNaiveRootsSystem => _ru ? 'Системные' : 'System';
+  String get setNaiveQuicSystemRoots => _ru ? 'naive по QUIC: принимать системные корни' : 'naive over QUIC: trust system roots';
+  String get setNaiveQuicSystemRootsSub => _ru
+      ? 'Разрешить локально установленные сертификаты для HTTP/3 / QUIC'
+      : 'Allow locally trusted system roots for HTTP/3 / QUIC';
+  String get setYggdrasilEnable => _ru ? 'Включить Yggdrasil' : 'Enable Yggdrasil';
+  String get setYggdrasilPeers => _ru ? 'Пиры Yggdrasil' : 'Yggdrasil peers';
+  String get setYggdrasilPeersAuto => _ru ? 'публичные, 3 быстрейших' : 'public, 3 fastest';
+  String get setYggdrasilViaProxy => _ru ? 'К пирам через прокси' : 'Connect to peers via proxy';
+  String get setYggdrasilTlsChrome => _ru ? 'TLS к пирам как у Chrome' : 'Chrome TLS fingerprint to peers';
+  String get setYggdrasilInbound => _ru ? 'Принимать входящие Yggdrasil' : 'Allow Yggdrasil inbound';
+  String get setYggdrasilInboundPorts => _ru ? 'Разрешённые порты Yggdrasil' : 'Allowed Yggdrasil ports';
+  String get setYggdrasilAddress => _ru ? 'Адрес этого устройства' : 'This device address';
+  String get setYggdrasilAddressEmpty => _ru ? 'появится после первого запуска' : 'assigned on first start';
+  String get setHonestConnect => _ru ? 'Честное подключение' : 'Honest connect';
+  String get setHonestConnectSub => _ru
+      ? 'Ждать подтверждения соединения от сервера (await_dial)'
+      : 'Wait for server dial acknowledgement (await_dial)';
+  String get setIcmpThroughNode => _ru ? 'ping через узел' : 'ping through node';
+  String get setIcmpThroughNodeSub => _ru
+      ? 'Проксировать ICMP-запросы через naive (если узел поддерживает)'
+      : 'Tunnel ICMP echo through naive when supported by the node';
+  String get setLogView => _ru ? 'Журнал и вид' : 'Log & view';
+  String get setLogBufferSize => _ru ? 'Размер буфера журнала' : 'Log buffer size';
+  String get setSpeedInterval => _ru ? 'Обновление скорости' : 'Speed refresh interval';
+  String get setProfileTrafficStats => _ru ? 'Считать трафик профилей' : 'Count per-profile traffic';
+  String get setDirectSpeed => _ru ? 'Скорость прямых соединений' : 'Show direct traffic speed';
+  String get setShowServerAddress => _ru ? 'Адрес сервера в списке' : 'Show server address in list';
+  String get setGlobalCustomConfig => _ru ? 'Общий свой конфиг (JSON)' : 'Global custom config (JSON)';
+  String get setGlobalCustomConfigHint => _ru
+      ? 'JSON-объект, объединяемый поверх итоговой конфигурации sing-box'
+      : 'JSON object merged on top of the generated sing-box config';
+  String get setResetSettings => _ru ? 'Сбросить настройки…' : 'Reset settings…';
+  String get setResetConfirmTitle => _ru ? 'Сбросить все настройки?' : 'Reset all settings?';
+  String get setResetConfirmText => _ru
+      ? 'Все параметры вернутся к значениям по умолчанию. Профили, группы, правила, узлы и ключ Yggdrasil останутся.'
+      : 'All settings will return to defaults. Profiles, groups, rules, nodes, and your Yggdrasil key are kept.';
+  String get setResetConfirmGo => _ru ? 'Сбросить' : 'Reset';
+  String get setResetDone => _ru ? 'Настройки сброшены к умолчаниям' : 'Settings reset to defaults';
+  String get setAutoCheckUpdates => _ru ? 'Проверять обновления самому' : 'Check for updates automatically';
+  String get setIncludePrerelease => _ru ? 'Предварительные сборки' : 'Include pre-releases';
+  String get setHelpValues => _ru ? 'Справка и что значат величины' : 'Help & what values mean';
+  String get copiedShort => _ru ? 'Скопировано' : 'Copied';
+
+  // Localized naive-udp-v1 states (B3)
+  String naiveUdpStateLabel(String state) => switch (state) {
+        'quic' || 'allowed' => _ru ? 'HTTP/3 датаграммы (QUIC)' : 'HTTP/3 datagrams (QUIC)',
+        'probing' => _ru ? 'проверка UDP…' : 'probing UDP…',
+        'tcp_fallback' || 'refused' => _ru ? 'UDP через TCP (запасной)' : 'UDP over TCP (fallback)',
+        'unsupported' => _ru ? 'не поддерживается сервером' : 'unsupported by server',
+        'off' => _ru ? 'выключен' : 'off',
+        _ => state,
+      };
+
+  // Step 5 strings (Nodes search/sort/menu, Group settings, Main active method, Why recommendation, Admin Network/Policies, Clash API)
+  String get nodesSearchHint => _ru ? 'Поиск профилей…' : 'Search profiles…';
+  String get nodesSortOrder => _ru ? 'Порядок' : 'Order';
+  String get nodesSortName => _ru ? 'Имя' : 'Name';
+  String get nodesSortLatency => _ru ? 'Задержка' : 'Latency';
+  String get nodesMenuClearLatency => _ru ? 'Очистить задержки' : 'Clear latencies';
+  String get nodesMenuDeleteFailed => _ru ? 'Удалить недоступные' : 'Delete unreachable';
+  String get nodesMenuDeduplicate => _ru ? 'Удалить дубликаты' : 'Remove duplicates';
+  String get groupSettingsTitle => _ru ? 'Настройки группы' : 'Group settings';
+  String get groupIsSelector => _ru ? 'Ручной выбор (selector)' : 'Manual selector';
+  String get groupAutoSelect => _ru ? 'Автовыбор быстрейшего (urltest)' : 'Auto-select fastest (urltest)';
+  String get groupFrontProxy => _ru ? 'Входной прокси (front)' : 'Front proxy';
+  String get groupLandingProxy => _ru ? 'Выходной прокси (landing)' : 'Landing proxy';
+  String get groupProxyNone => _ru ? 'Нет' : 'None';
+  String get mainActiveMethod => _ru ? 'Способ подключения' : 'Connection method';
+  String get mainSwitchMethod => _ru ? 'Сменить' : 'Switch';
+  String get mainReturnPrevious => _ru ? 'Вернуть' : 'Restore';
+  String get whyRecommendTitle => _ru ? 'Рекомендация' : 'Recommendation';
+  String whyRecommendSwitch(String name) => _ru ? 'Перейти на «$name»' : 'Switch to “$name”';
+  String get adminTabNetwork => _ru ? 'Сеть' : 'Network';
+  String get adminTabPolicies => _ru ? 'Политики' : 'Policies';
+  String get adminAddUser => _ru ? 'Новый пользователь' : 'New user';
+  String get adminCreateUserName => _ru ? 'Имя пользователя' : 'Username';
+  String get logFilterAll => _ru ? 'Все' : 'All';
+  String get clashApiCardTitle => 'Clash API';
+  String get clashApiOpenHint => _ru ? 'Локальный контроллер 127.0.0.1:9090' : 'Local controller at 127.0.0.1:9090';
+  String get addFullConfigWarning => _ru
+      ? 'Импортируется полная конфигурация sing-box (сырой JSON). Подтвердите добавление.'
+      : 'Importing a full sing-box raw JSON configuration. Confirm to add.';
+  String get profileChainHops => _ru ? 'Цепочка прокси (хопы)' : 'Proxy chain hops';
+  String get profileAddHop => _ru ? 'Добавить хоп' : 'Add hop';
+  String get trayModeVpn => _ru ? 'Режим: VPN (TUN)' : 'Mode: VPN (TUN)';
+  String get trayModeProxy => _ru ? 'Режим: Прокси' : 'Mode: Proxy';
+
   List<(String, String)> get faqEntries => _ru
       ? const [
           (
