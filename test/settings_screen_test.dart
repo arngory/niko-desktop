@@ -293,7 +293,7 @@ void main() {
     expect(find.text('Niko 0.1.0'), findsOneWidget);
     expect(find.text('sing-box 1.14.4-niko'), findsOneWidget);
     expect(find.text('nikod 1.58.0'), findsOneWidget);
-    expect(find.text('minisign D5D2D2E799D74D8D'), findsOneWidget);
+    expect(find.text('minisign 0DCF3D8664BAC261'), findsOneWidget);
     if (Platform.isLinux) {
       await expectLater(find.byType(SettingsScreen), matchesGoldenFile('goldens/settings_about_light.png'));
     }
@@ -303,7 +303,7 @@ void main() {
     expect(find.text('Niko 0.1.0'), findsOneWidget);
     expect(find.textContaining('sing-box'), findsNothing);
     expect(find.textContaining('nikod'), findsNothing);
-    expect(find.text('minisign D5D2D2E799D74D8D'), findsOneWidget);
+    expect(find.text('minisign 0DCF3D8664BAC261'), findsOneWidget);
   });
 }
 
